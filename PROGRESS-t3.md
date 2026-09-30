@@ -34,5 +34,16 @@
 - Corrections to the plan: user `message-sent` carries `turnId: null`; an interrupt is not visible
   as such on the stream.
 
-## Part C: review M0 — not started
-## Part D: Claude Code mod — not started
+## Part C: review M0 — sent 2026-09-30 (relay job fec293ed to Cedar)
+
+M0 was committed (with M1-M3). Change requests sent to Cedar:
+- T3 adapter: link via `latestTurn.requestedAt === our createdAt` (verified live); drop the
+  "first output after ours" rule (Claude starts turns with no user message; interrupted Claude
+  turns have no answer); detect foreign input from event order, not client-clock `createdAt`;
+  interrupts show as `completed`; web queue mode steers at the next tool completion.
+- Contract: `outcome failed/rejected` without `turnId` (a dropped plugin prompt has no turn);
+  clip over-long answers instead of `bad_request`; `check-result found:yes completed` without
+  an outcome for answer deliveries. Question: how a T3 agent learns it must `comms reply`.
+- Awaiting Cedar's decisions; Part D proceeds on the current contract.
+
+## Part D: Claude Code mod — in progress
