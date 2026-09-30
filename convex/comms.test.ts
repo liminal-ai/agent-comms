@@ -258,6 +258,22 @@ describe("delivery lifecycle", () => {
     expect(original.deliveries[0]).toMatchObject({ state: "replied", detail: `completed by comms reply ${r1.message.id}` });
   });
 
+  it("accepts comms reply as a follow-up after the answer was collected, without changing the delivery", async () => {
+    const t = await setup();
+    const { sent, id, claimId } = await claimed(t);
+    await t.mutation(api.connector.delivered, { machine: m1, deliveryId: id, claimId, turnId: "t1" });
+    const collected = await t.mutation(api.connector.collect, { machine: m1, deliveryId: id, claimId, turnId: "t1", answer: "4" });
+    const followUp = await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: sent.message.id, text: "tests pass too" });
+    expect(followUp.completed).toBeUndefined();
+    expect(followUp.message).toMatchObject({ kind: "answer", inReplyTo: sent.message.id });
+    expect(followUp.message.id).not.toBe(collected.answerMessageId);
+    expect(followUp.deliveries.map((d) => d.recipient)).toEqual(["a"]);
+    const view = await t.query(api.conversations.view, { adminToken: ADMIN, conversationId: sent.message.conversationId });
+    const original = view.messages.find((m) => m.message.id === sent.message.id)!;
+    expect(original.deliveries[0]).toMatchObject({ state: "replied" });
+    expect(view.messages.filter((m) => m.message.inReplyTo === sent.message.id)).toHaveLength(2);
+  });
+
   it("leaves a still-running delivery alone on comms reply: its own answer is still collected", async () => {
     const t = await setup();
     const { sent, id, claimId } = await claimed(t);
