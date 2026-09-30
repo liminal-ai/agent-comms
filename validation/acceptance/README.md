@@ -14,3 +14,7 @@ lim-builder; local Convex (3240); connector `cedar-connector-m5` (main, default 
 | 6 | Nothing typed directly appears in Convex | pending (grep for PRIVATE-ACC at the end) |
 | 7 | An answer wakes the requester, nothing it does next is collected | pending |
 | 8 | Connector killed mid-delivery and restarted | pending (joint) |
+
+## Incident (Hazel, during 2b)
+
+cc-a's first test folder sat under `/srv/agents/hazel`, so its Claude Code session loaded Hazel's CLAUDE.md and, when asked to message t3-native, tried `lhc-agent` (the relay) instead of `comms`. Nothing was sent (unknown relay target); Hazel killed the session before a suggested follow-up to a live seat could go out. cc-a was restarted in `/tmp/hazel-mod-work` with a PATH holding only `comms` and `node`, and 2b was rerun cleanly. Lesson for promoting terminal agents: an agent's working folder decides which instructions it loads, and a folder inheriting a seat's instructions can reach the relay and live seats. Keep test terminals out of seat homes.
