@@ -185,6 +185,8 @@ export class CommsMod {
       rendered,
       sessionId: this.options.sessionId,
       at: this.host.now(),
+      sender: delivery.message.sender.name,
+      recipient: delivery.recipient.name,
     });
     // Journal before submitting: after a crash, an entry means "maybe submitted".
     await this.saveJournal();
@@ -247,6 +249,7 @@ export class CommsMod {
         this.queue({ op: "delivered", body: { sessionId: this.options.sessionId, deliveryId: d.deliveryId, turnId: action.turnId } });
       } else if (action.type === "outcome") {
         this.queue({ op: "outcome", body: { sessionId: this.options.sessionId, deliveryId: d.deliveryId, turnId: action.turnId, ...action.outcome } });
+        if (action.outcome.outcome === "ambiguous") void this.notifyUnmatched(d);
       } else {
         const check = this.deferredChecks.get(d.deliveryId);
         if (check) {
@@ -264,6 +267,18 @@ export class CommsMod {
       }
     }
     void this.saveJournal();
+  }
+
+  /**
+   * Tells the agent its answer wasn't sent, so it answers with `comms reply`.
+   * A plugin prompt without a delivery header: its turn is never collected.
+   */
+  private async notifyUnmatched(d: Tracked): Promise<void> {
+    try {
+      await this.host.submit(unmatchedNotice(d, this.options.participant));
+    } catch (error) {
+      this.host.log(`notice for ${d.deliveryId} not submitted: ${String(error)}`);
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -378,6 +393,16 @@ export class CommsMod {
       this.host.log(`journal not saved: ${String(error)}`);
     }
   }
+}
+
+export function unmatchedNotice(d: Pick<Tracked, "messageId" | "sender" | "recipient">, participant: string): string {
+  const me = d.recipient ?? participant;
+  const from = d.sender ? ` from @${d.sender}` : "";
+  return [
+    `[agent-comms notice] Your answer to request ${d.messageId}${from} was not sent: other input entered that turn, so the reply couldn't be matched to the request.`,
+    `Send your answer with: comms reply --as ${me} ${d.messageId} "<your answer>"`,
+    "Nothing you write in this turn is sent anywhere automatically.",
+  ].join("\n");
 }
 
 export type { Responses };

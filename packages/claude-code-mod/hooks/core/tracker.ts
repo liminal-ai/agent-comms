@@ -24,6 +24,9 @@ export interface Tracked {
   deliveryId: string;
   messageId: string;
   kind: MessageKind;
+  /** Names for the notice sent when the reply can't be matched. */
+  sender?: string;
+  recipient?: string;
   /** The exact text submitted, to tell our prompt from others merged into its turn. */
   rendered: string;
   sessionId: string;
@@ -63,7 +66,16 @@ export class Tracker {
     this.pluginName = pluginName;
   }
 
-  submitted(input: { deliveryId: string; messageId: string; kind: MessageKind; rendered: string; sessionId: string; at: number }): Tracked {
+  submitted(input: {
+    deliveryId: string;
+    messageId: string;
+    kind: MessageKind;
+    rendered: string;
+    sessionId: string;
+    at: number;
+    sender?: string;
+    recipient?: string;
+  }): Tracked {
     const tracked: Tracked = {
       ...input,
       phase: "submitted",

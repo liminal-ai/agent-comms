@@ -150,6 +150,29 @@ describe("CommsMod against the stub", () => {
     assert.deepEqual(session.ops("presence").map((p) => p.status), ["busy", "idle"]);
   });
 
+  it("reports other input in our turn as ambiguous and tells the agent to comms reply", async () => {
+    const session = new FakeSession(socketPath);
+    const mod = makeMod(session);
+    await mod.start();
+    const sent = await post({ sender: "mod-b", to: ["mod-a"], text: "run the tests" });
+    await pumpUntil(mod, () => session.submitted.length === 1, "the submission");
+    mod.onTurnStart("turn-1", wrap(session.submitted[0]!));
+    mod.onPromptSubmit({ turnId: "turn-1", origin: { kind: "composer" }, text: "also 2+2?" });
+    mod.onTurnComplete({ turnId: "turn-1", reason: "answer", answer: "tests pass; 4" });
+    session.clock += 5_000;
+    await pumpUntil(mod, () => session.ops("outcome").length === 1 && session.submitted.length === 2, "outcome and notice");
+    assert.equal(session.ops("outcome")[0].outcome, "ambiguous");
+    assert.equal(await deliveryState(sent.deliveries[0].id), "ambiguous");
+    const notice = session.submitted[1]!;
+    assert.match(notice, /comms reply --as mod-a m_\d+ /);
+    assert.equal(parseDeliveryHeader(notice), null);
+    // The notice's own turn is never reported.
+    mod.onTurnStart("turn-2", wrap(notice));
+    mod.onTurnComplete({ turnId: "turn-2", reason: "answer", answer: "replied with comms" });
+    await mod.tick();
+    assert.equal(session.ops("outcome").length, 1);
+  });
+
   it("an answer delivery is delivered and nothing its turn does is collected", async () => {
     const session = new FakeSession(socketPath);
     const mod = makeMod(session);
