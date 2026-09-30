@@ -59,4 +59,12 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
   to `comms reply` when background work from an already-answered request finishes.
 - Needs Cedar: merge branch hazel; regenerate `pnpm-lock.yaml` for the new package (root file,
   not committed by me); decisions on the three contract edges from Part C.
-- Next: run the same checks against the real connector, then M6 and the shared acceptance check.
+- Against the real connector: every check passes, including SIGKILL recovery (VALIDATION.md).
+
+## Shared acceptance check (local) — passes in full 2026-09-30
+
+- Write-up: validation/acceptance/README.md (Cedar, main 9de3a0c); my Claude Code rows checked,
+  no corrections. Incident recorded there: a test terminal under /srv/agents/hazel loaded my
+  CLAUDE.md and tried lhc-agent (nothing sent). Test terminals now run in /tmp/hazel-mod-work
+  with a PATH holding only comms and node.
+- Next: M6 cloud checkpoint, waiting on Lee.
