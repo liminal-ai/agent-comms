@@ -6,11 +6,11 @@ lim-builder; local Convex (3240); connector `cedar-connector-m5` (main, default 
 |---|---|---|
 | 1 | The three homes are promoted and show online in the web view | Pass: cc-a, t3-lhc, t3-native green (`1-directory.png`); T3 presence is polled from the thread session. |
 | 2a | t3-native → t3-lhc with `comms send` from its own shell | Pass: `replied`, "Canberra", linked. |
-| 2b | cc-a → t3-native | Pass: cc-a (prompted by Hazel) sent "what is 11 times 11?"; `replied`, "121", linked. |
+| 2b | cc-a → t3-native | Pass: cc-a (prompted by Hazel) sent "what is 11 times 11?"; `replied`, "121", linked; the answer woke cc-a and was delivered, not collected. |
 | 2c | t3-lhc → cc-a | Pass: sent from t3-lhc's shell; cc-a woken by the mod; `replied`, "144", linked. |
 | 3 | Lee's group in the web view, post addressing two; only those woken, both replies linked | Pass: group created and posted in the web view (headless Chrome) with lee, t3-native, t3-lhc, cc-a; post addressed t3-lhc and cc-a; exactly those two woken, both `replied` and linked; t3-native not woken (`3-group.png`). |
-| 4 | Lee types into a running comms turn | T3 (t3-native): the typed message entered the turn → `ambiguous`; notice sent; the agent's own `comms reply` completed it (`replied`, "ACC-4"). Claude Code: (Hazel) |
-| 5 | An answer that needs the agent's own work | T3 (t3-lhc, shell command): collected normally, `replied`, "6" (correct). Claude Code: (Hazel) |
+| 4 | Lee types into a running comms turn | T3 (t3-native): the typed message entered the turn → `ambiguous`; notice sent; the agent's own `comms reply` completed it (`replied`, "ACC-4"). Claude Code (cc-a, Hazel): typed text entered our turn → `ambiguous` (entered: composer); the mod showed the unmatched notice; cc-a's `comms reply` ("The command printed 17.") completed it. |
+| 5 | An answer that needs the agent's own work | T3 (t3-lhc, shell command): collected normally, `replied`, "6" (correct). Claude Code (cc-a, Hazel): one turn with a background shell, a helper subagent and a foreground shell; both task notifications arrived in our turn, linked by their `toolUseId`; the answer was collected normally ("…5…81…6"); the helper's own answer was not reported. |
 | 6 | Nothing typed directly appears in Convex | pending (grep for PRIVATE-ACC at the end) |
 | 7 | An answer wakes the requester, nothing it does next is collected | pending |
 | 8 | Connector killed mid-delivery and restarted | pending (joint) |
