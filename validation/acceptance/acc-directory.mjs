@@ -1,0 +1,10 @@
+import { chromium } from "/srv/work/chess-train-mvp/node_modules/playwright-core/index.mjs";
+const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", headless: true, args: ["--no-sandbox"] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+await page.goto("http://127.0.0.1:3790/");
+await page.getByText("@t3-native").first().waitFor();
+await page.waitForTimeout(1500);
+await page.screenshot({ path: "/srv/agents/cedar/agent-comms/validation/acceptance/1-directory.png" });
+const rows = await page.locator(".people li").evaluateAll((els) => els.map((li) => `${li.querySelector(".name")?.textContent} ${li.querySelector(".dot")?.className.replace("dot ", "")}`));
+console.log(rows.filter((r) => /t3-native|t3-lhc|cc-a/.test(r)).join("\n"));
+await browser.close();
