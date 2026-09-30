@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { after, afterEach, beforeEach, describe, it } from "node:test";
 import { type Fixture, StubComms, startStubServer, type StubServer } from "@agent-comms/connector-stub";
 import { CommsMod, type Host } from "../hooks/core/mod.ts";
-import { parseDeliveryHeader } from "../hooks/protocol/render.ts";
+import { parseDeliveryHeader, parseNoticeHeader } from "../hooks/protocol/render.ts";
 
 const fixture: Fixture = {
   machine: "box",
@@ -166,6 +166,7 @@ describe("CommsMod against the stub", () => {
     const notice = session.submitted[1]!;
     assert.match(notice, /comms reply --as mod-a m_\d+ /);
     assert.equal(parseDeliveryHeader(notice), null);
+    assert.equal(parseNoticeHeader(notice)?.deliveryId, sent.deliveries[0].id);
     // The notice's own turn is never reported.
     mod.onTurnStart("turn-2", wrap(notice));
     mod.onTurnComplete({ turnId: "turn-2", reason: "answer", answer: "replied with comms" });
@@ -288,5 +289,7 @@ describe("CommsMod against the stub", () => {
     await post({ sender: "mod-b", to: ["mod-a"], text: "please" });
     await pumpUntil(mod, () => session.ops("outcome").length === 1, "the failure report");
     assert.equal(session.ops("outcome")[0].reason, "rejected");
+    assert.equal(session.ops("outcome")[0].turnId, undefined);
+    await until(async () => (await deliveryState(session.ops("outcome")[0].deliveryId)) === "failed", "failed");
   });
 });

@@ -24,9 +24,10 @@ export interface Tracked {
   deliveryId: string;
   messageId: string;
   kind: MessageKind;
-  /** Names for the notice sent when the reply can't be matched. */
+  /** For the notice sent when the reply can't be matched. */
   sender?: string;
   recipient?: string;
+  seq?: number;
   /** The exact text submitted, to tell our prompt from others merged into its turn. */
   rendered: string;
   sessionId: string;
@@ -79,6 +80,7 @@ export class Tracker {
     at: number;
     sender?: string;
     recipient?: string;
+    seq?: number;
   }): Tracked {
     const tracked: Tracked = {
       ...input,

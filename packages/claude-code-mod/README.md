@@ -49,8 +49,9 @@ checks) and `<name>.log` (the last 200 matching decisions).
   - a task notification delivered into our turn, unless its transcript row names a tool call or a
     subagent our turn started (`toolUseId` or task id);
   - a turn whose text holds anything besides the wrapper and our rendering (merged prompts).
-  After reporting `ambiguous`, the mod submits a notice telling the agent to answer with
-  `comms reply`. The notice carries no header, so its turn is never collected.
+  After reporting `ambiguous`, the mod submits the protocol's unmatched notice
+  (`renderUnmatchedNotice`) telling the agent to answer with `comms reply`. Its header is not a
+  delivery header, so its turn is never collected.
 - Follow-ups: a task notification for background work of a request whose turn already ended gets
   context telling the agent to send the result with `comms reply`.
 - Presence: busy from any main-loop `turn.start` to its `turn.complete`. Nothing else about turns
@@ -84,5 +85,3 @@ the engine will accept (it requires literal `$.env.get` names).
   read as merged and go ambiguous (never mis-collected).
 - Claude Code often ends a turn while a background shell or an async helper still runs; the turn's
   own (interim) answer is collected and the result arrives as a `comms reply` follow-up.
-- Contract workarounds pending with Cedar: a prompt a hook dropped is reported as `failed/rejected`
-  with `turnId: "none"`; a restart check for a delivered answer delivery is answered `yes/running`.

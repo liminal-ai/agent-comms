@@ -165,6 +165,8 @@ export interface DeliveryStatus {
   claim?: Claim;
   /** The harness turn our message went into. Present from `delivered` on, when known. */
   turnId?: string;
+  /** The adapter's resume point in the harness (T3: the event sequence just before our message). Opaque; set with `delivered`. */
+  cursor?: string;
 }
 
 /** The recent messages a delivery carries, so the recipient has context without reading. */

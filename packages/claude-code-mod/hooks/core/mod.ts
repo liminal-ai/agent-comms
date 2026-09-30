@@ -3,7 +3,7 @@
 // turns and presence to the connector. register.ts binds it to the engine;
 // tests bind it to fakes.
 
-import { renderDelivery } from "../protocol/render.ts";
+import { renderDelivery, renderUnmatchedNotice } from "../protocol/render.ts";
 import {
   type DeliveryCheck,
   type ErrorCode,
@@ -187,6 +187,7 @@ export class CommsMod {
       at: this.host.now(),
       sender: delivery.message.sender.name,
       recipient: delivery.recipient.name,
+      seq: delivery.message.seq,
     });
     // Journal before submitting: after a crash, an entry means "maybe submitted".
     await this.saveJournal();
@@ -201,8 +202,8 @@ export class CommsMod {
       d.phase = "done";
       if (d.kind === "request") {
         d.outcome = { outcome: "failed", reason: "rejected", detail: result.dropped.slice(0, 2000) };
-        // No turn exists; the contract asks for one (proposed change pending with Cedar).
-        this.queue({ op: "outcome", body: { sessionId: this.options.sessionId, deliveryId: d.deliveryId, turnId: "none", ...d.outcome } });
+        // No turn ever started: a failed outcome may omit turnId.
+        this.queue({ op: "outcome", body: { sessionId: this.options.sessionId, deliveryId: d.deliveryId, ...d.outcome } });
       }
       await this.saveJournal();
     }
@@ -322,8 +323,8 @@ export class CommsMod {
         return this.queue({ op: "check-result", body: { ...base, found: "yes", turnId: d.turnId, turn: "completed", ...d.outcome } });
       }
       if (d.turnId) {
-        // An answer delivery: delivered is where it ends. (Contract change proposed.)
-        return this.queue({ op: "check-result", body: { ...base, found: "yes", turnId: d.turnId, turn: "running" } });
+        // An answer's delivery ran and has no outcome to report.
+        return this.queue({ op: "check-result", body: { ...base, found: "yes", turnId: d.turnId, turn: "completed" } });
       }
       return this.queue({ op: "check-result", body: { ...base, found: "unknown", detail: "refused before it started" } });
     }
@@ -420,14 +421,15 @@ export class CommsMod {
   }
 }
 
-export function unmatchedNotice(d: Pick<Tracked, "messageId" | "sender" | "recipient">, participant: string): string {
-  const me = d.recipient ?? participant;
-  const from = d.sender ? ` from @${d.sender}` : "";
-  return [
-    `[agent-comms notice] Your answer to request ${d.messageId}${from} was not sent: other input entered that turn, so the reply couldn't be matched to the request.`,
-    `Send your answer with: comms reply --as ${me} ${d.messageId} "<your answer>"`,
-    "Nothing you write in this turn is sent anywhere automatically.",
-  ].join("\n");
+/** The protocol's notice, from what the journal keeps of the delivery. */
+export function unmatchedNotice(d: Pick<Tracked, "deliveryId" | "messageId" | "sender" | "recipient" | "seq">, participant: string): string {
+  const ref = (name: string) => ({ id: name, name, kind: "agent" as const });
+  const delivery = {
+    id: d.deliveryId,
+    recipient: ref(d.recipient ?? participant),
+    message: { id: d.messageId, seq: d.seq ?? 0, sender: ref(d.sender ?? "unknown") },
+  } as unknown as Parameters<typeof renderUnmatchedNotice>[0];
+  return renderUnmatchedNotice(delivery, { harnessLabelsSource: true });
 }
 
 export function followUpNote(d: Pick<Tracked, "messageId" | "sender" | "recipient">, participant: string): string {
