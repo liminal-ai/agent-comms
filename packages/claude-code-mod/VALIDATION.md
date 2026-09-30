@@ -67,3 +67,4 @@ Participants cc-a and cc-b (Claude Code, lim-builder); requests sent as cc-b wit
 | Agent-initiated Claude Code → Claude Code and Claude Code → T3 | Pass: cc-b's agent asked cc-a (`36`, collected) and t3-native (`56`, collected by the T3 adapter); both answers woke cc-b and weren't collected |
 | Ten benign requests, Sonnet, normal permissions | Pass 10/10; the file write raised the permission prompt |
 | Protocol errors in the mods' logs | None (no `poll_in_progress`, `conflict`, `bad_request`, `unavailable`) |
+| Connector SIGKILLed mid-turn and recreated (Cedar's `start-connector-m5.sh`) | Pass: the mod saw ECONNRESET, then ECONNREFUSED, then `unknown_session`, and re-registered 5 s after the kill. The delivery was submitted once; its turn (held on a permission prompt for 5 min) finished after the lease handover and `It printed 271.` was collected |
