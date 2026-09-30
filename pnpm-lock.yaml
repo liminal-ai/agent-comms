@@ -9,6 +9,9 @@ catalogs:
     '@types/node':
       specifier: 24.12.4
       version: 24.12.4
+    effect:
+      specifier: 4.0.0-rc.115
+      version: 4.0.0-rc.115
     typescript:
       specifier: 7.0.2
       version: 7.0.2
@@ -49,6 +52,31 @@ importers:
       '@agent-comms/connector-stub':
         specifier: workspace:*
         version: link:../connector-stub
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
+  packages/connector:
+    dependencies:
+      '@agent-comms/connector-stub':
+        specifier: workspace:*
+        version: link:../connector-stub
+      '@agent-comms/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      convex:
+        specifier: 1.46.0
+        version: 1.46.0
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.0-rc.115
+    devDependencies:
+      '@agent-comms/comms-cli':
+        specifier: workspace:*
+        version: link:../comms-cli
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4
@@ -537,6 +565,9 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  effect@4.0.0-rc.115:
+    resolution: {integrity: sha512-ogYulZ5ffeOzrJqQrG0XOkDO5lKn2s9KNHhoxJy/6wKUkF0i12dlVXWA9TgsgQ+zV/JzizyG0+XMPepZEQX6vw==}
 
   es-module-lexer@2.3.2:
     resolution: {integrity: sha512-poHGpORABojJJucnV9KbOavETW8lBVnphkW77ER5/BQ5Fz7oXSoCNek7IH3vR5nRjdsEz926ibFYX8KtLQmdyw==}
@@ -1048,6 +1079,8 @@ snapshots:
       - utf-8-validate
 
   detect-libc@2.1.2: {}
+
+  effect@4.0.0-rc.115: {}
 
   es-module-lexer@2.3.2: {}
 

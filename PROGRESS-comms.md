@@ -33,5 +33,17 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - The claim is held from `claimed` through `delivered` (so a takeover can still collect); cleared when finished. An answer's delivery finishes at `delivered`.
 - New group members start with everything so far counted as read.
 
+## M2: the connector
+- [x] `packages/connector` (Effect 4.0.0-rc.115): server API over Convex, dispatcher, Claude Code sessions + adapter, loopback server, config, `comms-connector` entry point
+- [x] Claims with lease, renewal, pre-handoff compare-and-set; recovery through adapter checks (never blind); claims only what can be handed over; serial per participant; writes retried through outages
+- [x] 9 integration tests (convex-test + real socket + scripted mod), stable over repeated runs
+- [x] Live smoke on lim-builder: real local Convex (3240) + real ConvexClient, request → mod → collected answer → answer delivered back
+- [x] `scripts/dev-setup.ts`: registers a machine secret and promotes participants from a seed file (secrets read from files, never printed)
+
+### M2 decisions
+- Mod reports (`delivered`, `outcome`, `check-result`, `presence`) are acknowledged at once and written in the background; documented in the protocol. `answerMessageId` only when known.
+- Any `unknown_session` answer means: register again, then retry the call (documented).
+- After a connector restart, recovery waits for the old lease to expire (60 s default) before asking the session.
+
 ## Later
-M2 connector · M3 T3 adapter · M4 web · M5 local milestone · M6 integration and cloud
+M3 T3 adapter · M4 web · M5 local milestone · M6 integration and cloud

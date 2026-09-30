@@ -1,0 +1,29 @@
+{
+  "name": "@agent-comms/connector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The per-machine connector: Convex subscription, claims, the loopback server, and the harness adapters.",
+  "bin": {
+    "comms-connector": "./src/main.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "cd ../.. && vitest run --project connector"
+  },
+  "dependencies": {
+    "@agent-comms/protocol": "workspace:*",
+    "@agent-comms/connector-stub": "workspace:*",
+    "convex": "1.46.0",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "@agent-comms/comms-cli": "workspace:*"
+  }
+}

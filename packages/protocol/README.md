@@ -85,10 +85,11 @@ Request shapes and their validation are in `requestDecoders` (loopback.ts); resp
 
 Rules that matter to clients:
 
-- **Register** again with the same `sessionId` after the connector restarts (a poll answers `unknown_session`). A different session for the same participant supersedes the old one, whose polls then fail with `session_superseded`: stop polling.
+- **Register** again with the same `sessionId` after the connector restarts: any call answering `unknown_session` means register, then retry that call. A different session for the same participant supersedes the old one, whose polls then fail with `session_superseded`: stop polling.
 - **Poll** is held until there's an item or the wait passes, then answered, possibly with no items. The bound is the connector's, because the mod's fetch has no timeout. One outstanding poll per session; a second fails with `poll_in_progress`. If the client disconnects, nothing is handed out on that poll.
 - **Serial per participant:** a participant gets its next delivery only after the previous one is finished (a request replied, ambiguous, failed or uncertain; an answer delivered).
 - **Checks** replace blind re-runs. After a restart or a new registration, anything handed out and unfinished comes back as a `check` before any new delivery: `state: "claimed"` asks "did this enter the session?"; `state: "delivered"` asks "what happened to turn `turnId`?". Answer with `check-result`. `no` for a claimed one makes it run again; `unknown` makes it `uncertain`; `yes` with a completed turn carries the outcome.
+- **Reports are acknowledged at once.** The connector answers `delivered`, `outcome`, `check-result` and `presence` immediately and writes them to the server in the background, retrying while it's unreachable, so a harness is never held up. The `delivery.state` in the answer is the state being recorded; `answerMessageId` is included only when already known.
 - **`delivered`** is idempotent for the same turn; a different turn is a `conflict`.
 - **`outcome`** applies only to request deliveries. `replied` is collected at most once per delivery; a repeat returns the first answer with `duplicate: true`. `ambiguous` reports only the kinds of input that entered the turn (`origin`, e.g. `composer`), never their text.
 - **`send`** without `conversationId` addresses exactly one participant (their DM, opened if new). With it, every addressed name must be a member, and an empty `to` posts without waking anyone.

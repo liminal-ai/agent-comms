@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "pnpm -r typecheck && tsc -p convex/tsconfig.json",
-    "test": "pnpm -r --workspace-concurrency=1 test && vitest run",
-    "test:convex": "vitest run",
+    "test": "pnpm -r --workspace-concurrency=1 --filter '!@agent-comms/connector' test && vitest run",
+    "test:convex": "vitest run --project convex",
     "check": "pnpm typecheck && pnpm test"
   },
   "devDependencies": {

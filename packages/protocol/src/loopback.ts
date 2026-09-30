@@ -220,6 +220,9 @@ const requestDecoders = {
 
   /**
    * The harness accepted a delivery: a turn started carrying our delivery id.
+   * Like every report (`outcome`, `check-result`, `presence`), acknowledged at
+   * once and written to the server in the background. Any call answering
+   * `unknown_session` means: register again, then retry it.
    * Idempotent: the same turn id again succeeds. A different turn id, or a
    * delivery not offered to this session's participant, fails with `conflict`.
    */
@@ -228,8 +231,9 @@ const requestDecoders = {
   /**
    * How our turn ended. Only for deliveries of a request; an answer delivery
    * ends at `delivered` and `outcome` on it fails with `conflict`.
-   * `replied` collects the answer: at most once per delivery; a repeat returns
-   * the first answer's message id with `duplicate: true`.
+   * `replied` collects the answer: at most once per delivery; a repeat
+   * returns `duplicate: true`. `answerMessageId` is present only when already
+   * known (the stub knows at once; the connector writes in the background).
    */
   outcome: (value: unknown, path: string) => {
     const head = object({ sessionId: harnessId, deliveryId: id, turnId: harnessId })(value, path);
