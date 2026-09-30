@@ -25,7 +25,11 @@ export interface T3Thread {
     state: "running" | "interrupted" | "completed" | "error";
     requestedAt: string;
     completedAt: string | null;
+    /** The turn's answer. Null on a completed turn means it was interrupted (Claude; Hazel's notes §6). */
+    assistantMessageId: string | null;
   } | null;
+  /** Message ids T3 couldn't start a turn for (`provider.turn.start.failed` activities). */
+  turnStartFailures: string[];
   messages: T3Message[];
   /** Turns that have finished, from the thread's checkpoints. */
   finishedTurnIds: string[];
@@ -82,21 +86,33 @@ function isActive(thread: T3Thread, turnId: string): boolean {
  * messages, so it's read from T3's other records, in order:
  * 1. the first turn-tagged message created after ours (the turn's output);
  * 2. the session's active turn, once our message is there and it's running;
- * 3. the latest turn, if it was requested at our message's own timestamp.
- * With no server-side queue, a message sent into a running turn joins it, so
- * all three name the turn our message is in.
+ * 3. the latest turn, if it was requested at our message's own timestamp
+ *    (live: a turn our message starts has `requestedAt` equal to its `createdAt`).
+ * A latest turn requested after our message is never ours: it's a turn
+ * something else started (Claude waking for a background task, say) after
+ * ours was dropped or never started.
  */
 export function turnOf(thread: T3Thread, messageId: string): string | undefined {
   const ours = thread.messages.find((m) => m.id === messageId);
   if (!ours) return undefined;
   if (ours.turnId) return ours.turnId;
   const after = thread.messages
-    .filter((m) => m.turnId !== null && m.createdAt > ours.createdAt)
-    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))[0];
-  if (after) return after.turnId!;
-  if (thread.session?.activeTurnId && RUNNING.has(thread.session.status)) return thread.session.activeTurnId;
-  if (thread.latestTurn && thread.latestTurn.requestedAt === ours.createdAt) return thread.latestTurn.turnId;
-  return undefined;
+    .filter((m) => m.turnId !== null && ms(m.createdAt) > ms(ours.createdAt))
+    .sort((a, b) => ms(a.createdAt) - ms(b.createdAt))[0];
+  const running = thread.session?.activeTurnId && RUNNING.has(thread.session.status) ? thread.session.activeTurnId : undefined;
+  const requestedByUs =
+    thread.latestTurn && ms(thread.latestTurn.requestedAt) === ms(ours.createdAt) ? thread.latestTurn.turnId : undefined;
+  const candidate = after?.turnId ?? running ?? requestedByUs;
+  if (candidate && thread.latestTurn?.turnId === candidate && ms(thread.latestTurn.requestedAt) > ms(ours.createdAt)) return undefined;
+  return candidate ?? undefined;
+}
+
+/** T3 recorded our message but no turn ran it: it failed to start, or a later turn began without it. */
+export function neverRan(thread: T3Thread, messageId: string): boolean {
+  const ours = thread.messages.find((m) => m.id === messageId);
+  if (!ours) return false;
+  if (thread.turnStartFailures.includes(messageId)) return true;
+  return turnOf(thread, messageId) === undefined && !isBusy(thread) && thread.latestTurn !== null && ms(thread.latestTurn.requestedAt) > ms(ours.createdAt);
 }
 
 /**

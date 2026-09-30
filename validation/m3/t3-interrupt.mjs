@@ -1,0 +1,11 @@
+import { answersTo, interrupt, log, send, sleep, waitBusy, waitState } from "./t3-live.mjs";
+const who = process.argv[2] ?? "t3-native";
+await waitBusy(who, false);
+const s = send("smoke-a", who, "Without using any tools, write out every integer from 1 to 4000 in words, one per line. Do not abbreviate.");
+await waitState(s, who, ["delivered"], 60_000);
+await sleep(6000);
+log("interrupting");
+await interrupt(who);
+const d = await waitState(s, who, ["replied", "ambiguous", "failed", "uncertain"]);
+const answers = await answersTo(s);
+console.log(JSON.stringify({ who, state: d.state, detail: d.detail ?? null, answers: answers.map((a) => ({ ...a, text: a.text.slice(0, 80) })) }));

@@ -25,6 +25,7 @@ class FakeT3 implements T3Client {
         latestTurn: null,
         messages: [],
         finishedTurnIds: [],
+        turnStartFailures: [],
       });
     }
   }
@@ -71,7 +72,7 @@ class FakeT3 implements T3Client {
     let turnId = t.session?.status === "running" ? t.session.activeTurnId : null;
     if (!turnId) {
       turnId = `turn-${++this.turns}`;
-      t.latestTurn = { turnId, state: "running", requestedAt: createdAt, completedAt: null };
+      t.latestTurn = { turnId, state: "running", requestedAt: createdAt, completedAt: null, assistantMessageId: null };
       t.session = { status: "running", activeTurnId: turnId, lastError: null };
     }
     t.messages.push({ id: messageId, role: "user", turnId: null, streaming: false, createdAt });
@@ -80,7 +81,9 @@ class FakeT3 implements T3Client {
   }
   assistant(id: string, text: string, streaming = false) {
     const t = this.thread(id);
-    t.messages.push({ id: `a-${t.messages.length}`, role: "assistant", turnId: t.session!.activeTurnId, streaming, createdAt: this.at(), text });
+    const messageId = `a-${t.messages.length}`;
+    t.messages.push({ id: messageId, role: "assistant", turnId: t.session!.activeTurnId, streaming, createdAt: this.at(), text });
+    if (!streaming && t.latestTurn?.turnId === t.session!.activeTurnId) t.latestTurn!.assistantMessageId = messageId;
     this.changed(id);
   }
   finish(id: string, state: "completed" | "interrupted" | "error" = "completed", lastError: string | null = null) {
@@ -214,7 +217,13 @@ describe("T3 adapter", () => {
     const turnId = (h as { turnId: string }).turnId;
     // Simulate a snapshot where our message has its turn id but latestTurn still names the old turn.
     const ourTurn = { ...t3.thread("th1").latestTurn! };
-    t3.thread("th1").latestTurn = { turnId: "turn-1", state: "completed", requestedAt: "2026-09-30T12:00:01.000Z", completedAt: "2026-09-30T12:00:02.000Z" };
+    t3.thread("th1").latestTurn = {
+      turnId: "turn-1",
+      state: "completed",
+      requestedAt: "2026-09-30T12:00:01.000Z",
+      completedAt: "2026-09-30T12:00:02.000Z",
+      assistantMessageId: null,
+    };
     t3.thread("th1").session = { status: "ready", activeTurnId: null, lastError: null };
     let settled = false;
     const outcome = adapter.awaitOutcome(target, delivery(), turnId).then((o) => ((settled = true), o));
@@ -225,6 +234,48 @@ describe("T3 adapter", () => {
     t3.assistant("th1", "4");
     t3.finish("th1");
     assert.deepEqual(await outcome, { _tag: "replied", answer: "4" });
+  });
+
+  it("treats a completed turn with no answer as interrupted (how v0.0.44 reports a Claude interrupt)", async () => {
+    const { t3, adapter } = setup();
+    const h = await adapter.handOff(target, delivery());
+    const outcome = adapter.awaitOutcome(target, delivery(), (h as { turnId: string }).turnId);
+    t3.finish("th1", "completed");
+    assert.deepEqual(await outcome, { _tag: "failed", reason: "aborted", detail: "the turn ended without an answer (interrupted)" });
+  });
+
+  it("fails fast when T3 reports it couldn't start our turn", async () => {
+    const { t3, adapter } = setup();
+    t3.startTurn = async (id, turn) => {
+      t3.thread(id).messages.push({ id: turn.messageId, role: "user", turnId: null, streaming: false, createdAt: "2026-09-30T12:00:30.000Z" });
+      t3.thread(id).turnStartFailures.push(turn.messageId);
+    };
+    const h = await adapter.handOff(target, delivery());
+    assert.equal(h._tag, "rejected");
+  });
+
+  it("never takes a turn requested after our message as ours", async () => {
+    const { t3, adapter } = setup();
+    // Our message steers into Lee's turn, the interrupt drops it, then Claude wakes on its own.
+    t3.userMessage("th1", "lee-turn");
+    t3.startTurn = async (id, turn) => void t3.userMessage(id, turn.messageId);
+    const realGetThread = t3.getThread.bind(t3);
+    const busyAtFirst = { n: 0 };
+    t3.getThread = async (id: string) => {
+      const t = await realGetThread(id);
+      // Pretend the thread looked idle for the courtesy wait, so we dispatch into Lee's running turn.
+      if (t && busyAtFirst.n++ < 2) t.session = { status: "ready", activeTurnId: null, lastError: null };
+      return t;
+    };
+    const handOff = adapter.handOff(target, delivery());
+    await tick(60);
+    t3.finish("th1", "completed"); // interrupted: no answer
+    const wake = t3.userMessage("th1", "placeholder"); // a new turn (the fake needs a message to open one)
+    t3.thread("th1").messages = t3.thread("th1").messages.filter((m) => m.id !== "placeholder");
+    t3.assistant("th1", "background task finished");
+    t3.finish("th1");
+    const h = await handOff;
+    assert.notDeepEqual(h, { _tag: "accepted", turnId: wake });
   });
 
   it("rejects a missing thread or a refused turn.start", async () => {

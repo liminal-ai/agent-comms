@@ -15,7 +15,7 @@
 // - Reads nothing else from the thread.
 
 import { type Delivery, type EnteredInput, renderDelivery } from "@agent-comms/protocol";
-import { isBusy, othersInTurn, T3Rejected, type T3Client, type T3Thread, turnFinished, turnOf } from "./model.ts";
+import { isBusy, neverRan, othersInTurn, T3Rejected, type T3Client, type T3Thread, turnFinished, turnOf } from "./model.ts";
 
 export interface Target {
   participant: string;
@@ -113,13 +113,20 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
   function outcomeOf(thread: T3Thread, ourMessageId: string, turnId: string): Outcome {
     const others = othersInTurn(thread, ourMessageId, turnId);
     if (others.length > 0) return { _tag: "ambiguous", entered: others.map(() => ({ origin: "t3-user-message" })) };
-    const state = thread.latestTurn?.turnId === turnId ? thread.latestTurn.state : "completed";
+    const latest = thread.latestTurn?.turnId === turnId ? thread.latestTurn : null;
+    const state = latest?.state ?? "completed";
     if (state === "interrupted") return { _tag: "failed", reason: "aborted", detail: "the turn was interrupted" };
     if (state === "error") {
       return { _tag: "failed", reason: "error", detail: thread.session?.lastError ?? "the turn ended in an error" };
     }
-    const answers = thread.messages.filter((m) => m.role === "assistant" && m.turnId === turnId && !m.streaming && m.text?.trim());
-    const final = answers.at(-1);
+    // v0.0.44 reports an interrupted Claude turn as completed with no answer (Hazel's notes §6).
+    // (Codex keeps the partial text as its answer; that can't be told from a real one.)
+    if (latest && latest.assistantMessageId === null) {
+      return { _tag: "failed", reason: "aborted", detail: "the turn ended without an answer (interrupted)" };
+    }
+    const named = latest ? thread.messages.find((m) => m.id === latest.assistantMessageId && m.text?.trim()) : undefined;
+    const final =
+      named ?? thread.messages.filter((m) => m.role === "assistant" && m.turnId === turnId && !m.streaming && m.text?.trim()).at(-1);
     if (!final) return { _tag: "failed", reason: "error", detail: "the turn produced no answer" };
     return { _tag: "replied", answer: final.text! };
   }
@@ -144,9 +151,18 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
             interactionMode: modes.interactionMode,
           });
         }
-        const turnId = await waitFor(threadId, (t) => turnOf(t, messageId), acceptTimeoutMs);
-        if (turnId === undefined) return { _tag: "lost", detail: `message ${messageId} wasn't in a turn after ${acceptTimeoutMs} ms` };
-        return { _tag: "accepted", turnId };
+        const found = await waitFor(
+          threadId,
+          (t): { turnId: string } | { neverRan: true } | undefined => {
+            if (neverRan(t, messageId)) return { neverRan: true };
+            const turnId = turnOf(t, messageId);
+            return turnId ? { turnId } : undefined;
+          },
+          acceptTimeoutMs,
+        );
+        if (found === undefined) return { _tag: "lost", detail: `message ${messageId} wasn't in a turn after ${acceptTimeoutMs} ms` };
+        if ("neverRan" in found) return { _tag: "rejected", detail: "T3 recorded the message but ran no turn for it" };
+        return { _tag: "accepted", turnId: found.turnId };
       } catch (error) {
         if (error instanceof T3Rejected) return { _tag: "rejected", detail: error.message };
         return { _tag: "lost", detail: error instanceof Error ? error.message : String(error) };
@@ -174,6 +190,7 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
       if (!thread) return { _tag: "unknown", detail: `T3 thread ${target.locator} not found` };
       const ours = thread.messages.find((m) => m.id === messageId);
       if (!ours) return { _tag: "absent" };
+      if (neverRan(thread, messageId)) return { _tag: "unknown", detail: "T3 recorded the message but ran no turn for it" };
       const turnId = turnOf(thread, messageId);
       if (!turnId) return { _tag: "later", detail: "our message isn't in a turn yet" };
       if (!turnFinished(thread, turnId, messageId)) return { _tag: "running", turnId };

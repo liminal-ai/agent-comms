@@ -1,0 +1,18 @@
+import { execFileSync } from "node:child_process";
+import { answersTo, log, send, sleep, thread, waitBusy, waitState } from "./t3-live.mjs";
+const env = { ...process.env, XDG_RUNTIME_DIR: "/run/user/1000", DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus" };
+const sc = (...a) => execFileSync("systemctl", ["--user", ...a], { env, encoding: "utf8" });
+const who = "t3-codex";
+await waitBusy(who, false);
+const s = send("smoke-a", who, "Without using any tools, write the integers from 1 to 300 in words, one per line, then a final line: KILL-TEST-DONE");
+await waitState(s, who, ["delivered"], 60_000);
+log("delivered; killing the connector");
+sc("kill", "--kill-whom=main", "--signal=KILL", "cedar-connector-t3");
+await sleep(3000);
+log("restarting");
+execFileSync("/srv/agents/cedar/smoke/start-connector-t3.sh", { env, stdio: "inherit" });
+const d = await waitState(s, who, ["replied", "ambiguous", "failed", "uncertain"], 240_000);
+const t = await thread(who);
+const ours = t.messages.filter((m) => m.id === `comms-${s.deliveryId}`).length;
+const answers = await answersTo(s);
+console.log(JSON.stringify({ state: d.state, detail: d.detail ?? null, ourMessagesInThread: ours, answers: answers.map((a) => ({ collected: a.collected, tail: a.text.slice(-40) })) }));

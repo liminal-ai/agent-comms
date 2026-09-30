@@ -167,6 +167,7 @@ function slice(thread: OrchestrationThread): T3Thread {
           state: thread.latestTurn.state,
           requestedAt: thread.latestTurn.requestedAt,
           completedAt: thread.latestTurn.completedAt,
+          assistantMessageId: thread.latestTurn.assistantMessageId,
         }
       : null,
     messages: thread.messages.map((m) => ({
@@ -178,5 +179,9 @@ function slice(thread: OrchestrationThread): T3Thread {
       ...(m.role === "assistant" ? { text: m.text } : {}),
     })),
     finishedTurnIds: thread.checkpoints.map((c) => c.turnId),
+    turnStartFailures: thread.activities.flatMap((a) => {
+      const requestId = (a.payload as { requestId?: unknown } | null)?.requestId;
+      return a.kind === "provider.turn.start.failed" && typeof requestId === "string" ? [requestId] : [];
+    }),
   };
 }

@@ -57,5 +57,6 @@ export function loadConfig(path: string): LoadedConfig {
       uid: process.getuid?.(),
     });
   if (!socket) throw new Error(`can't work out the socket path; set "socket" in ${path}`);
-  return { ...config, secretFile, secret, socket, warnings };
+  const t3 = config.t3 ? { ...config.t3, authFile: expand(config.t3.authFile) } : undefined;
+  return { ...config, ...(t3 ? { t3 } : {}), secretFile, secret, socket, warnings };
 }
