@@ -1,5 +1,7 @@
 # Shared acceptance check (local), 2026-09-30
 
+**Result: every check passes, on both the T3 and the Claude Code side.** Run by Cedar (T3 side, web view, Convex checks) and Hazel (Claude Code side, the SIGKILL).
+
 lim-builder; local Convex (3240); connector `cedar-connector-m5` (main, default socket, T3 adapter); Hazel's T3 v0.0.44 on 3780. Homes: `t3-native` (native Claude, T3), `t3-lhc` (Claude-LHC, T3), `cc-a` (Claude Code terminal with Hazel's mod). "Typed directly" = a foreign `thread.turn.start` in T3 (what the web UI sends), or typing in the Claude Code terminal; every such text carries the marker `PRIVATE-ACC`.
 
 | # | Check | Result |
@@ -13,8 +15,12 @@ lim-builder; local Convex (3240); connector `cedar-connector-m5` (main, default 
 | 5 | An answer that needs the agent's own work | T3 (t3-lhc, shell command): collected normally, `replied`, "6" (correct). Claude Code (cc-a, Hazel): one turn with a background shell, a helper subagent and a foreground shell; both task notifications arrived in our turn, linked by their `toolUseId`; the answer was collected normally ("…5…81…6"); the helper's own answer was not reported. |
 | 6 | Nothing typed directly appears in Convex | Pass: none of the 105 messages in Convex contains `PRIVATE-` (T3-side and Claude Code-side markers) (`acc-67.mjs`). |
 | 7 | An answer wakes the requester, nothing it does next is collected | Pass: 45 collected answers, none from an answer's delivery; no answer delivery ever went past `delivered`; 2b's answer woke cc-a and was delivered only. |
-| 8 | Connector killed mid-delivery and restarted | T3 (t3-codex): SIGKILL (Hazel) 31 s after `delivered`, recreated 2 s later; `replied` once, full answer, our message in the thread once. Claude Code: (Hazel) |
+| 8 | Connector killed mid-delivery and restarted | T3 (t3-codex): SIGKILL (Hazel) 31 s after `delivered`, recreated 2 s later; `replied` once, full answer, our message in the thread once. Claude Code (cc-a, Hazel): same SIGKILL 4 s after `delivered`, during a 45 s command; the mod saw ECONNRESET → ECONNREFUSED → `unknown_session`, re-registered 5 s after the kill; `replied` ("The command printed 8888."), submitted once. |
 
 ## Incident (Hazel, during 2b)
 
 cc-a's first test folder sat under `/srv/agents/hazel`, so its Claude Code session loaded Hazel's CLAUDE.md and, when asked to message t3-native, tried `lhc-agent` (the relay) instead of `comms`. Nothing was sent (unknown relay target); Hazel killed the session before a suggested follow-up to a live seat could go out. cc-a was restarted in `/tmp/hazel-mod-work` with a PATH holding only `comms` and `node`, and 2b was rerun cleanly. Lesson for promoting terminal agents: an agent's working folder decides which instructions it loads, and a folder inheriting a seat's instructions can reach the relay and live seats. Keep test terminals out of seat homes.
+
+## Loose end, explained
+
+One delivery stays `claimed`: an answer to `smoke-a` from the 22:08 M2 smoke test, handed to a curl-simulated session that no longer exists. For a Claude Code participant the connector recovers a claimed delivery only by asking a live session, and `smoke-a` has none, so it waits rather than guessing. Correct behavior; it clears when `smoke-a` registers or is retired.

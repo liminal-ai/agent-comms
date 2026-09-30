@@ -70,5 +70,7 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - [x] `comms` on PATH for this machine's agents: `~/.local/bin/comms` → `/srv/work/agent-comms` (main)
 - [x] Connector on the default socket from the main checkout (unit `cedar-connector-m5`)
 
-## Later
-M6: integration with Hazel's mod (swap the stub for the real connector, shared acceptance check), then the cloud checkpoint
+## M6: integration, then the cloud checkpoint
+- [x] Hazel's mod merged; every part-D check passes on the real connector (her VALIDATION.md)
+- [x] Shared acceptance check (local): every item passes on T3 and Claude Code (`validation/acceptance/README.md`)
+- [ ] Cloud checkpoint: needs Lee (cloud Convex project under his account; the second machine and access to it)
