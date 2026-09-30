@@ -124,8 +124,8 @@ Reference implementation: `/srv/work/long-horizon-context/packages/t3code-inject
 
 - **Deliver:** wait until the thread is idle, then `thread.turn.start` with the rendered delivery as the user message and a message id the adapter chooses. Waiting is only a courtesy, since a person can start a turn in between: ownership comes from events, not from the wait.
   - v0.0.44 has no server-side queue, and a turn start on a busy thread steers the running turn. The Hazel confirms that per provider.
-- **Ownership and matching:** `thread.message-sent` carries `messageId` and `turnId`. Our message's event gives our turn id; mark delivered.
-  - If another user message arrives with the same `turnId`, the delivery is ambiguous.
+- **Ownership and matching:** a user `thread.message-sent` carries our `messageId` but `turnId: null` (Hazel, live on v0.0.44). Link it to the turn through the thread session's `activeTurnId` once our turn starts; mark delivered. Hazel's `docs/t3-api-notes.md` gives the exact event sequence and any race.
+  - If another user message is sent while that turn is the session's active turn, the delivery is ambiguous.
   - Otherwise, when that turn completes, its final assistant message is the answer: write it with `inReplyTo`, and mark replied.
   - If our message landed in a turn someone else started (steered in), it's ambiguous.
   - Deliveries of kind `answer` are delivered, never collected.
