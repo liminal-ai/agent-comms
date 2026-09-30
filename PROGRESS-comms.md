@@ -65,5 +65,10 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - [x] Connector resets Claude Code participants' presence to offline at start (stale "idle" seen in the check)
 - Reaching it from Lee's phone needs a reachable deployment: M6
 
+## M5: first milestone (local)
+- [x] All M5 checks pass live (`validation/m5/README.md`): agent-initiated `comms send` from a Codex thread answered by native Claude and delivered back, no loop; Lee's group post to two agents, both linked, third not woken; typed-in → ambiguous → notice → the agent's own `comms reply`; busy wait and kill recovery from `validation/m3`
+- [x] `comms` on PATH for this machine's agents: `~/.local/bin/comms` → `/srv/work/agent-comms` (main)
+- [x] Connector on the default socket from the main checkout (unit `cedar-connector-m5`)
+
 ## Later
-M5 local milestone · M6 integration and cloud
+M6: integration with Hazel's mod (swap the stub for the real connector, shared acceptance check), then the cloud checkpoint
