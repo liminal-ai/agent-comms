@@ -1,6 +1,6 @@
 # Agent comms: overview
 
-Shared context for both builders. Read this first, then your own lane document:
+Shared context for Cedar and Hazel. Read this first, then your own lane document:
 
 - Comms server lane: [`01-comms-lane.md`](./01-comms-lane.md)
 - T3 lane (then the Claude Code mod): [`02-t3-lane.md`](./02-t3-lane.md)
@@ -89,31 +89,36 @@ Scenario flows (T3↔T3, Claude Code↔Claude Code, groups, reply matching, trac
 - The mod and the `comms` CLI: plain TypeScript. Claude Code runs the mod in its own runtime, and the CLI must start fast from any shell.
 - One monorepo: `/srv/work/agent-comms`. These documents live in its `docs/`.
 
-## The plan: two builders
+## The plan: two agents
 
-Two fresh native T3 threads, Opus 5.5 at high effort, on lim-builder.
+Two agents, each a native Claude thread (Opus 5.5, high effort) in the T3 on port 3773, each with its own home folder:
 
-| Lane | Builder | Work |
+- **Cedar**, home `/srv/agents/cedar`, works in the worktree `/srv/agents/cedar/agent-comms` (branch `cedar`).
+- **Hazel**, home `/srv/agents/hazel`, works in `/srv/agents/hazel/t3code-v044` and the worktree `/srv/agents/hazel/agent-comms` (branch `hazel`).
+
+The main checkout `/srv/work/agent-comms` stays on `main`; Cedar merges both branches into it.
+
+| Lane | Agent | Work |
 |---|---|---|
-| Comms | comms builder | The contract, CLI and stub first; then Convex, the connector, the T3 adapter, the web view |
-| T3, then mod | T3 builder | A clean T3 v0.0.44 with the claude-lhc provider; T3 API notes; then the Claude Code mod |
+| Comms | Cedar | The contract, CLI and stub first; then Convex, the connector, the T3 adapter, the web view |
+| T3, then mod | Hazel | A clean T3 v0.0.44 with the claude-lhc provider; T3 API notes; then the Claude Code mod |
 
 Sequence:
 
 1. **Both start at once.**
-   - Comms builder writes M0: the envelope and its parser, the loopback protocol, a minimal `comms` CLI, and a stub connector. About half a day; the mod depends on it.
-   - T3 builder installs and patches T3, and writes the API notes (02, parts A and B).
-2. **Handoff 1:** T3 builder gives the comms builder the fresh T3's address, how to authenticate, the test thread ids, and the API notes. The comms builder can start the adapter against stock v0.0.44 before this.
-3. **Handoff 2:** T3 builder reviews M0 (02, part C) and proposes changes. The comms builder owns the contract and makes them.
-4. **T3 builder builds the mod** against the stub (02, part D), while the comms builder finishes the real connector, adapter and web view.
+   - Cedar writes M0: the envelope and its parser, the loopback protocol, a minimal `comms` CLI, and a stub connector. The mod depends on it.
+   - Hazel installs and patches T3, and writes the API notes (02, parts A and B).
+2. **Handoff 1:** Hazel gives Cedar the fresh T3's address, how to authenticate, the test thread ids, and the API notes. The Cedar can start the adapter against stock v0.0.44 before this.
+3. **Handoff 2:** Hazel reviews M0 (02, part C) and proposes changes. The Cedar owns the contract and makes them.
+4. **Hazel builds the mod** against the stub (02, part D), while Cedar finishes the real connector, adapter and web view.
 5. **Integration:** swap the stub for the real connector and run the shared acceptance check. Then the cloud checkpoint.
 
 Ownership:
 
-- `packages/protocol`: comms builder. It is the single source of truth for the contract; the documents point to it rather than restating it.
-- The T3 checkout and install: T3 builder.
-- `packages/claude-code-mod`: T3 builder.
-- Everything else in `agent-comms`, including the root `package.json`, lockfile, workspace config and `README.md`: comms builder. The T3 builder asks for root changes.
+- `packages/protocol`: Cedar. It is the single source of truth for the contract; the documents point to it rather than restating it.
+- The T3 checkout and install: Hazel.
+- `packages/claude-code-mod`: Hazel.
+- Everything else in `agent-comms`, including the root `package.json`, lockfile, workspace config and `README.md`: Cedar. The Hazel asks for root changes.
 - Progress: `PROGRESS-comms.md` and `PROGRESS-t3.md`, one per lane.
 
 ## Shared acceptance check (local)
@@ -133,7 +138,7 @@ The cloud and cross-host checkpoint is separate (comms lane, M6).
 
 ## Working rules on lim-builder
 
-- Each builder works in its own git worktree of `agent-comms`, on its own branch, and merges through the comms builder.
+- Each agent works only in its own worktree of `agent-comms`, on its own branch. Cedar merges into `main` in `/srv/work/agent-comms`; Hazel asks Cedar to merge.
 - Don't touch the running t3code-lhc service on port 3773, its data folder, or any live seat.
 - Builds and test runs go in memory-capped `systemd-run --user` units, outside `t3code-3773.service`, with `SSH_AUTH_SOCK` and `GIT_SSH_COMMAND` unset.
 - **Credentials:** live turns use the credentials already configured for T3 and Claude Code. Never read, print or copy them, including `~/.claude/settings.json`, proxy config, or T3 secret files. Unit tests use dummy values.

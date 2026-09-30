@@ -1,20 +1,20 @@
 # T3 lane, then the Claude Code mod
 
-For the T3 builder. Read [`00-overview.md`](./00-overview.md) first. Four parts, in order:
+For Hazel. Read [`00-overview.md`](./00-overview.md) first. Four parts, in order:
 
 - **A:** a clean T3 with the claude-lhc provider.
-- **B:** T3 API notes for the comms builder.
+- **B:** T3 API notes for Cedar.
 - **C:** review the comms contract.
 - **D:** build the Claude Code mod.
 
-You own the T3 checkout and install, `packages/claude-code-mod` in `agent-comms`, and `PROGRESS-t3.md`. Work in your own git worktree of `agent-comms`. The contract in `packages/protocol` and the repo root files belong to the comms builder: propose changes, don't make them.
+You own the T3 checkout and install, `packages/claude-code-mod` in `agent-comms`, and `PROGRESS-t3.md`. Work in your own git worktree of `agent-comms`. The contract in `packages/protocol` and the repo root files belong to Cedar: propose changes, don't make them.
 
 ## Part A: a clean T3 v0.0.44 with the claude-lhc provider
 
 **Goal:** a T3 that is stock v0.0.44 plus one provider, running beside the current setup and touching none of it.
 
 1. **Checkout:**
-   - clone upstream `pingdotgg/t3code` at tag `v0.0.44` into `/srv/work/t3code-v044`, and work on a branch `lhc-provider`. Alder's `/srv/work/t3code-control-plane-v044` is the untouched reference copy; don't modify it.
+   - clone upstream `pingdotgg/t3code` at tag `v0.0.44` into `/srv/agents/hazel/t3code-v044`, and work on a branch `lhc-provider`. Alder's `/srv/work/t3code-control-plane-v044` is the untouched reference copy; don't modify it.
    - Keep a list of every file you change in `LHC-PATCH.md` at the checkout root. The whole patch should stay reviewable in one sitting.
 2. **Isolation:**
    - `T3CODE_PORT=3780` and `T3CODE_HOME=~/.t3code-v044`;
@@ -42,9 +42,9 @@ You own the T3 checkout and install, `packages/claude-code-mod` in `agent-comms`
    - live: a native Claude thread and a Claude-LHC thread each run turns. The LHC thread goes through at least one compaction, and recalls a fact planted before it;
    - a Codex thread runs, since the comms milestone needs one.
    - Live turns use the credentials already configured; never print them. Record in `validation/` in the checkout.
-5. **Give the comms builder:** the base URL, how an outside process authenticates (a bearer token or pairing, never printed into logs), and the three test thread ids.
+5. **Give Cedar:** the base URL, how an outside process authenticates (a bearer token or pairing, never printed into logs), and the three test thread ids.
 
-## Part B: T3 API notes for the comms builder
+## Part B: T3 API notes for Cedar
 
 Write `docs/t3-api-notes.md` in `agent-comms`. Check each point against the v0.0.44 contracts (`packages/contracts/src/orchestration.ts`, `rpc.ts`) and a live run, not memory. Reference client: `/srv/work/long-horizon-context/packages/t3code-inject`.
 
@@ -64,9 +64,9 @@ To establish:
 
 ## Part C: review the comms contract
 
-Once part A is done, check whether the comms builder has committed M0: `packages/protocol`, `packages/comms-cli` and `packages/connector-stub`.
+Once part A is done, check whether Cedar has committed M0: `packages/protocol`, `packages/comms-cli` and `packages/connector-stub`.
 
-- **If it's committed:** review the envelope, the rendering and its parser, the loopback protocol and the CLI against what you learned in parts A and B, and against the mod facts below. Send concrete change requests to the comms builder, and wait for them to land or be declined before building on them.
+- **If it's committed:** review the envelope, the rendering and its parser, the loopback protocol and the CLI against what you learned in parts A and B, and against the mod facts below. Send concrete change requests to Cedar, and wait for them to land or be declined before building on them.
 - **If it isn't:** tell Reed. Then review whatever draft exists instead of starting the mod.
 
 ## Part D: the Claude Code mod (`packages/claude-code-mod`)
@@ -123,7 +123,7 @@ The adapter for standalone Claude Code terminal sessions: it delivers comms mess
 - A follow-up sent with `comms reply` after the turn's own answer was collected is accepted as a second message on the same request.
 - Nothing the session does outside comms turns is sent to the connector.
 
-Then join the comms builder for M6 and the shared acceptance check in the overview.
+Then join Cedar for M6 and the shared acceptance check in the overview.
 
 ## Don't
 

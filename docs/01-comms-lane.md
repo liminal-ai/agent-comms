@@ -1,8 +1,8 @@
 # Comms lane: the comms server, connector and T3 adapter
 
-For the comms builder. Read [`00-overview.md`](./00-overview.md) first: it has the model, the delivery guarantees, the stack and the working rules on this box. This document is the work breakdown.
+For Cedar. Read [`00-overview.md`](./00-overview.md) first: it has the model, the delivery guarantees, the stack and the working rules on this box. This document is the work breakdown.
 
-You own `packages/protocol` (the contract), the repo root files, and everything in `agent-comms` except `packages/claude-code-mod`, which the T3 builder owns. Progress goes in `PROGRESS-comms.md`.
+You own `packages/protocol` (the contract), the repo root files, and everything in `agent-comms` except `packages/claude-code-mod`, which Hazel owns. Progress goes in `PROGRESS-comms.md`.
 
 ## Repo layout
 
@@ -14,18 +14,18 @@ agent-comms/
   packages/connector-stub/   stub connector for mod development (M0)
   packages/adapter-t3/       T3 adapter, loaded by the connector
   packages/comms-cli/        `comms` CLI. Plain TS, fast start
-  packages/claude-code-mod/  owned by the T3 builder
+  packages/claude-code-mod/  owned by Hazel
   apps/web/                  Lee's chat, groups and directory view
   docs/
   PROGRESS-comms.md
-  PROGRESS-t3.md             owned by the T3 builder
+  PROGRESS-t3.md             owned by Hazel
 ```
 
 Pin `effect` to T3 v0.0.44's catalog version, `4.0.0-rc.115`, in the connector and the adapter.
 
 ## Milestones, in order
 
-### M0: the contract, CLI and stub (first, about half a day; the mod depends on it)
+### M0: the contract, CLI and stub (first; the mod depends on it)
 
 Write in `packages/protocol`:
 
@@ -72,7 +72,7 @@ Then build, minimally:
   In M0 these talk to the stub; later to the real connector, unchanged.
 - **`packages/connector-stub`:** serves the loopback protocol on the socket, hands out deliveries from a JSON file, records everything it receives, and holds polls like the real one. No Convex.
 
-Commit M0 and tell Reed. The T3 builder reviews it (02, part C); changes go through you.
+Commit M0 and tell Reed. The Hazel reviews it (02, part C); changes go through you.
 
 ### M1: Convex schema and functions (local deployment)
 
@@ -120,10 +120,10 @@ Tests: Convex function tests for every state transition and invariant, including
 
 ### M3: the T3 adapter
 
-Reference implementation: `/srv/work/long-horizon-context/packages/t3code-inject`. It already drives stock T3 over its WebSocket RPC: `orchestration.dispatchCommand` with `thread.turn.start`, `orchestration.subscribeThread` for events, and `waitForTurn` for matching. Use the T3 builder's API notes when they land; start against stock v0.0.44 before that.
+Reference implementation: `/srv/work/long-horizon-context/packages/t3code-inject`. It already drives stock T3 over its WebSocket RPC: `orchestration.dispatchCommand` with `thread.turn.start`, `orchestration.subscribeThread` for events, and `waitForTurn` for matching. Use Hazel's API notes when they land; start against stock v0.0.44 before that.
 
 - **Deliver:** wait until the thread is idle, then `thread.turn.start` with the rendered delivery as the user message and a message id the adapter chooses. Waiting is only a courtesy, since a person can start a turn in between: ownership comes from events, not from the wait.
-  - v0.0.44 has no server-side queue, and a turn start on a busy thread steers the running turn. The T3 builder confirms that per provider.
+  - v0.0.44 has no server-side queue, and a turn start on a busy thread steers the running turn. The Hazel confirms that per provider.
 - **Ownership and matching:** `thread.message-sent` carries `messageId` and `turnId`. Our message's event gives our turn id; mark delivered.
   - If another user message arrives with the same `turnId`, the delivery is ambiguous.
   - Otherwise, when that turn completes, its final assistant message is the answer: write it with `inReplyTo`, and mark replied.
@@ -156,7 +156,7 @@ Record evidence in `validation/`.
 
 ### M6: integration, then the cloud checkpoint
 
-1. Swap the stub for the real connector in the T3 builder's mod tests, and run the shared acceptance check in the overview together.
+1. Swap the stub for the real connector in Hazel's mod tests, and run the shared acceptance check in the overview together.
 2. **Cloud checkpoint,** separately: deploy the functions to a cloud Convex project; issue the connector's machine credential; point the connector and the web app at it; seed or migrate the participants; rerun the acceptance check. Then a second machine (the M5 MacBook) with its own connector, and one cross-host request each way.
 
 ## Don't
