@@ -17,6 +17,7 @@ describe("renderDelivery", () => {
     assert.match(text, /`--as cedar`/);
     assert.match(text, /^Conversation: direct messages with @reed \(id c_1\)$/m);
     assert.match(text, /An answer is expected/);
+    assert.match(text, /Finish the work before your final message; if you must end the turn first, send the result later with `comms reply`\./);
     assert.match(text, /comms reply --as cedar m_3 /);
     assert.match(text, /^> Please review the envelope\.$/m);
   });

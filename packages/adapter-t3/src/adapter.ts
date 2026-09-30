@@ -54,6 +54,8 @@ export interface T3Adapter {
   awaitOutcome(target: Target, delivery: Delivery, turnId: string): Promise<Outcome | { _tag: "lost"; detail: string }>;
   check(target: Target, delivery: Delivery, turnId: string | undefined): Promise<Check>;
   notifyUnmatched(target: Target, delivery: Delivery): Promise<void>;
+  /** Busy while the thread's session runs a turn; offline if T3 or the thread can't be reached. */
+  presence(target: Target): Promise<"idle" | "busy" | "offline">;
 }
 
 export const messageIdFor = (deliveryId: string) => `comms-${deliveryId}`;
@@ -284,6 +286,15 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
     },
 
     check,
+
+    async presence(target) {
+      try {
+        const thread = await client.getThread(target.locator, 1);
+        return !thread ? "offline" : isBusy(thread) ? "busy" : "idle";
+      } catch {
+        return "offline";
+      }
+    },
 
     async notifyUnmatched(target, delivery) {
       const noticeId = noticeIdFor(delivery.id);

@@ -54,6 +54,8 @@ export interface HarnessAdapter {
    * `comms reply` (renderUnmatchedNotice). Optional: the mod does this itself.
    */
   readonly notifyUnmatched?: (target: Target, delivery: Delivery) => Effect.Effect<void>;
+  /** The participant's presence, for adapters that can read it from the harness (T3). The mod reports its own. */
+  readonly presence?: (target: Target) => Effect.Effect<"idle" | "busy" | "offline">;
 }
 
 export class Adapters extends Context.Service<Adapters, ReadonlyMap<Harness, HarnessAdapter>>()("agent-comms/Adapters") {}

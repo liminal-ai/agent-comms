@@ -96,7 +96,7 @@ export function renderDelivery(delivery: Delivery, options: RenderOptions): stri
     lines.push(...attachmentLines(message));
     lines.push("");
     lines.push(
-      `An answer is expected. Reply normally: your final message in this turn is sent back to @${message.sender.name} as your answer, so make it complete on its own.`,
+      `An answer is expected. Reply normally: your final message in this turn is sent back to @${message.sender.name} as your answer, so make it complete on its own. Finish the work before your final message; if you must end the turn first, send the result later with \`comms reply\`.`,
     );
     lines.push(
       `If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with \`comms reply --as ${me} ${message.id} "<your answer>"\`.`,

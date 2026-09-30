@@ -286,6 +286,14 @@ describe("T3 adapter: live", () => {
     assert.equal((await adapter.handOff({ participant: "tee", locator: "nope" }, delivery("d_c")))._tag, "rejected");
   });
 
+  it("reports presence from the thread's session", async () => {
+    const { t3, adapter } = setup();
+    assert.equal(await adapter.presence(target), "idle");
+    t3.userMessage("lee");
+    assert.equal(await adapter.presence(target), "busy");
+    assert.equal(await adapter.presence({ participant: "x", locator: "nope" }), "offline");
+  });
+
   it("sends the unmatched notice once, as its own turn", async () => {
     const { t3, adapter } = setup();
     await adapter.notifyUnmatched(target, delivery());

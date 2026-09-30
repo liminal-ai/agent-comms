@@ -12,5 +12,6 @@ export function t3HarnessAdapter(adapter: T3Adapter): HarnessAdapter {
     awaitOutcome: (target, delivery, turnId) => Effect.promise(() => adapter.awaitOutcome(target, delivery, turnId)),
     check: (target, delivery, turnId) => Effect.promise(() => adapter.check(target, delivery, turnId)),
     notifyUnmatched: (target, delivery) => Effect.promise(() => adapter.notifyUnmatched(target, delivery)),
+    presence: (target) => Effect.promise(() => adapter.presence(target)),
   };
 }

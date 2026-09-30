@@ -106,6 +106,31 @@ export const runConnector = (options: ConnectorOptions) =>
       Effect.forkScoped,
     );
 
+    // Presence for harnesses the connector can read (T3): polled, written only on change.
+    const lastPresence = new Map<string, string>();
+    yield* api.homed.pipe(
+      Effect.flatMap(({ participants }) =>
+        Effect.forEach(
+          participants.filter((p) => p.state !== "retired"),
+          (p) => {
+            const adapter = options.adapters?.find((a) => a.harness === p.home.harness);
+            if (!adapter?.presence) return Effect.void;
+            return adapter.presence({ participant: p.participant.name, locator: p.home.locator }).pipe(
+              Effect.flatMap((status) =>
+                lastPresence.get(p.participant.name) === status
+                  ? Effect.void
+                  : api.presence(p.participant.name, status).pipe(Effect.tap(() => Effect.sync(() => lastPresence.set(p.participant.name, status)))),
+              ),
+            );
+          },
+          { discard: true },
+        ),
+      ),
+      Effect.catch((e) => Effect.sync(() => log(`presence: ${e.message}`))),
+      Effect.repeat(Schedule.spaced(Duration.seconds(20))),
+      Effect.forkScoped,
+    );
+
     const adapters = new Map([["claude-code" as const, sessions.adapter], ...(options.adapters ?? []).map((a) => [a.harness, a] as const)]);
     yield* runDispatcher({ leaseMs: options.leaseMs ?? 60_000, ...(options.tickMs ? { tickMs: options.tickMs } : {}), log }).pipe(
       Effect.provideService(ServerApi, api),
