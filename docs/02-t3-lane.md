@@ -82,12 +82,14 @@ The adapter for standalone Claude Code terminal sessions: it delivers comms mess
   - Layout: `.claude-plugin/plugin.json`, `hooks/hooks.json` containing `{ "modules": ["./register.ts"] }`, and a module exporting `register(on)`. `claude plugin validate` checks it.
   - Mods fire in `claude -p` print sessions too.
 - **Events:**
-  - `turn.start` carries the prompt `text` and mints the `turnId`.
+  - `turn.start` carries the prompt `text` and mints the `turnId`. For a plugin-submitted prompt that text is wrapped by Claude Code: "The <plugin> plugin sent a message:", our text, then a closing sentence (Wrenn, captured live). The protocol's parser handles that.
+  - The `tool.call` hook exposes `tool_use_id`. Subagents' tool calls pass through it too; tell them apart by `agentId`.
   - `prompt.submit` origins: `composer` (typed), `plugin` (ours), `bridge`, `sdk`, `peer`, `task-notification`, `scheduled-trigger` and others. Input delivered into a running turn carries that turn's `turnId`.
   - `turn.complete` carries `turnId`, `reason` (`answer | aborted | refusal | error`) and the answer text in **`answer`**. With an `agentId` it is a subagent's turn.
   - A `task-notification` row carries its task: `id` (a subagent's `agentId`) and, when the notification includes it, `toolUseId`, the call that started the task.
 - **`$.prompt.submit({ text })`** wakes an idle session immediately. On a busy session it waits until the turn ends, then runs as its own turn. There's no mid-stream insertion.
-- **`$.http.fetch`** takes `socketPath` for a Unix socket, reads the whole body, and has **no timeout option**. `$.clock.every`, `$.fs` (confined to the session's folder) and `$.session.id()` are available.
+- **`$.http.fetch`** takes `socketPath` for a Unix socket, reads the whole body, and has **no timeout option**. `$.clock.every`, `$.env.get`, `$.fs` (confined to the session's folder) and `$.session.id()` are available.
+- **Configuration, verified** (Reed, `/scratch/reed/modflag`): the mod read `AGENT_COMMS_PARTICIPANT` with `$.env.get`, and reached a socket under `/run/user/<uid>/` with `socketPath`, outside the session folder. No token file is needed (see 01, M0).
 
 **Build against the stub connector:**
 
@@ -97,13 +99,13 @@ The adapter for standalone Claude Code terminal sessions: it delivers comms mess
 4. **For each delivery:** dedupe by delivery id, render it with the protocol's function, and `$.prompt.submit` it.
 5. **Matching:**
    - On `turn.start`, parse the text with the protocol's parser. If it carries our delivery id, that `turnId` is ours; ack delivered with it.
-   - Record the tool-use ids and subagent ids started during our turn.
+   - Record the tool-use ids of main-turn tool calls (no `agentId`) and the subagent ids started during our turn.
    - Any other input delivered into our turn (any `prompt.submit` or notification carrying our `turnId`) makes the delivery ambiguous, **except** a task notification whose `toolUseId` or task `id` matches work our turn started. If the notification can't be linked, it counts as other input.
    - On `turn.complete` for our `turnId` with no `agentId`: reason `answer` reports replied with `answer` (unless ambiguous); aborted, refusal or error report failed with the reason.
-   - If the real result only arrives after our turn ended, that's a follow-up, not ambiguity: the rendered delivery tells the agent to send it with `comms reply`.
+   - If the real result only arrives after our turn ended, that's a follow-up, not ambiguity: the rendered delivery tells the agent to send it with `comms reply`. The turn's own answer is still collected; the follow-up is a separate message with the same `inReplyTo`.
    - Deliveries of kind `answer` are delivered, never collected.
 6. **Presence:** busy between our session's main `turn.start` and `turn.complete`, idle otherwise.
-7. **Restart check:** answer the connector's "do you have delivery X" by looking in the session's messages for the delivery header.
+7. **Restart check:** answer the connector's "do you have delivery X, and what happened to its turn" by looking in the session's messages for the delivery header and that turn's answer.
 8. **Reconnect:** if the connector restarts, re-register and resume polling; the connector's lease and restart rules prevent duplicate prompts.
 
 **Acceptance, against the stub, then the real connector:**
@@ -117,7 +119,8 @@ The adapter for standalone Claude Code terminal sessions: it delivers comms mess
 - An answer delivered in wakes the agent, and nothing it does next is collected; no loop.
 - The connector restarts mid-session: the mod reconnects, with no delivery run twice.
 - A slow connector never leads to overlapping polls.
-- The model handles ten benign rendered requests correctly on Sonnet and Opus, with normal permission prompts still applying.
+- The model handles ten benign rendered requests correctly on Sonnet and Opus, as it actually sees them (inside Claude Code's plugin wrapper), with normal permission prompts still applying.
+- A follow-up sent with `comms reply` after the turn's own answer was collected is accepted as a second message on the same request.
 - Nothing the session does outside comms turns is sent to the connector.
 
 Then join the comms builder for M6 and the shared acceptance check in the overview.

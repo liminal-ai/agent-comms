@@ -40,11 +40,16 @@ Write in `packages/protocol`:
    - state: `pending | claimed | delivered | replied | ambiguous | uncertain | failed`, with a timestamp and detail. `claimed` carries the claiming machine and a lease expiry;
    - the bounded history attached to it: the recent messages since the recipient's read position, capped by count and characters, and saying how many older ones were left out.
 3. **How a delivery is shown to the model.** One rendering function, used by every adapter, and one matching parser.
-   - The rendered text starts with a fixed, machine-readable header carrying the delivery id. Adapters find their delivery by parsing that header with the protocol's parser, never by searching the prompt for a substring.
+   - The rendered text contains a fixed, machine-readable header line carrying the delivery id. The parser matches that header as a complete line anywhere in the text, never as a loose substring. Not at offset zero: Claude Code wraps a plugin's prompt, so the text the mod sees in `turn.start` begins with "The <plugin> plugin sent a message:" and ends with a sentence saying the plugin started the turn in the user's place (Wrenn, captured live).
+   - The renderer takes whether the harness already labels the source. Claude Code does, so the mod's rendering doesn't repeat "a plugin sent this". T3 doesn't, so the T3 rendering includes a one-line source statement.
    - It states accurately what the message is: from which participant, in which conversation, addressed to which registered name (the recipient's own), and whether an answer is expected.
    - It says how to answer: normally just reply; use `comms reply <message-id>` if told the reply couldn't be matched, or for a follow-up that finishes after the turn.
    - It identifies the source; it doesn't ask the model to treat the message as the user's authority. Normal permission checks apply to anything the message asks for. Wrenn's spike saw Sonnet refuse bare `[from: …]` injections until the source was explicit; start from that finding.
-4. **The loopback protocol** between the connector and local clients (the mod and the CLI). HTTP over a Unix socket at a fixed per-user path: `$XDG_RUNTIME_DIR/agent-comms/connector.sock` on Linux, `~/.agent-comms/connector.sock` on macOS. Token in a 0600 file next to it. Operations:
+4. **The loopback protocol** between the connector and local clients (the mod and the CLI). HTTP over a Unix socket at a fixed per-user path: `$XDG_RUNTIME_DIR/agent-comms/connector.sock` on Linux, `~/.agent-comms/connector.sock` on macOS, in a directory only the user can open (0700).
+   - **No token.** Owner-only directory permissions give the same protection: any process that could read a token file could also open the socket. And the mod can't read files outside the session's folder. This is the same trusted-machine footing as `--as`.
+   - Verified (Reed, `/scratch/reed/modflag`): a mod reads `AGENT_COMMS_PARTICIPANT` with `$.env.get`, and `$.http.fetch` with `socketPath` reaches a socket under `/run/user/<uid>/`, outside the session folder.
+   
+   Operations:
    - **register:** participant, harness session id, cwd, status;
    - **poll for deliveries:** the mod calls this repeatedly. The connector holds the request open until a delivery is ready or a bounded wait (e.g. 20s) passes, then returns an empty result. The mod's `$.http.fetch` has no timeout option, so the bound must be on the connector side. A client has at most one poll outstanding; the connector rejects a second concurrent poll from the same session.
    - **ack delivered:** with the harness turn id it started;
@@ -88,7 +93,8 @@ Functions:
 - **Deliveries:**
   - a pending-deliveries query per machine;
   - claim with a lease, then state transitions. All idempotent on delivery id;
-  - append an answer: one per delivery, keyed by delivery id, linked with `inReplyTo`.
+  - append a collected answer: at most one per delivery, keyed by delivery id, linked with `inReplyTo`;
+  - append an explicit reply (`comms reply`): its own message id, the same `inReplyTo`, any number of them. It can also complete an ambiguous delivery.
 - **Reads:** bounded history; presence heartbeat.
 - **Web:** conversation list, posting as a human.
 - **Invariant:** an answer is delivered to the requester, but the delivery it creates is never one whose output gets collected.
@@ -100,9 +106,13 @@ Tests: Convex function tests for every state transition and invariant, including
 ### M2: the connector (Effect)
 
 - **Config file:** Convex deployment URL, machine id and connector secret, adapters to load, T3 base URL and auth reference, socket path.
-- **Convex subscription** to pending deliveries for participants homed on this machine. Claim before running.
+- **Convex subscription** to pending deliveries for participants homed on this machine.
+- **Claims:** claim with a lease, renew while working, and confirm the claim is still held (a compare-and-set on the claim id) immediately before handing the message to the harness. An expired claim is taken over only through the restart check below, never by running the delivery straight away.
 - **Deliveries** run serially per participant, in parallel across participants.
-- **Restart:** on start, for each delivery this machine claimed that isn't delivered, ask the adapter whether the harness already has it. Found: delivered. Absent: run it. Can't tell: `uncertain`. Never re-run blind.
+- **Restart and takeover:**
+  - claimed, not delivered: ask the adapter whether the harness already has it. Found: delivered. Absent: run it. Can't tell: `uncertain`;
+  - delivered, not replied or ambiguous: ask the adapter for our turn. Finished: collect it by the usual rule. Running: resume watching. Not found: `uncertain`.
+  - Never re-run blind.
 - **The loopback server** from M0: the real version of the stub.
 - **Writes are asynchronous and off the harness's turn path.** If Convex is unreachable, keep retrying with backoff, mark presence stale, and never block a harness. There's no local queue, so a message not yet accepted by Convex can be lost if the connector crashes. That's the agreed trade-off; log it.
 - **Runs as** a memory-capped `systemd --user` service here, and a launchd agent on macOS later.
@@ -118,7 +128,7 @@ Reference implementation: `/srv/work/long-horizon-context/packages/t3code-inject
   - Otherwise, when that turn completes, its final assistant message is the answer: write it with `inReplyTo`, and mark replied.
   - If our message landed in a turn someone else started (steered in), it's ambiguous.
   - Deliveries of kind `answer` are delivered, never collected.
-- **Restart check:** look in the thread for our message id.
+- **Restart check:** look in the thread for our message id, and for the state of the turn it went into.
 - **Presence:** idle or busy, from the thread's session state.
 - **Never read or forward anything else from the thread.**
 

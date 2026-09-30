@@ -5,7 +5,7 @@ Shared context for both builders. Read this first, then your own lane document:
 - Comms server lane: [`01-comms-lane.md`](./01-comms-lane.md)
 - T3 lane (then the Claude Code mod): [`02-t3-lane.md`](./02-t3-lane.md)
 
-Draft 2 by Reed, 2026-09-30, merging Alder's and Wrenn's reviews. Reviewers: Alder (scope, contracts, acceptance), Wrenn (technical claims, mod details).
+Draft 3 by Reed, 2026-09-30, merging two rounds of review from Alder and Wrenn. Reviewers: Alder (scope, contracts, acceptance), Wrenn (technical claims, mod details).
 Interactive architecture walkthrough: https://lim-builder.tailb30114.ts.net:10000/lhc/comms-architecture-reed.html
 
 ## The problem
@@ -54,10 +54,11 @@ Out of scope for this plan: Slack and iMessage bridges, Hermes, a standalone Cod
 
 Stated plainly, so nobody builds against a promise we don't make:
 
-- **At most one executor.** A connector claims a delivery with a lease before running it, so two connectors can't both run it.
+- **Claims.** A connector claims a delivery with a lease, renews it while working, and checks it still holds the claim immediately before handing the message to the harness. The lease on its own doesn't prevent a double run: it only decides who may act.
 - **`delivered` means the harness accepted our message:** T3 recorded our message id in the thread, or the mod saw a turn start carrying our delivery id.
-- **After a crash, no blind retry.** If a claimed delivery isn't marked delivered, the connector looks in the harness for our message or delivery id. Found: mark delivered and carry on. Clearly absent: run it. Can't tell: mark `uncertain` and surface it in the web view.
-- **Answers are idempotent:** one answer per delivery, keyed by delivery id.
+- **Taking over a claim, or restarting, never re-runs blind.** For a claimed delivery not yet delivered, the connector looks in the harness for our message or delivery id. Found: mark delivered and carry on. Clearly absent: run it. Can't tell: `uncertain`, surfaced in the web view.
+- **Delivered but not yet answered is recovered too.** If our turn has finished, collect its result. If it's still running, resume watching it. If it can't be found, `uncertain`.
+- **Automatic collection is idempotent:** at most one collected answer per delivery, keyed by delivery id. Explicit follow-ups with `comms reply` are separate messages, each with its own id and the same `inReplyTo`, and are always allowed.
 - **Not promised:** exactly-once execution in the harness, and survival of a message the connector hadn't yet written to Convex when it crashed. Both are accepted limits of this version.
 
 ## Architecture
@@ -65,7 +66,7 @@ Stated plainly, so nobody builds against a promise we don't make:
 ```
 Convex (comms server: participants, conversations, members, messages, deliveries, machines)
    ↕  subscriptions + mutations, async, never on a harness's turn path
-connector (one Effect service per machine; Unix socket for local clients)
+connector (one Effect service per machine; a Unix socket, owner-only, for local clients)
    ├─ T3 adapter (inside the connector) ── T3 server API ── T3 threads (Claude, Claude-LHC, Codex)
    ├─ Claude Code mod (inside each Claude Code terminal) ── polls the connector's socket
    └─ comms CLI: send, reply, read, list, run by any agent from its shell
@@ -122,8 +123,8 @@ On lim-builder, with local Convex:
 1. A native Claude thread and a Claude-LHC thread in the fresh T3, and a Claude Code terminal with the mod, are promoted and show online in the web view.
 2. Each sends a request to another with `comms send`; every request is delivered, answered, and the answer matched to it, across all three homes.
 3. Lee creates a group in the web view and posts addressing two of them. Only those two are woken, and both replies land in the group linked to Lee's message.
-4. Lee types directly into one agent's T3 thread while a comms request is running there. The delivery is marked ambiguous, not mis-attributed, and the agent's `comms reply` reaches the requester.
-5. A request whose answer needs the agent's own test run or helper is collected normally, not marked ambiguous.
+4. Lee types directly into one agent's thread while a comms request is running there. If his message is delivered into that turn, the delivery is marked ambiguous, not mis-attributed, and the agent's `comms reply` reaches the requester. If it's queued for the next turn, the reply is collected normally.
+5. A request whose answer needs the agent's own test run or helper is collected normally, provided the harness links that work to our turn. Where it can't (see 02, part D), the delivery is ambiguous and completed with `comms reply`; either outcome passes, as long as it's the one recorded.
 6. Nothing Lee typed directly into an agent's thread appears in Convex.
 7. An answer wakes the requester, and nothing the requester does next is collected; no loop.
 8. The connector is killed mid-delivery and restarted: the delivery ends delivered, replied or `uncertain`, never run twice.
