@@ -1,0 +1,20 @@
+{
+  "machine": "lim-builder",
+  "participants": [
+    { "name": "lee", "kind": "human", "home": { "harness": "web", "locator": "lee" } },
+    { "name": "cedar" },
+    { "name": "hazel" },
+    { "name": "mod-a" },
+    { "name": "mod-b" },
+    { "name": "reed", "home": { "harness": "t3", "locator": "thread-reed" } },
+    { "name": "far", "home": { "machine": "macbook", "harness": "claude-code", "locator": "far" } },
+    { "name": "old", "state": "retired" }
+  ],
+  "conversations": [
+    { "id": "g_build", "kind": "group", "title": "agent-comms build", "members": ["lee", "cedar", "hazel", "mod-a", "mod-b", "reed"] }
+  ],
+  "messages": [
+    { "sender": "lee", "to": [], "conversationId": "g_build", "text": "Welcome to the build group.", "via": "web" },
+    { "sender": "lee", "to": ["mod-a"], "conversationId": "g_build", "text": "mod-a: reply with the word OK.", "via": "web" }
+  ]
+}

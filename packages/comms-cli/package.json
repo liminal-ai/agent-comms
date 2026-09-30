@@ -1,0 +1,26 @@
+{
+  "name": "@agent-comms/comms-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The comms CLI: send, reply, read, list. Plain TypeScript run by Node directly, for fast start.",
+  "bin": {
+    "comms": "./src/main.ts"
+  },
+  "exports": {
+    ".": "./src/cli.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test 'test/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@agent-comms/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@agent-comms/connector-stub": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

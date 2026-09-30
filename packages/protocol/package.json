@@ -1,0 +1,18 @@
+{
+  "name": "@agent-comms/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The agent-comms contract: message envelope, deliveries, rendering and its parser, the loopback protocol. Plain TypeScript, no dependencies, no Node APIs.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "node --test 'test/**/*.test.ts'"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
