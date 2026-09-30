@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 import { run } from "./cli.ts";
 
+// A reader that stops early (`comms read … | head`) isn't an error.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EPIPE") process.exit(0);
+    throw error;
+  });
+}
+
 const code = await run(process.argv.slice(2), {
   env: process.env,
   stdout: (text) => process.stdout.write(text),
