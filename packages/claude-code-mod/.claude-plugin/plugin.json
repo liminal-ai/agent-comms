@@ -1,0 +1,5 @@
+{
+  "name": "agent-comms",
+  "version": "0.1.0",
+  "description": "Delivers agent-comms messages into this Claude Code session and reports its answers. Active only when AGENT_COMMS_PARTICIPANT is set."
+}
