@@ -43,6 +43,19 @@ importers:
         specifier: 5.0.3
         version: 5.0.3(@edge-runtime/vm@5.0.0)(@types/node@24.12.4)(vite@8.3.1(@types/node@24.12.4)(esbuild@0.27.0))
 
+  packages/adapter-t3:
+    dependencies:
+      '@agent-comms/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
   packages/comms-cli:
     dependencies:
       '@agent-comms/protocol':
@@ -61,6 +74,9 @@ importers:
 
   packages/connector:
     dependencies:
+      '@agent-comms/adapter-t3':
+        specifier: workspace:*
+        version: link:../adapter-t3
       '@agent-comms/connector-stub':
         specifier: workspace:*
         version: link:../connector-stub

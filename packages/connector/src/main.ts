@@ -6,6 +6,7 @@ import { ConvexClient } from "convex/browser";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Scope from "effect/Scope";
+import type { HarnessAdapter } from "./adapter.ts";
 import { loadConfig } from "./config.ts";
 import { runConnector } from "./connector.ts";
 import { type ConvexTransport, makeServerApi } from "./server-api.ts";
@@ -34,6 +35,18 @@ client.subscribeToConnectionState((state) => {
 });
 
 const api = makeServerApi(transport, { machine: { id: config.machine, secret: config.secret } });
+
+const adapters: HarnessAdapter[] = [];
+if (config.adapters?.includes("t3")) {
+  if (!config.t3) throw new Error(`config: "adapters" includes t3 but there's no "t3" section`);
+  // Loaded only when configured: it needs a T3 checkout linked by packages/adapter-t3/link-deps.sh.
+  const { makeT3Client } = await import("@agent-comms/adapter-t3/client");
+  const { makeT3Adapter } = await import("@agent-comms/adapter-t3");
+  const { t3HarnessAdapter } = await import("./t3.ts");
+  const t3Client = makeT3Client({ baseUrl: config.t3.baseUrl, authFile: config.t3.authFile, log });
+  adapters.push(t3HarnessAdapter(makeT3Adapter({ client: t3Client, log })));
+  log(`T3 adapter: ${config.t3.baseUrl}`);
+}
 const scope = Effect.runSync(Scope.make());
 await Effect.runPromise(
   Scope.provide(scope)(
@@ -43,11 +56,11 @@ await Effect.runPromise(
       api,
       ...(config.leaseMs ? { leaseMs: config.leaseMs } : {}),
       ...(config.pollWaitMs ? { pollWaitMs: config.pollWaitMs } : {}),
+      adapters,
       log,
     }),
   ),
 );
-if (config.adapters?.includes("t3")) log("the T3 adapter isn't built yet (M3); T3 participants' deliveries wait");
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {

@@ -45,5 +45,15 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - Any `unknown_session` answer means: register again, then retry the call (documented).
 - After a connector restart, recovery waits for the old lease to expire (60 s default) before asking the session.
 
+## M3: the T3 adapter
+- [x] `packages/adapter-t3`: T3's own client runtime (linked read-only from a v0.0.44 checkout by `link-deps.sh` into `src/t3/node_modules`), promise API, no T3 or Effect types across the boundary
+- [x] Deliver: courtesy wait for idle, `thread.turn.start` with message id `comms-<delivery id>`, the thread's own runtime and interaction modes (never forced full access), T3 rendering with source line
+- [x] Match from T3's records: our message's turn id; any other user message in that turn → ambiguous (origin only, no text); final assistant message → answer; interrupted/error → failed; a stale `latestTurn` never ends our turn
+- [x] Restart check: our message id in the whole thread → absent / running / completed with outcome
+- [x] Connector loads it when the config lists `"adapters": ["t3"]` with a `t3` section (`baseUrl`, `authFile`)
+- [x] 11 tests against a fake T3 (idle, busy wait, typed-into, raced steer, later turn, interrupt, error, stale latestTurn, refusals, idempotent handoff, restart check)
+- [ ] Live against Hazel's T3 on 3780: needs her handoff (base URL, how to get a bearer, test thread ids) and her API notes to confirm busy-thread and typed-in behavior per provider
+- [ ] Presence from T3 session state (idle/busy)
+
 ## Later
-M3 T3 adapter · M4 web · M5 local milestone · M6 integration and cloud
+M4 web · M5 local milestone · M6 integration and cloud

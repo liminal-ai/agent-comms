@@ -16,6 +16,7 @@
     "test": "cd ../.. && vitest run --project connector"
   },
   "dependencies": {
+    "@agent-comms/adapter-t3": "workspace:*",
     "@agent-comms/protocol": "workspace:*",
     "@agent-comms/connector-stub": "workspace:*",
     "convex": "1.46.0",

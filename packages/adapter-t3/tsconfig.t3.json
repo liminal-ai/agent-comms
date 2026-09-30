@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["es2023", "dom"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src/t3/client.ts"]
+}
