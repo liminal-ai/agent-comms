@@ -8,7 +8,7 @@
 //   aren't working on is recovered through the adapter's check.
 // - Writes retry while the server is unreachable; nothing here blocks a harness.
 
-import type { Claim, Delivery } from "@agent-comms/protocol";
+import { type Claim, clipAnswer, type Delivery } from "@agent-comms/protocol";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -36,6 +36,7 @@ interface Held {
   claim: Claim;
   delivery: Delivery;
   target: Target;
+  harness: WorkItem["harness"];
 }
 
 export const runDispatcher = (options: DispatcherOptions) =>
@@ -114,9 +115,19 @@ export const runDispatcher = (options: DispatcherOptions) =>
       const claimId = h.claim.claimId;
       switch (outcome._tag) {
         case "replied":
-          return write("collect", id, api.collect(id, claimId, turnId, outcome.answer));
+          return write("collect", id, api.collect(id, claimId, turnId, clipAnswer(outcome.answer)));
         case "ambiguous":
-          return write("ambiguous", id, api.ambiguous(id, claimId, turnId, outcome.entered));
+          return write("ambiguous", id, api.ambiguous(id, claimId, turnId, outcome.entered)).pipe(
+            Effect.tap((ok) => {
+              const notify = adapters.get(h.harness)?.notifyUnmatched;
+              return ok && notify
+                ? notify(h.target, h.delivery).pipe(
+                    Effect.catchCause(() => Effect.sync(() => log(`${id}: couldn't send the unmatched notice`))),
+                    Effect.forkScoped,
+                  )
+                : Effect.void;
+            }),
+          );
         case "failed":
           return write("failed", id, api.failed(id, claimId, turnId, outcome.reason, outcome.detail));
       }
@@ -133,8 +144,8 @@ export const runDispatcher = (options: DispatcherOptions) =>
         yield* release(h);
       });
 
-    const markDelivered = (h: Held, turnId: string) =>
-      write("delivered", h.delivery.id, api.delivered(h.delivery.id, h.claim.claimId, turnId));
+    const markDelivered = (h: Held, turnId: string, cursor?: string) =>
+      write("delivered", h.delivery.id, api.delivered(h.delivery.id, h.claim.claimId, turnId, cursor));
 
     const handOffAndFollow = (adapter: HarnessAdapter, h: Held) =>
       Effect.gen(function* () {
@@ -156,7 +167,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
           case "lost":
             return log(`${h.delivery.id}: lost during handoff (${result.detail}); will check later`);
           case "accepted": {
-            if (!(yield* markDelivered(h, result.turnId))) return yield* release(h);
+            if (!(yield* markDelivered(h, result.turnId, result.cursor))) return yield* release(h);
             if (h.delivery.message.kind !== "request") return yield* release(h);
             return yield* follow(adapter, h, result.turnId);
           }
@@ -186,7 +197,10 @@ export const runDispatcher = (options: DispatcherOptions) =>
             return yield* follow(adapter, h, check.turnId);
           case "completed":
             if (!wasDelivered && !(yield* markDelivered(h, check.turnId))) return yield* release(h);
-            if (collect) yield* writeOutcome(h, check.turnId, check.outcome);
+            if (collect) {
+              if (check.outcome) yield* writeOutcome(h, check.turnId, check.outcome);
+              else yield* write("uncertain", id, api.uncertain(id, h.claim.claimId, "its turn completed but no outcome was reported"));
+            }
             return yield* release(h);
         }
       });
@@ -211,7 +225,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
             if (r.failure._tag === "Unavailable") log(`claim ${item.id}: ${r.failure.message}`);
             return; // Someone holds it, or it moved on; the next work update tells us.
           }
-          h = { claim: r.success.claim, delivery: r.success.delivery, target };
+          h = { claim: r.success.claim, delivery: r.success.delivery, target, harness: item.harness };
           takeover = r.success.takeover;
         }
         held.set(item.id, h);

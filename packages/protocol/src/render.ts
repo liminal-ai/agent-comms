@@ -172,3 +172,43 @@ function oneLine(text: string): string {
 function clip(text: string, max: number): string {
   return text.length <= max ? text : text.slice(0, max) + " […]";
 }
+
+// ---------------------------------------------------------------------------
+// The "couldn't match" notice
+
+export interface NoticeHeader {
+  notice: "unmatched";
+  deliveryId: DeliveryId;
+  messageId: MessageId;
+}
+
+const NOTICE_LINE = /^\[agent-comms v1\] notice=unmatched delivery=([A-Za-z0-9_-]{1,128}) message=([A-Za-z0-9_-]{1,128})$/;
+
+/**
+ * Told to an agent whose delivery went `ambiguous`: other input entered the
+ * turn, so its reply wasn't collected and it should answer with `comms reply`.
+ * Delivered by the adapter as its own turn (T3) or prompt (the mod). Its
+ * header is not a delivery header, so nothing is ever collected from the turn
+ * it starts.
+ */
+export function renderUnmatchedNotice(delivery: Delivery, options: Pick<RenderOptions, "harnessLabelsSource">): string {
+  const { message, recipient } = delivery;
+  const me = recipient.name;
+  const lines = [`${HEADER_PREFIX} notice=unmatched delivery=${delivery.id} message=${message.id}`];
+  if (!options.harnessLabelsSource) lines.push(SOURCE_LINE);
+  lines.push(
+    `Your reply to @${message.sender.name}'s request #${message.seq} (message ${message.id}) couldn't be matched: other input entered that turn, so nothing was sent back.`,
+    `Send your answer with \`comms reply --as ${me} ${message.id} "<your answer>"\`. If you already have, there's nothing to do.`,
+    "No reply to this notice is expected.",
+  );
+  return lines.join("\n");
+}
+
+/** Finds the notice header as a complete line, like `parseDeliveryHeader`. */
+export function parseNoticeHeader(text: string): NoticeHeader | null {
+  for (const line of text.split(/\r?\n/)) {
+    const match = NOTICE_LINE.exec(line.trim());
+    if (match) return { notice: "unmatched", deliveryId: match[1]!, messageId: match[2]! };
+  }
+  return null;
+}

@@ -184,6 +184,7 @@ export async function fullDelivery(ctx: QueryCtx, d: Doc<"deliveries">): Promise
       ...(d.detail !== undefined ? { detail: d.detail } : {}),
       ...(d.claim ? { claim: d.claim } : {}),
       ...(d.turnId !== undefined ? { turnId: d.turnId } : {}),
+      ...(d.cursor !== undefined ? { cursor: d.cursor } : {}),
     },
   };
 }

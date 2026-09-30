@@ -157,6 +157,11 @@ export class ClaudeCodeSessions {
     if (!duplicate) {
       report.turnId ??= req.turnId;
       report.outcome = outcomeBody(req);
+      if (req.turnId === undefined && req.outcome === "failed") {
+        // Dropped before any turn ran it: the handoff itself failed.
+        const detail = req.detail ? `${req.reason}: ${req.detail}` : req.reason;
+        this.settle(this.handOffs, req.deliveryId, { _tag: "rejected", detail });
+      }
       this.settle(this.outcomes, req.deliveryId, toOutcome(report.outcome));
     }
     const state = (report.outcome ?? outcomeBody(req)).outcome;
@@ -169,14 +174,21 @@ export class ClaudeCodeSessions {
     if (req.found === "no") check = { _tag: "absent" };
     else if (req.found === "unknown") check = { _tag: "unknown", detail: req.detail ?? "the session couldn't tell whether it ran" };
     else if (req.turn === "running") check = { _tag: "running", turnId: req.turnId };
-    else check = { _tag: "completed", turnId: req.turnId, outcome: toOutcome(req.outcome) as Exclude<Outcome, { _tag: "lost" }> };
+    else {
+      check = {
+        _tag: "completed",
+        turnId: req.turnId,
+        ...(req.outcome ? { outcome: toOutcome(req.outcome) as Exclude<Outcome, { _tag: "lost" }> } : {}),
+      };
+    }
     if (req.found === "yes") {
       const report = this.report(req.deliveryId);
       report.turnId ??= req.turnId;
-      if (req.turn === "completed") report.outcome ??= req.outcome;
+      if (req.turn === "completed" && req.outcome) report.outcome ??= req.outcome;
     }
     this.settle(this.checks, req.deliveryId, check);
-    const state = check._tag === "absent" ? "claimed" : check._tag === "unknown" ? "uncertain" : check._tag === "running" ? "delivered" : check.outcome._tag;
+    const state =
+      check._tag === "absent" ? "claimed" : check._tag === "unknown" ? "uncertain" : check._tag === "running" ? "delivered" : (check.outcome?._tag ?? "delivered");
     return { delivery: { id: req.deliveryId, recipient: s.participant, state } };
   }
 

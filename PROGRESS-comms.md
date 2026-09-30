@@ -54,6 +54,8 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - [x] 11 tests against a fake T3 (idle, busy wait, typed-into, raced steer, later turn, interrupt, error, stale latestTurn, refusals, idempotent handoff, restart check)
 - [x] Hazel's API notes applied: interrupt = completed with `assistantMessageId: null` → failed (aborted); answer = `latestTurn.assistantMessageId`; `provider.turn.start.failed` for our message id → rejected; a latest turn requested after our message is never ours (measured: our turn's `requestedAt` equals our message's `createdAt`)
 - [x] Live on 3780 (`validation/m3/`): all three providers answered and matched; busy thread waited then ran as its own turn; typed-in → ambiguous; interrupt → failed; connector SIGKILL mid-delivery → recovered, one run, one answer
+- [x] Hazel's review: matching follows T3's event order (not client clocks, not "first output after ours"); a cursor saved with `delivered` lets a restart replay the events; snapshot fallback links only by `requestedAt`; mid-answer Claude interrupts detected by the session stopping right after; unmatched notice sent into the thread
+- [x] Contract (Hazel's review): `failed` outcome may omit `turnId`; over-long answers clipped (`clipAnswer`), not refused; `check-result` completed may omit the outcome (answer deliveries); `renderUnmatchedNotice` / `parseNoticeHeader`; delivery `status.cursor`
 - [ ] Presence from T3 session state (idle/busy)
 
 ## M4: the web view

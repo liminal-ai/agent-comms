@@ -1,7 +1,7 @@
 import { answersTo, interrupt, log, send, sleep, waitBusy, waitState } from "./t3-live.mjs";
 const who = process.argv[2] ?? "t3-native";
 await waitBusy(who, false);
-const s = send("smoke-a", who, "Without using any tools, write out every integer from 1 to 4000 in words, one per line. Do not abbreviate.");
+const s = send("smoke-a", who, "Without using any tools, write a detailed 3000-word short story about a lighthouse keeper who collects letters. Take your time.");
 await waitState(s, who, ["delivered"], 60_000);
 await sleep(6000);
 log("interrupting");

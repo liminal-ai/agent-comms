@@ -13,6 +13,21 @@
 | Claude backgrounds a long command and ends the turn early | native Claude | the turn's own answer collected (`replied`); the real result is the agent's `comms reply` follow-up (Hazel's notes §7) |
 | Connector SIGKILLed after `delivered`, restarted | Codex | recovered through the check after the lease (30 s): `replied` once, full answer; our message in the thread exactly once (twice: a first attempt's delivery recovered the same way) |
 
+## Second pass: event-order matching (after Hazel's review)
+
+The adapter now follows T3's event stream (server order) instead of snapshots and client timestamps, saves a cursor with `delivered`, and replays from it after a restart. Rerun on the same threads:
+
+| Scenario | Result |
+|---|---|
+| LHC and Codex requests | `replied`, matched |
+| Busy thread (someone else's turn) | waited, own turn, `replied` |
+| Typed into our turn | `ambiguous`; the unmatched notice is sent into the thread as its own turn |
+| SIGKILL after `delivered`, restart | replayed from the cursor, `replied` once, message in thread once |
+| Plain request, native Claude and Claude-LHC | `replied` (no false interrupt) |
+| Interrupted **mid-answer**, native Claude | `failed` ("interrupted; its partial answer wasn't collected") |
+
+New finding (corrects Hazel's notes §6 for one case): interrupted after part of the answer has streamed, native Claude records the turn as `completed` **with** `assistantMessageId` set to the partial message (`t3-lastturn.mjs`: 1,319 characters of a 3,000-word request). What marks it is the session going `ready` then `stopped`, which a normal Claude turn doesn't do. The adapter watches for that for 4 s after our turn ends. Codex still can't be told apart.
+
 Measured: a turn our message starts has `latestTurn.requestedAt` equal to our message's `createdAt` to the millisecond (`t3-peek.mjs`), which the adapter now uses to refuse a later turn (e.g. a background-task wake) as ours.
 
 `delivery-states.txt`: every delivery from these runs. The answers to `smoke-a` stay `pending`: it has no Claude Code session, and the connector claims nothing it can't hand over.

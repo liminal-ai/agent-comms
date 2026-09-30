@@ -14,8 +14,8 @@ export interface Target {
 
 /** Handing a rendered delivery to the harness. */
 export type HandOff =
-  /** The harness recorded our message; this is the turn it went into. */
-  | { _tag: "accepted"; turnId: string }
+  /** The harness recorded our message; this is the turn it went into. `cursor`: where to resume watching after a restart. */
+  | { _tag: "accepted"; turnId: string; cursor?: string }
   /** The harness refused it outright; it never ran. */
   | { _tag: "rejected"; detail: string }
   /** We lost sight of it (session gone mid-handoff): it may or may not have entered. Recovered by a later check. */
@@ -33,7 +33,8 @@ export type Outcome =
 export type Check =
   | { _tag: "absent" }
   | { _tag: "running"; turnId: string }
-  | { _tag: "completed"; turnId: string; outcome: Exclude<Outcome, { _tag: "lost" }> }
+  /** `outcome` absent: the turn finished but its outcome isn't known (fine for an answer's delivery; a request's becomes uncertain). */
+  | { _tag: "completed"; turnId: string; outcome?: Exclude<Outcome, { _tag: "lost" }> }
   | { _tag: "unknown"; detail: string }
   /** Can't ask right now (no session to ask); try again later without changing anything. */
   | { _tag: "later"; detail: string };
@@ -48,6 +49,11 @@ export interface HarnessAdapter {
   readonly awaitOutcome: (target: Target, delivery: Delivery, turnId: string) => Effect.Effect<Outcome>;
   /** Answer the restart question for a claimed (`turnId` unknown) or delivered delivery. */
   readonly check: (target: Target, delivery: Delivery, turnId: string | undefined) => Effect.Effect<Check>;
+  /**
+   * Tell the agent its reply to this delivery couldn't be matched and it should
+   * `comms reply` (renderUnmatchedNotice). Optional: the mod does this itself.
+   */
+  readonly notifyUnmatched?: (target: Target, delivery: Delivery) => Effect.Effect<void>;
 }
 
 export class Adapters extends Context.Service<Adapters, ReadonlyMap<Harness, HarnessAdapter>>()("agent-comms/Adapters") {}

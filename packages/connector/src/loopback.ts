@@ -25,7 +25,7 @@ export interface Loopback {
   close(): Promise<void>;
 }
 
-const MAX_BODY_BYTES = 1_000_000;
+const MAX_BODY_BYTES = 4_000_000;
 
 export async function serveLoopback(socketPath: string, handlers: Handlers, log: (line: string) => void): Promise<Loopback> {
   const server = createServer(async (req, res) => {

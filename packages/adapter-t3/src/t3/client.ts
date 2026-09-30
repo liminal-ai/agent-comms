@@ -20,8 +20,8 @@ import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as Socket from "effect/unstable/socket/Socket";
 import { resolveRemoteWebSocketConnectionUrl } from "@t3tools/client-runtime/authorization";
 import { makeWsRpcProtocolClient, remoteHttpClientLayer, type WsRpcProtocolClient } from "@t3tools/client-runtime/rpc";
-import { ORCHESTRATION_WS_METHODS, type OrchestrationThread } from "@t3tools/contracts";
-import { T3Rejected, type T3Client, type T3Thread } from "../model.ts";
+import { ORCHESTRATION_WS_METHODS, type OrchestrationEvent, type OrchestrationThread } from "@t3tools/contracts";
+import { T3Rejected, type T3Client, type T3Event, type T3StreamItem, type T3Thread } from "../model.ts";
 
 export interface T3ClientOptions {
   /** e.g. http://127.0.0.1:3780 */
@@ -110,7 +110,8 @@ export function makeT3Client(options: T3ClientOptions): T3Client {
       });
       if (response.status === 404) return null;
       if (!response.ok) throw new Error(`T3 thread snapshot: HTTP ${response.status}`);
-      return slice(((await response.json()) as { thread: OrchestrationThread }).thread);
+      const body = (await response.json()) as { snapshotSequence: number; thread: OrchestrationThread };
+      return slice(body.thread, body.snapshotSequence);
     },
 
     startTurn: async (threadId, turn) => {
@@ -132,12 +133,18 @@ export function makeT3Client(options: T3ClientOptions): T3Client {
       }
     },
 
-    watch: async (threadId, onChange) => {
+    subscribe: async (threadId, options, onItem) => {
       const s = await connect();
-      const stream = (s.client[ORCHESTRATION_WS_METHODS.subscribeThread] as (i: unknown) => Stream.Stream<unknown, unknown, never>)({ threadId });
+      const input = { threadId, ...(options.afterSequence !== undefined ? { afterSequence: options.afterSequence } : {}) };
+      const stream = (s.client[ORCHESTRATION_WS_METHODS.subscribeThread] as (i: unknown) => Stream.Stream<unknown, unknown, never>)(input);
       const fiber = Effect.runFork(
-        Stream.runForEach(stream, () => Effect.sync(onChange)).pipe(
-          Effect.onExit(() => Effect.sync(onChange)),
+        Stream.runForEach(stream, (raw) =>
+          Effect.sync(() => {
+            const item = toItem(raw);
+            if (item) onItem(item);
+          }),
+        ).pipe(
+          Effect.onExit(() => Effect.sync(() => (onItem as (i: unknown) => void)({ kind: "closed" }))),
           Effect.ignore,
         ) as Effect.Effect<void, never, never>,
       );
@@ -152,10 +159,44 @@ export function makeT3Client(options: T3ClientOptions): T3Client {
   };
 }
 
+function toItem(raw: unknown): T3StreamItem | undefined {
+  const item = raw as { kind: string; snapshot?: { snapshotSequence: number; thread: OrchestrationThread }; event?: OrchestrationEvent };
+  if (item.kind === "synchronized") return { kind: "synchronized" };
+  if (item.kind === "snapshot" && item.snapshot) return { kind: "snapshot", thread: slice(item.snapshot.thread, item.snapshot.snapshotSequence) };
+  if (item.kind === "event" && item.event) return { kind: "event", event: toEvent(item.event) };
+  return undefined;
+}
+
+/** Only the fields the tracker reads; user message text never leaves here. */
+function toEvent(event: OrchestrationEvent): T3Event {
+  const sequence = event.sequence;
+  const payload = event.payload as Record<string, unknown>;
+  switch (event.type) {
+    case "thread.message-sent":
+      return payload.role === "user"
+        ? { type: "user-message", sequence, messageId: String(payload.messageId) }
+        : { type: "assistant-message", sequence, messageId: String(payload.messageId), turnId: (payload.turnId as string | null) ?? null };
+    case "thread.session-set": {
+      const session = payload.session as { status: string; activeTurnId: string | null; lastError: string | null };
+      return { type: "session", sequence, session: { status: session.status, activeTurnId: session.activeTurnId, lastError: session.lastError } };
+    }
+    case "thread.activity-appended": {
+      const activity = payload.activity as { kind: string; payload?: { requestId?: unknown } };
+      if (activity.kind === "provider.turn.start.failed" && typeof activity.payload?.requestId === "string") {
+        return { type: "turn-start-failed", sequence, requestId: activity.payload.requestId };
+      }
+      return { type: "other", sequence };
+    }
+    default:
+      return { type: "other", sequence };
+  }
+}
+
 /** Keep only what the adapter reads. User message text is dropped here. */
-function slice(thread: OrchestrationThread): T3Thread {
+function slice(thread: OrchestrationThread, snapshotSequence: number): T3Thread {
   return {
     id: thread.id,
+    snapshotSequence,
     runtimeMode: thread.runtimeMode,
     interactionMode: thread.interactionMode,
     session: thread.session
@@ -178,7 +219,6 @@ function slice(thread: OrchestrationThread): T3Thread {
       createdAt: m.createdAt,
       ...(m.role === "assistant" ? { text: m.text } : {}),
     })),
-    finishedTurnIds: thread.checkpoints.map((c) => c.turnId),
     turnStartFailures: thread.activities.flatMap((a) => {
       const requestId = (a.payload as { requestId?: unknown } | null)?.requestId;
       return a.kind === "provider.turn.start.failed" && typeof requestId === "string" ? [requestId] : [];
