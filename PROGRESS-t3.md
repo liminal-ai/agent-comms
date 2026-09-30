@@ -25,11 +25,14 @@
   Codex `thr-abad70c6-298e-445d-9570-aae607cea3fb`.
 - Working reference client: `validation/probe/{t3.ts,cli.ts}` in the checkout.
 
-## Part B: T3 API notes — in progress
+## Part B: T3 API notes — done 2026-09-30
 
-- `docs/t3-api-notes.md`. Early finding: a user `thread.message-sent` always carries `turnId: null`
-  (decider sets it so; the snapshot keeps it null). The turn is linked through the session's
-  `activeTurnId` and `latestTurn`, not through the message. Details in the notes.
+- `docs/t3-api-notes.md`: auth (long-lived bearer via `auth session issue`), methods (WS and HTTP),
+  the event sequence of a turn, busy-thread `thread.turn.start` (steers on all three providers),
+  UI typing (default queue mode steers at the next tool completion), interrupt (looks completed;
+  steered message dropped), Claude turns with no user message, restart lookup, gaps.
+- Corrections to the plan: user `message-sent` carries `turnId: null`; an interrupt is not visible
+  as such on the stream.
 
 ## Part C: review M0 — not started
 ## Part D: Claude Code mod — not started
