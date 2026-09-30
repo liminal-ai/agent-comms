@@ -1,0 +1,25 @@
+{
+  "name": "@agent-comms/connector-stub",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Stub connector: the loopback protocol on the socket, an in-memory comms record, no Convex. For developing the mod and the CLI.",
+  "bin": {
+    "comms-stub": "./src/main.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test 'test/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@agent-comms/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

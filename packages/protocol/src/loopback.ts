@@ -278,8 +278,10 @@ const requestDecoders = {
   /**
    * Answer a message: an `answer` in the same conversation, addressed to the
    * message's sender, with `inReplyTo` set. Always allowed, any number of
-   * times. If `as` has an `ambiguous` or `delivered` delivery of that message,
-   * this completes it (`replied`) and `completed` names it.
+   * times. If `as` has an `ambiguous` or `uncertain` delivery of that
+   * message, this completes it (`replied`) and `completed` names it. A
+   * `delivered` one is left alone: its turn is still running and its own
+   * answer is still collected; this reply is a separate follow-up.
    * Errors: `unknown_participant`, `not_homed_here`, `unknown_message`, `not_member`.
    */
   reply: object({

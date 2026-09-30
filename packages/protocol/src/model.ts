@@ -144,7 +144,7 @@ export const DELIVERY_STATES: readonly DeliveryState[] = [
   "failed",
 ];
 
-/** States a delivery never leaves on its own. `ambiguous` can still become `replied` via `comms reply`. */
+/** States a delivery never leaves on its own. `ambiguous` and `uncertain` still become `replied` when the recipient answers with `comms reply`. */
 export const TERMINAL_DELIVERY_STATES: readonly DeliveryState[] = ["replied", "uncertain", "failed"];
 
 export interface Claim {

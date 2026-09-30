@@ -24,6 +24,35 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  packages/comms-cli:
+    dependencies:
+      '@agent-comms/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@agent-comms/connector-stub':
+        specifier: workspace:*
+        version: link:../connector-stub
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
+  packages/connector-stub:
+    dependencies:
+      '@agent-comms/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
   packages/protocol:
     devDependencies:
       '@types/node':
