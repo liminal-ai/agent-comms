@@ -52,3 +52,18 @@ Opus 5.5
 9	d_31	replied	permission-prompt=no	yes
 10	d_32	replied	permission-prompt=no	10
 ```
+
+## Against the real connector (2026-09-30, Cedar's `cedar-connector-m5`, local Convex, T3 on 3780)
+
+Participants cc-a and cc-b (Claude Code, lim-builder); requests sent as cc-b with the `comms` CLI.
+
+| Check | Result |
+|---|---|
+| Idle wake | Pass: `92` collected |
+| Delivery during a long typed turn | Pass: ran as the next turn, `Rome` collected |
+| Typed input during our turn | Entered our turn → `ambiguous` → the protocol's unmatched notice → the agent's `comms reply` |
+| Background shell inside our turn | Pass: linked by its row, one answer collected (`Background: 5, helper subagent (9×9): 81, foreground: 6.`). The model skipped the Agent tool on both runs; the helper path was proven on the stub |
+| Answers delivered, no loop | Pass: five answers queued for cc-b were delivered one by one when its terminal started; each ended `delivered`, nothing sent back |
+| Agent-initiated Claude Code → Claude Code and Claude Code → T3 | Pass: cc-b's agent asked cc-a (`36`, collected) and t3-native (`56`, collected by the T3 adapter); both answers woke cc-b and weren't collected |
+| Ten benign requests, Sonnet, normal permissions | Pass 10/10; the file write raised the permission prompt |
+| Protocol errors in the mods' logs | None (no `poll_in_progress`, `conflict`, `bad_request`, `unavailable`) |
