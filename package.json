@@ -1,0 +1,18 @@
+{
+  "name": "agent-comms",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "check": "pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.4",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": "^24.13.0"
+  },
+  "packageManager": "pnpm@11.8.0"
+}
