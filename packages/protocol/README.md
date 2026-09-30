@@ -76,7 +76,7 @@ Request shapes and their validation are in `requestDecoders` (loopback.ts); resp
 | `poll` | mod | `sessionId`, `waitMs?` (≤ 25000) | `items`: `{type:"deliver", delivery}` \| `{type:"check", check}` |
 | `delivered` | mod | `sessionId`, `deliveryId`, `turnId` | `delivery` state |
 | `outcome` | mod | `sessionId`, `deliveryId`, `turnId`, then `outcome: "replied", answer` \| `"ambiguous", entered[]` \| `"failed", reason, detail?` | `delivery` state, `answerMessageId?`, `duplicate` |
-| `check-result` | mod | `sessionId`, `deliveryId`, `found: "yes", turnId, turn: "running"` \| `…turn: "completed"` + outcome fields \| `found: "no"` \| `found: "unknown", detail?` | `delivery` state |
+| `check-result` | mod | `sessionId`, `deliveryId`, `found: "yes", turnId, turn: "running"` \| `…turn: "completed"` + outcome fields (omit for an answer's delivery) \| `found: "no"` \| `found: "unknown", detail?` | `delivery` state |
 | `presence` | mod | `sessionId`, `status` (`idle` \| `busy`) | `{}` |
 | `send` | CLI | `as`, `to[]`, `conversationId?`, `text`, `attachments?` | `message`, `deliveries`, `skipped` |
 | `reply` | CLI | `as`, `messageId`, `text`, `attachments?` | as `send`, plus `completed?` |
@@ -91,7 +91,8 @@ Rules that matter to clients:
 - **Checks** replace blind re-runs. After a restart or a new registration, anything handed out and unfinished comes back as a `check` before any new delivery: `state: "claimed"` asks "did this enter the session?"; `state: "delivered"` asks "what happened to turn `turnId`?". Answer with `check-result`. `no` for a claimed one makes it run again; `unknown` makes it `uncertain`; `yes` with a completed turn carries the outcome.
 - **Reports are acknowledged at once.** The connector answers `delivered`, `outcome`, `check-result` and `presence` immediately and writes them to the server in the background, retrying while it's unreachable, so a harness is never held up. The `delivery.state` in the answer is the state being recorded; `answerMessageId` is included only when already known.
 - **`delivered`** is idempotent for the same turn; a different turn is a `conflict`.
-- **`outcome`** applies only to request deliveries. `replied` is collected at most once per delivery; a repeat returns the first answer with `duplicate: true`. `ambiguous` reports only the kinds of input that entered the turn (`origin`, e.g. `composer`), never their text.
+- **The unmatched notice.** When a delivery goes `ambiguous`, the agent is told with `renderUnmatchedNotice` (its own header line, found by `parseNoticeHeader`, never by `parseDeliveryHeader`), so it knows to `comms reply`. The T3 adapter sends it into the thread as its own turn; the mod shows it after reporting `ambiguous`. Nothing is collected from the turn a notice starts.
+- **`outcome`** applies only to request deliveries. `turnId` may be omitted only for `failed` (a delivery the harness dropped before any turn ran it). An answer over `MAX_TEXT_CHARS` is accepted and clipped (`clipAnswer`). `replied` is collected at most once per delivery; a repeat returns the first answer with `duplicate: true`. `ambiguous` reports only the kinds of input that entered the turn (`origin`, e.g. `composer`), never their text.
 - **`send`** without `conversationId` addresses exactly one participant (their DM, opened if new). With it, every addressed name must be a member, and an empty `to` posts without waking anyone.
 - **`reply`** is always allowed and never collected from. It completes an `ambiguous` or `uncertain` delivery of that message to the replier; a still-running `delivered` one is left alone, because its turn's own answer is still collected.
 - **`read`** of the newest page moves the reader's read position; older pages don't.

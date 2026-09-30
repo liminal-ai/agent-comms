@@ -180,7 +180,7 @@ export const renew = mutation({
  * nothing is ever collected from it.
  */
 export const delivered = mutation({
-  args: { machine: machineAuth, deliveryId: v.string(), claimId: v.string(), turnId: v.string() },
+  args: { machine: machineAuth, deliveryId: v.string(), claimId: v.string(), turnId: v.string(), cursor: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const machine = await requireMachine(ctx, args.machine);
     const { d } = await deliveryForMachine(ctx, machine, args.deliveryId);
@@ -194,6 +194,7 @@ export const delivered = mutation({
       state: "delivered",
       at: Date.now(),
       turnId: args.turnId,
+      ...(args.cursor !== undefined ? { cursor: args.cursor } : {}),
       ...(d.collect ? {} : { claim: undefined }),
     });
     await advanceRead(ctx, d.conversationId, d.recipientId, message.seq);

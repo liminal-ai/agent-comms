@@ -1,0 +1,26 @@
+{
+  "name": "@agent-comms/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lee's view: directory with presence, conversations and groups, delivery states, posting.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@agent-comms/protocol": "workspace:*",
+    "convex": "1.46.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "catalog:",
+    "vite": "8.3.1"
+  }
+}

@@ -10,6 +10,7 @@
 
 import {
   array,
+  DecodeError,
   decode,
   type Decoded,
   type Decoder,
@@ -47,6 +48,15 @@ export const MAX_POLL_WAIT_MS = 25_000;
 export const DEFAULT_READ_LIMIT = 20;
 export const MAX_READ_LIMIT = 100;
 export const MAX_TEXT_CHARS = 100_000;
+/** What a client may report as an answer; anything over MAX_TEXT_CHARS is clipped on collection. */
+export const MAX_REPORTED_ANSWER_CHARS = 1_000_000;
+
+/** Clips a collected answer to MAX_TEXT_CHARS, saying how much was cut. */
+export function clipAnswer(text: string): string {
+  if (text.length <= MAX_TEXT_CHARS) return text;
+  const marker = `\n[… clipped by agent-comms: ${text.length - MAX_TEXT_CHARS} more characters]`;
+  return text.slice(0, MAX_TEXT_CHARS - marker.length) + marker;
+}
 
 // ---------------------------------------------------------------------------
 // Socket location
@@ -157,8 +167,11 @@ const enteredInput = object({
 
 const outcomeReplied = object({
   outcome: literal("replied"),
-  /** The turn's final answer text: collected as the answer to the request. */
-  answer: string({ max: MAX_TEXT_CHARS }),
+  /**
+   * The turn's final answer text: collected as the answer to the request.
+   * Longer than MAX_TEXT_CHARS is accepted and clipped (`clipAnswer`), not refused.
+   */
+  answer: string({ max: MAX_REPORTED_ANSWER_CHARS }),
 });
 const outcomeAmbiguous = object({
   outcome: literal("ambiguous"),
@@ -231,19 +244,26 @@ const requestDecoders = {
   /**
    * How our turn ended. Only for deliveries of a request; an answer delivery
    * ends at `delivered` and `outcome` on it fails with `conflict`.
+   * `turnId` may be omitted only for `failed`: a delivery the harness dropped
+   * before any turn started it (e.g. a plugin prompt that was never run).
    * `replied` collects the answer: at most once per delivery; a repeat
    * returns `duplicate: true`. `answerMessageId` is present only when already
    * known (the stub knows at once; the connector writes in the background).
    */
   outcome: (value: unknown, path: string) => {
-    const head = object({ sessionId: harnessId, deliveryId: id, turnId: harnessId })(value, path);
-    return { ...head, ...outcomeBody(value, path) };
+    const head = object({ sessionId: harnessId, deliveryId: id, turnId: optional(harnessId) })(value, path);
+    const body = outcomeBody(value, path);
+    if (head.turnId === undefined && body.outcome !== "failed") {
+      throw new DecodeError(path ? `${path}.turnId` : "turnId", "a value (only a failed outcome may omit it)");
+    }
+    return { ...head, ...body };
   },
 
   /**
    * Answer to a `check` item from a poll: does this session have the delivery,
    * and what happened to its turn? `yes` with a completed turn carries the
-   * outcome, exactly as `outcome` would. `unknown` makes the delivery `uncertain`.
+   * outcome, exactly as `outcome` would (omit it for an answer's delivery; a
+   * request's without one becomes `uncertain`). `unknown` makes it `uncertain`.
    */
   "check-result": (value: unknown, path: string) => {
     const head = object({ sessionId: harnessId, deliveryId: id })(value, path);
@@ -251,8 +271,10 @@ const requestDecoders = {
       yes: (v: unknown, p: string) => {
         const turn = object({ turnId: harnessId, turn: literal("running", "completed") })(v, p);
         if (turn.turn === "running") return { found: "yes" as const, turnId: turn.turnId, turn: "running" as const };
-        const outcome = outcomeBody(v, p);
-        return { found: "yes" as const, turnId: turn.turnId, turn: "completed" as const, outcome };
+        // An answer's delivery has no outcome to report; a request's should (without one it becomes `uncertain`).
+        const hasOutcome = typeof v === "object" && v !== null && (v as { outcome?: unknown }).outcome !== undefined;
+        const outcome = hasOutcome ? outcomeBody(v, p) : undefined;
+        return { found: "yes" as const, turnId: turn.turnId, turn: "completed" as const, ...(outcome ? { outcome } : {}) };
       },
       no: object({ found: literal("no") }),
       unknown: object({ found: literal("unknown"), detail: optional(string({ max: 2000 })) }),

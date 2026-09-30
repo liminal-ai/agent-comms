@@ -78,6 +78,8 @@ export default defineSchema({
     /** Held from `claimed` through `delivered`; cleared when the delivery is finished. */
     claim: v.optional(claim),
     turnId: v.optional(v.string()),
+    /** The adapter's resume point in the harness, for recovery after a restart. Opaque. */
+    cursor: v.optional(v.string()),
     answerMessageId: v.optional(v.id("messages")),
     createdAt: v.number(),
   })

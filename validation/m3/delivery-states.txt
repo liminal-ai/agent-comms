@@ -1,0 +1,17 @@
+smoke-a+t3-codex #1 request @t3-codex replied  | Live test from agent-comms. Reply with exactly: PO
+smoke-a+t3-codex #2 answer @smoke-a pending  | PONG-t3-codex
+smoke-a+t3-codex #3 request @t3-codex replied  | Without using any tools, write the integers from 1
+smoke-a+t3-codex #4 answer @smoke-a pending  | one two three four five six seven eight nine ten e
+smoke-a+t3-codex #5 request @t3-codex replied  | Without using any tools, write the integers from 1
+smoke-a+t3-codex #6 answer @smoke-a pending  | one two three four five six seven eight nine ten e
+smoke-a+t3-native #1 request @t3-native replied  | Live test 1 from agent-comms. Reply with exactly: 
+smoke-a+t3-native #2 answer @smoke-a pending  | PONG-1
+smoke-a+t3-native #3 request @t3-native replied  | Reply with exactly: AFTER-BUSY
+smoke-a+t3-native #4 answer @smoke-a pending  | AFTER-BUSY
+smoke-a+t3-native #5 request @t3-native ambiguous other input entered the turn: t3-user-message | Run the shell command `sleep 20`, then reply with 
+smoke-a+t3-native #6 request @t3-native replied  | Run the shell command `sleep 30`, then reply with 
+smoke-a+t3-native #7 answer @smoke-a pending  | The foreground `sleep 30` was blocked, so it's run
+smoke-a+t3-native #8 request @t3-native failed aborted: the turn ended without an answer (interrupted) | Without using any tools, write out every integer f
+smoke-a+t3-native #9 request @t3-native failed aborted: the turn ended without an answer (interrupted) | Without using any tools, write out every integer f
+smoke-a+t3-lhc #1 request @t3-lhc replied  | Live test from agent-comms. Reply with exactly: PO
+smoke-a+t3-lhc #2 answer @smoke-a pending  | PONG-t3-lhc

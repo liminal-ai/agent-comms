@@ -19,7 +19,7 @@ import {
 import { prepareSocketPath } from "./socket.ts";
 import { type PostInput, StubComms, StubError } from "./state.ts";
 
-const MAX_BODY_BYTES = 1_000_000;
+const MAX_BODY_BYTES = 4_000_000;
 
 export interface StubServerOptions {
   socketPath: string;

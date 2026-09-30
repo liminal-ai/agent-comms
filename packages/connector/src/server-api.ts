@@ -50,7 +50,7 @@ export interface ServerApiShape {
   readonly work: Stream.Stream<WorkItem[], Unavailable>;
   readonly claim: (deliveryId: string, leaseMs: number) => Effect.Effect<ClaimResult, ApiError>;
   readonly renew: (deliveryId: string, claimId: string, leaseMs: number) => Effect.Effect<{ claim: Claim }, ApiError>;
-  readonly delivered: (deliveryId: string, claimId: string, turnId: string) => Effect.Effect<StateResult, ApiError>;
+  readonly delivered: (deliveryId: string, claimId: string, turnId: string, cursor?: string) => Effect.Effect<StateResult, ApiError>;
   readonly collect: (deliveryId: string, claimId: string, turnId: string, answer: string) => Effect.Effect<Responses["outcome"], ApiError>;
   readonly ambiguous: (deliveryId: string, claimId: string, turnId: string, entered: EnteredInput[]) => Effect.Effect<StateResult, ApiError>;
   readonly failed: (
@@ -122,8 +122,10 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
       call("claim", () => transport.mutation(api.connector.claim, { machine, deliveryId, leaseMs })) as Effect.Effect<ClaimResult, ApiError>,
     renew: (deliveryId, claimId, leaseMs) =>
       call("renew", () => transport.mutation(api.connector.renew, { machine, deliveryId, claimId, leaseMs })),
-    delivered: (deliveryId, claimId, turnId) =>
-      call("delivered", () => transport.mutation(api.connector.delivered, { machine, deliveryId, claimId, turnId })),
+    delivered: (deliveryId, claimId, turnId, cursor) =>
+      call("delivered", () =>
+        transport.mutation(api.connector.delivered, { machine, deliveryId, claimId, turnId, ...(cursor !== undefined ? { cursor } : {}) }),
+      ),
     collect: (deliveryId, claimId, turnId, answer) =>
       call("collect", () => transport.mutation(api.connector.collect, { machine, deliveryId, claimId, turnId, answer })),
     ambiguous: (deliveryId, claimId, turnId, entered) =>

@@ -1,0 +1,23 @@
+{
+  "name": "@agent-comms/adapter-t3",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "T3 adapter: delivers into T3 v0.0.44 threads through T3's own client runtime, matches replies from T3's records.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/t3/client.ts"
+  },
+  "scripts": {
+    "link-deps": "./link-deps.sh",
+    "typecheck": "tsc -p tsconfig.json && if [ -d src/t3/node_modules ]; then tsc -p tsconfig.t3.json; else echo \"adapter-t3: T3 not linked; skipped src/t3\"; fi",
+    "test": "node --test --test-timeout=30000 'test/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@agent-comms/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

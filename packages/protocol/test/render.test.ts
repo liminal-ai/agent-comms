@@ -138,3 +138,19 @@ describe("parseDeliveryHeader", () => {
     assert.equal(parseDeliveryHeader(`${header}\n${header}`)?.deliveryId, "d_42");
   });
 });
+
+describe("renderUnmatchedNotice", () => {
+  it("tells the agent to comms reply, and is never parsed as a delivery", async () => {
+    const { renderUnmatchedNotice, parseNoticeHeader } = await import("../src/index.ts");
+    const text = renderUnmatchedNotice(delivery(), { harnessLabelsSource: false });
+    assert.equal(parseDeliveryHeader(text), null);
+    assert.deepEqual(parseNoticeHeader(`The agent-comms plugin sent a message:\n${text}\nAddress the message above.`), {
+      notice: "unmatched",
+      deliveryId: "d_1",
+      messageId: "m_3",
+    });
+    assert.match(text, /comms reply --as cedar m_3 /);
+    assert.match(text, /^Source: agent-comms/m);
+    assert.doesNotMatch(renderUnmatchedNotice(delivery(), { harnessLabelsSource: true }), /^Source:/m);
+  });
+});

@@ -98,7 +98,7 @@ describe("decodeRequest", () => {
       decodeRequest("check-result", { ...head, found: "yes", turnId: "t", turn: "completed", outcome: "replied", answer: "a" }),
       { ok: true, value: { ...head, found: "yes", turnId: "t", turn: "completed", outcome: { outcome: "replied", answer: "a" } } },
     );
-    assert.equal(decodeRequest("check-result", { ...head, found: "yes", turnId: "t", turn: "completed" }).ok, false);
+    assert.equal(decodeRequest("check-result", { ...head, found: "yes", turnId: "t", turn: "completed", outcome: "maybe" }).ok, false);
     assert.equal(decodeRequest("check-result", { ...head, found: "no" }).ok, true);
     assert.equal(decodeRequest("check-result", { ...head, found: "unknown", detail: "resumed" }).ok, true);
   });
@@ -117,5 +117,30 @@ describe("parseResponse", () => {
     assert.equal(parseResponse(502, "<html>").ok, false);
     const r = parseResponse(500, '{"ok":false,"error":{"code":"weird"}}');
     assert.deepEqual(r, { ok: false, error: { code: "internal", message: "HTTP 500" } });
+  });
+});
+
+describe("contract changes from Hazel's review", () => {
+  it("lets only a failed outcome omit turnId", () => {
+    const head = { sessionId: "s-1", deliveryId: "d_1" };
+    assert.equal(decodeRequest("outcome", { ...head, outcome: "failed", reason: "rejected", detail: "prompt dropped" }).ok, true);
+    const r = decodeRequest("outcome", { ...head, outcome: "replied", answer: "x" });
+    assert.equal(r.ok, false);
+    assert.match(!r.ok ? r.error : "", /^turnId:/);
+  });
+
+  it("accepts over-long answers and clips them on collection", async () => {
+    const { clipAnswer, MAX_TEXT_CHARS } = await import("../src/index.ts");
+    const long = "x".repeat(MAX_TEXT_CHARS + 500);
+    assert.equal(decodeRequest("outcome", { sessionId: "s", deliveryId: "d", turnId: "t", outcome: "replied", answer: long }).ok, true);
+    const clipped = clipAnswer(long);
+    assert.equal(clipped.length, MAX_TEXT_CHARS);
+    assert.match(clipped, /\[… clipped by agent-comms: \d+ more characters\]$/);
+    assert.equal(clipAnswer("short"), "short");
+  });
+
+  it("lets a completed check omit the outcome (an answer's delivery)", () => {
+    const r = decodeRequest("check-result", { sessionId: "s", deliveryId: "d", found: "yes", turnId: "t", turn: "completed" });
+    assert.deepEqual(r, { ok: true, value: { sessionId: "s", deliveryId: "d", found: "yes", turnId: "t", turn: "completed" } });
   });
 });

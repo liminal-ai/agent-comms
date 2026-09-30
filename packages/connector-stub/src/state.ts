@@ -7,6 +7,7 @@
 
 import {
   boundHistory,
+  clipAnswer,
   type ConversationRef,
   type ConversationSummary,
   type Delivery,
@@ -484,7 +485,7 @@ export class StubComms {
     return this.applyOutcome(d, req.turnId, req);
   }
 
-  private applyOutcome(d: StubDelivery, turnId: string, body: OutcomeBody): Responses["outcome"] {
+  private applyOutcome(d: StubDelivery, turnId: string | undefined, body: OutcomeBody): Responses["outcome"] {
     const request = this.message(d.messageId);
     if (request.kind !== "request") {
       throw new StubError("conflict", `delivery ${d.id} carries an answer; answers are never collected`);
@@ -495,7 +496,7 @@ export class StubComms {
     if (d.status.state !== "claimed" && d.status.state !== "delivered") {
       throw new StubError("conflict", `delivery ${d.id} is already ${d.status.state}`);
     }
-    if (d.status.turnId && d.status.turnId !== turnId) {
+    if (d.status.turnId && turnId && d.status.turnId !== turnId) {
       throw new StubError("conflict", `delivery ${d.id} went into turn ${d.status.turnId}, not ${turnId}`);
     }
     if (body.outcome === "replied") {
@@ -504,22 +505,22 @@ export class StubComms {
         sender: recipient.ref.name,
         to: request.sender.id === recipient.ref.id ? [] : [request.sender.name],
         conversationId: request.conversationId,
-        text: body.answer,
+        text: clipAnswer(body.answer),
         kind: "answer",
         inReplyTo: request.id,
         via: "claude-code",
       }).message;
       answer.collectedFrom = d.id;
       d.answerMessageId = answer.id;
-      this.setState(d, "replied", { turnId });
+      this.setState(d, "replied", turnId ? { turnId } : {});
       this.changed();
       return { delivery: this.stateRef(d), answerMessageId: answer.id, duplicate: false };
     }
     if (body.outcome === "ambiguous") {
       const what = body.entered.map((e) => e.origin).join(", ") || "other input";
-      this.setState(d, "ambiguous", { turnId, detail: `other input entered the turn: ${what}` });
+      this.setState(d, "ambiguous", { ...(turnId ? { turnId } : {}), detail: `other input entered the turn: ${what}` });
     } else {
-      this.setState(d, "failed", { turnId, detail: body.detail ? `${body.reason}: ${body.detail}` : body.reason });
+      this.setState(d, "failed", { ...(turnId ? { turnId } : {}), detail: body.detail ? `${body.reason}: ${body.detail}` : body.reason });
     }
     this.changed();
     return { delivery: this.stateRef(d), duplicate: false };
@@ -541,7 +542,10 @@ export class StubComms {
       if (d.status.state === "claimed") this.setState(d, "delivered", { turnId: req.turnId });
     } else {
       if (d.status.state === "claimed") this.setState(d, "delivered", { turnId: req.turnId });
-      this.applyOutcome(d, req.turnId, req.outcome);
+      if (this.message(d.messageId).kind === "request") {
+        if (req.outcome) this.applyOutcome(d, req.turnId, req.outcome);
+        else this.setState(d, "uncertain", { turnId: req.turnId, detail: "its turn completed but no outcome was reported" });
+      }
     }
     this.changed();
     return { delivery: this.stateRef(d) };
