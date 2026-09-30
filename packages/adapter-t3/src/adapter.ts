@@ -7,13 +7,15 @@
 // - It waits for the thread to be idle before starting a turn, as a courtesy
 //   only: a person can start a turn in between, and ownership comes from T3's
 //   records, not from the wait.
+// - v0.0.44 user messages carry no turn id; our turn is read from T3's other
+//   records (see turnOf in model.ts).
 // - Ambiguity: any other user message in our turn (someone typed into it, or
 //   our message was steered into a turn someone else started) makes it
 //   ambiguous. Only the fact is reported, never that message's text.
 // - Reads nothing else from the thread.
 
 import { type Delivery, type EnteredInput, renderDelivery } from "@agent-comms/protocol";
-import { isBusy, T3Rejected, type T3Client, type T3Thread, turnFinished } from "./model.ts";
+import { isBusy, othersInTurn, T3Rejected, type T3Client, type T3Thread, turnFinished, turnOf } from "./model.ts";
 
 export interface Target {
   participant: string;
@@ -109,7 +111,7 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
   }
 
   function outcomeOf(thread: T3Thread, ourMessageId: string, turnId: string): Outcome {
-    const others = thread.messages.filter((m) => m.role === "user" && m.turnId === turnId && m.id !== ourMessageId);
+    const others = othersInTurn(thread, ourMessageId, turnId);
     if (others.length > 0) return { _tag: "ambiguous", entered: others.map(() => ({ origin: "t3-user-message" })) };
     const state = thread.latestTurn?.turnId === turnId ? thread.latestTurn.state : "completed";
     if (state === "interrupted") return { _tag: "failed", reason: "aborted", detail: "the turn was interrupted" };
@@ -142,7 +144,7 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
             interactionMode: modes.interactionMode,
           });
         }
-        const turnId = await waitFor(threadId, (t) => t.messages.find((m) => m.id === messageId)?.turnId ?? undefined, acceptTimeoutMs);
+        const turnId = await waitFor(threadId, (t) => turnOf(t, messageId), acceptTimeoutMs);
         if (turnId === undefined) return { _tag: "lost", detail: `message ${messageId} wasn't in a turn after ${acceptTimeoutMs} ms` };
         return { _tag: "accepted", turnId };
       } catch (error) {
@@ -153,7 +155,7 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
 
     async awaitOutcome(target, delivery, turnId) {
       try {
-        const thread = await waitFor(target.locator, (t) => (turnFinished(t, turnId) ? t : undefined));
+        const thread = await waitFor(target.locator, (t) => (turnFinished(t, turnId, messageIdFor(delivery.id)) ? t : undefined));
         return outcomeOf(thread!, messageIdFor(delivery.id), turnId);
       } catch (error) {
         return { _tag: "lost", detail: error instanceof Error ? error.message : String(error) };
@@ -172,9 +174,10 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
       if (!thread) return { _tag: "unknown", detail: `T3 thread ${target.locator} not found` };
       const ours = thread.messages.find((m) => m.id === messageId);
       if (!ours) return { _tag: "absent" };
-      if (!ours.turnId) return { _tag: "later", detail: "our message isn't in a turn yet" };
-      if (!turnFinished(thread, ours.turnId)) return { _tag: "running", turnId: ours.turnId };
-      return { _tag: "completed", turnId: ours.turnId, outcome: outcomeOf(thread, messageId, ours.turnId) };
+      const turnId = turnOf(thread, messageId);
+      if (!turnId) return { _tag: "later", detail: "our message isn't in a turn yet" };
+      if (!turnFinished(thread, turnId, messageId)) return { _tag: "running", turnId };
+      return { _tag: "completed", turnId, outcome: outcomeOf(thread, messageId, turnId) };
     },
   };
 }

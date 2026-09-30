@@ -162,7 +162,12 @@ function slice(thread: OrchestrationThread): T3Thread {
       ? { status: thread.session.status, activeTurnId: thread.session.activeTurnId, lastError: thread.session.lastError }
       : null,
     latestTurn: thread.latestTurn
-      ? { turnId: thread.latestTurn.turnId, state: thread.latestTurn.state, completedAt: thread.latestTurn.completedAt }
+      ? {
+          turnId: thread.latestTurn.turnId,
+          state: thread.latestTurn.state,
+          requestedAt: thread.latestTurn.requestedAt,
+          completedAt: thread.latestTurn.completedAt,
+        }
       : null,
     messages: thread.messages.map((m) => ({
       id: m.id,

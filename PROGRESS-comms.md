@@ -48,7 +48,8 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 ## M3: the T3 adapter
 - [x] `packages/adapter-t3`: T3's own client runtime (linked read-only from a v0.0.44 checkout by `link-deps.sh` into `src/t3/node_modules`), promise API, no T3 or Effect types across the boundary
 - [x] Deliver: courtesy wait for idle, `thread.turn.start` with message id `comms-<delivery id>`, the thread's own runtime and interaction modes (never forced full access), T3 rendering with source line
-- [x] Match from T3's records: our message's turn id; any other user message in that turn → ambiguous (origin only, no text); final assistant message → answer; interrupted/error → failed; a stale `latestTurn` never ends our turn
+- [x] Match from T3's records. v0.0.44 user messages carry `turnId: null` (Hazel, live), so our turn is: the first turn-tagged message after ours, else the session's active turn, else the latest turn requested at our message's timestamp. Any other user message inside that turn's window → ambiguous (origin only, no text); final assistant message → answer; interrupted/error → failed; a stale `latestTurn` never ends our turn; a later turn starting does
+- [ ] Confirm the turn-linking rule against Hazel's `docs/t3-api-notes.md` event sequence (especially typed-in and steered messages per provider)
 - [x] Restart check: our message id in the whole thread → absent / running / completed with outcome
 - [x] Connector loads it when the config lists `"adapters": ["t3"]` with a `t3` section (`baseUrl`, `authFile`)
 - [x] 11 tests against a fake T3 (idle, busy wait, typed-into, raced steer, later turn, interrupt, error, stale latestTurn, refusals, idempotent handoff, restart check)

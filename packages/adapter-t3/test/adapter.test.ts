@@ -61,16 +61,20 @@ class FakeT3 implements T3Client {
   async close() {}
 
   // What people and the model do
-  /** A user message: joins the running turn if there is one, else starts a new turn. Returns its turn id. */
+  /**
+   * A user message: joins the running turn if there is one, else starts a new
+   * turn. Like v0.0.44, the message itself carries no turn id. Returns the turn.
+   */
   userMessage(id: string, messageId: string): string {
     const t = this.thread(id);
+    const createdAt = this.at();
     let turnId = t.session?.status === "running" ? t.session.activeTurnId : null;
     if (!turnId) {
       turnId = `turn-${++this.turns}`;
-      t.latestTurn = { turnId, state: "running", completedAt: null };
+      t.latestTurn = { turnId, state: "running", requestedAt: createdAt, completedAt: null };
       t.session = { status: "running", activeTurnId: turnId, lastError: null };
     }
-    t.messages.push({ id: messageId, role: "user", turnId, streaming: false, createdAt: this.at() });
+    t.messages.push({ id: messageId, role: "user", turnId: null, streaming: false, createdAt });
     this.changed(id);
     return turnId;
   }
@@ -209,12 +213,15 @@ describe("T3 adapter", () => {
     const h = await adapter.handOff(target, delivery());
     const turnId = (h as { turnId: string }).turnId;
     // Simulate a snapshot where our message has its turn id but latestTurn still names the old turn.
-    t3.thread("th1").latestTurn = { turnId: "turn-1", state: "completed", completedAt: "2026-09-30T12:00:02.000Z" };
+    const ourTurn = { ...t3.thread("th1").latestTurn! };
+    t3.thread("th1").latestTurn = { turnId: "turn-1", state: "completed", requestedAt: "2026-09-30T12:00:01.000Z", completedAt: "2026-09-30T12:00:02.000Z" };
+    t3.thread("th1").session = { status: "ready", activeTurnId: null, lastError: null };
     let settled = false;
     const outcome = adapter.awaitOutcome(target, delivery(), turnId).then((o) => ((settled = true), o));
     await tick(100);
     assert.equal(settled, false);
-    t3.thread("th1").latestTurn = { turnId, state: "running", completedAt: null };
+    t3.thread("th1").latestTurn = ourTurn;
+    t3.thread("th1").session = { status: "running", activeTurnId: turnId, lastError: null };
     t3.assistant("th1", "4");
     t3.finish("th1");
     assert.deepEqual(await outcome, { _tag: "replied", answer: "4" });
