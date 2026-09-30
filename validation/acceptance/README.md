@@ -11,9 +11,9 @@ lim-builder; local Convex (3240); connector `cedar-connector-m5` (main, default 
 | 3 | Lee's group in the web view, post addressing two; only those woken, both replies linked | Pass: group created and posted in the web view (headless Chrome) with lee, t3-native, t3-lhc, cc-a; post addressed t3-lhc and cc-a; exactly those two woken, both `replied` and linked; t3-native not woken (`3-group.png`). |
 | 4 | Lee types into a running comms turn | T3 (t3-native): the typed message entered the turn → `ambiguous`; notice sent; the agent's own `comms reply` completed it (`replied`, "ACC-4"). Claude Code (cc-a, Hazel): typed text entered our turn → `ambiguous` (entered: composer); the mod showed the unmatched notice; cc-a's `comms reply` ("The command printed 17.") completed it. |
 | 5 | An answer that needs the agent's own work | T3 (t3-lhc, shell command): collected normally, `replied`, "6" (correct). Claude Code (cc-a, Hazel): one turn with a background shell, a helper subagent and a foreground shell; both task notifications arrived in our turn, linked by their `toolUseId`; the answer was collected normally ("…5…81…6"); the helper's own answer was not reported. |
-| 6 | Nothing typed directly appears in Convex | pending (grep for PRIVATE-ACC at the end) |
-| 7 | An answer wakes the requester, nothing it does next is collected | pending |
-| 8 | Connector killed mid-delivery and restarted | pending (joint) |
+| 6 | Nothing typed directly appears in Convex | Pass: none of the 105 messages in Convex contains `PRIVATE-` (T3-side and Claude Code-side markers) (`acc-67.mjs`). |
+| 7 | An answer wakes the requester, nothing it does next is collected | Pass: 45 collected answers, none from an answer's delivery; no answer delivery ever went past `delivered`; 2b's answer woke cc-a and was delivered only. |
+| 8 | Connector killed mid-delivery and restarted | T3 (t3-codex): SIGKILL (Hazel) 31 s after `delivered`, recreated 2 s later; `replied` once, full answer, our message in the thread once. Claude Code: (Hazel) |
 
 ## Incident (Hazel, during 2b)
 
