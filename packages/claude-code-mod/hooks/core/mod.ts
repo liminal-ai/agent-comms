@@ -217,15 +217,39 @@ export class CommsMod {
   }
 
   onPromptSubmit(input: { turnId?: string; origin: { kind: string; name?: string }; text: string }): void {
+    const ours = [...this.tracker.deliveries.values()].find((d) => d.phase === "running" && d.turnId === input.turnId);
+    if (ours) this.host.log(`${ours.deliveryId}: ${input.origin.kind} input during our turn`);
     this.tracker.promptSubmit({ ...input, at: this.host.now() });
   }
 
-  onToolCall(input: { toolUseId?: string; agentId?: string }): void {
+  onToolCall(input: { toolUseId?: string; agentId?: string; background?: boolean; tool?: string }): void {
+    const running = [...this.tracker.deliveries.values()].find((d) => d.phase === "running");
+    if (running) {
+      const where = input.agentId ? `subagent ${input.agentId}` : this.tracker.activeTurnId === running.turnId ? "our turn" : "another turn";
+      this.host.log(`${running.deliveryId}: tool ${input.tool ?? "?"} ${input.toolUseId ?? "(no id)"} in ${where}${input.background ? " (background)" : ""}`);
+    }
     this.tracker.toolCall(input);
   }
 
+  /**
+   * Context to attach to a prompt: for a task notification finishing background
+   * work of a request whose turn already ended, how to send the result.
+   */
+  contextFor(input: { turnId?: string; origin: { kind: string }; text: string }): string | undefined {
+    if (input.origin.kind !== "task-notification") return undefined;
+    const running = [...this.tracker.deliveries.values()].find((d) => d.phase === "running");
+    if (running && running.turnId === input.turnId) return undefined;
+    const d = this.tracker.followUpFor(input.text);
+    if (!d) return undefined;
+    this.host.log(`${d.deliveryId}: follow-up notification, reminding the agent to comms reply`);
+    return followUpNote(d, this.options.participant);
+  }
+
   onTaskRow(task: { id?: string; toolUseId?: string }): void {
+    const running = [...this.tracker.deliveries.values()].find((d) => d.phase === "running");
+    const before = running?.linkedTaskRows ?? 0;
     this.tracker.taskRow(task);
+    if (running) this.host.log(`${running.deliveryId}: task row id=${task.id ?? "-"} toolUseId=${task.toolUseId ?? "-"} ${running.linkedTaskRows > before ? "linked" : "not linked"}`);
   }
 
   onTurnComplete(input: { turnId: string; agentId?: string; reason: "answer" | "aborted" | "refusal" | "error"; answer: string }): void {
@@ -245,6 +269,7 @@ export class CommsMod {
     if (actions.length === 0) return;
     for (const action of actions) {
       const d = this.tracker.deliveries.get(action.deliveryId)!;
+      this.host.log(`${d.deliveryId}: ${action.type}${action.type === "outcome" ? ` ${action.outcome.outcome}` : ""}`);
       if (action.type === "delivered") {
         this.queue({ op: "delivered", body: { sessionId: this.options.sessionId, deliveryId: d.deliveryId, turnId: action.turnId } });
       } else if (action.type === "outcome") {
@@ -402,6 +427,15 @@ export function unmatchedNotice(d: Pick<Tracked, "messageId" | "sender" | "recip
     `[agent-comms notice] Your answer to request ${d.messageId}${from} was not sent: other input entered that turn, so the reply couldn't be matched to the request.`,
     `Send your answer with: comms reply --as ${me} ${d.messageId} "<your answer>"`,
     "Nothing you write in this turn is sent anywhere automatically.",
+  ].join("\n");
+}
+
+export function followUpNote(d: Pick<Tracked, "messageId" | "sender" | "recipient">, participant: string): string {
+  const me = d.recipient ?? participant;
+  const from = d.sender ? ` from @${d.sender}` : "";
+  return [
+    `[agent-comms] This notification is for background work you started while answering request ${d.messageId}${from}.`,
+    `Your reply in that turn was already sent as the answer. If this completes the answer, send the result with: comms reply --as ${me} ${d.messageId} "<result>"`,
   ].join("\n");
 }
 

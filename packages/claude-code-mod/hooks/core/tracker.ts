@@ -37,6 +37,8 @@ export interface Tracked {
   toolUseIds: string[];
   /** Subagents seen during our turn. */
   agentIds: string[];
+  /** Tool calls of our turn that started background work (a background shell or subagent). */
+  backgroundIds: string[];
   /** Input that certainly entered our turn. */
   entered: EnteredInput[];
   /** Prompts typed or delivered during our turn: entered unless the next turn starts with them. */
@@ -44,6 +46,8 @@ export interface Tracked {
   /** Task notifications delivered into our turn, and the task rows linked to our work while it ran. */
   taskNotices: number;
   linkedTaskRows: number;
+  /** Tasks already counted, by id or call: a row can be drawn more than once. */
+  linkedTasks?: string[];
   completion?: { reason: "answer" | "aborted" | "refusal" | "error"; answer: string; at: number };
   settleUntil?: number;
   /** For requests, once decided. */
@@ -82,6 +86,7 @@ export class Tracker {
       submittedAt: input.at,
       toolUseIds: [],
       agentIds: [],
+      backgroundIds: [],
       entered: [],
       maybeQueued: [],
       taskNotices: 0,
@@ -130,14 +135,30 @@ export class Tracker {
     else d.maybeQueued.push({ origin: input.origin.kind, text: input.text, at: input.at });
   }
 
-  toolCall(input: { toolUseId?: string; agentId?: string }): void {
+  toolCall(input: { toolUseId?: string; agentId?: string; background?: boolean }): void {
     const d = this.running();
     if (!d || this.activeTurnId !== d.turnId) return;
     if (input.agentId) {
       if (!d.agentIds.includes(input.agentId)) d.agentIds.push(input.agentId);
     } else if (input.toolUseId && !d.toolUseIds.includes(input.toolUseId)) {
       d.toolUseIds.push(input.toolUseId);
+      if (input.background) d.backgroundIds.push(input.toolUseId);
     }
+  }
+
+  /**
+   * A request whose turn is over but started background work that may still
+   * report: a later notification naming one of its calls is a follow-up the
+   * agent should send with `comms reply`.
+   */
+  followUpFor(notificationText: string): Tracked | undefined {
+    let found: Tracked | undefined;
+    for (const d of this.deliveries.values()) {
+      if (d.phase !== "done" || d.kind !== "request" || d.backgroundIds === undefined) continue;
+      const ids = [...d.backgroundIds, ...d.agentIds];
+      if (ids.some((id) => id !== "" && notificationText.includes(id))) found = d;
+    }
+    return found;
   }
 
   /** A subagent's id, from wherever it's seen (an Agent tool result, its turns). */
@@ -153,7 +174,12 @@ export class Tracker {
     const linked =
       (task.toolUseId !== undefined && d.toolUseIds.includes(task.toolUseId)) ||
       (task.id !== undefined && d.agentIds.includes(task.id));
-    if (linked) d.linkedTaskRows += 1;
+    const key = task.id ?? task.toolUseId;
+    d.linkedTasks ??= [];
+    if (linked && key !== undefined && !d.linkedTasks.includes(key)) {
+      d.linkedTasks.push(key);
+      d.linkedTaskRows += 1;
+    }
   }
 
   turnComplete(input: {

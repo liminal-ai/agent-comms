@@ -102,12 +102,15 @@ export function register(on: any) {
   });
 
   on("prompt.submit", ($: Dollar, e: any, next: any) => {
-    mod?.onPromptSubmit({ turnId: e.turnId, origin: e.origin ?? { kind: "unclassified" }, text: String(e.text ?? "") });
-    return next(e);
+    if (!mod) return next(e);
+    const input = { turnId: e.turnId, origin: e.origin ?? { kind: "unclassified" }, text: String(e.text ?? "") };
+    mod.onPromptSubmit(input);
+    const note = mod.contextFor(input);
+    return note ? next({ ...e, context: [...(e.context ?? []), note] }) : next(e);
   });
 
   on("tool.call", ($: Dollar, e: any, next: any) => {
-    mod?.onToolCall({ toolUseId: e.tool_use_id, agentId: e.agentId });
+    mod?.onToolCall({ toolUseId: e.tool_use_id, agentId: e.agentId, background: e.run_in_background === true, tool: e.tool });
     return next(e);
   });
 

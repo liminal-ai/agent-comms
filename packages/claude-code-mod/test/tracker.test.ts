@@ -66,10 +66,23 @@ describe("Tracker", () => {
     t.toolCall({ toolUseId: "toolu_x", agentId: "agent_7" });
     t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "<task done>", at: 2 });
     t.taskRow({ id: "shell_1", toolUseId: "toolu_bash" });
+    t.taskRow({ id: "shell_1", toolUseId: "toolu_bash" });
     t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "<agent done>", at: 3 });
     t.taskRow({ id: "agent_7" });
     const [outcome] = t.turnComplete({ turnId: "t1", reason: "answer", answer: "done", at: 4 });
     assert.equal(outcome?.type === "outcome" && outcome.outcome.outcome, "replied");
+  });
+
+  it("a row drawn twice counts once, so it can't cover for an unlinked notification", () => {
+    const t = started();
+    t.turnStart("t1", wrap(RENDERED), 1);
+    t.toolCall({ toolUseId: "toolu_bash" });
+    t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "ours", at: 2 });
+    t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "someone else's", at: 2 });
+    t.taskRow({ id: "shell_1", toolUseId: "toolu_bash" });
+    t.taskRow({ id: "shell_1", toolUseId: "toolu_bash" });
+    const [outcome] = t.turnComplete({ turnId: "t1", reason: "answer", answer: "done", at: 3 });
+    assert.equal(outcome?.type === "outcome" && outcome.outcome.outcome, "ambiguous");
   });
 
   it("an unlinked task notification makes it ambiguous", () => {
@@ -107,6 +120,17 @@ describe("Tracker", () => {
     t.promptSubmit({ turnId: "t0", origin: { kind: "peer" }, text: "old turn", at: 2 });
     const [outcome] = t.turnComplete({ turnId: "t1", reason: "answer", answer: "ok", at: 3 });
     assert.equal(outcome?.type === "outcome" && outcome.outcome.outcome, "replied");
+  });
+
+  it("names the request a later notification of our background work belongs to", () => {
+    const t = started();
+    t.turnStart("t1", wrap(RENDERED), 1);
+    t.toolCall({ toolUseId: "toolu_bg", background: true });
+    t.toolCall({ toolUseId: "toolu_fg" });
+    t.turnComplete({ turnId: "t1", reason: "answer", answer: "started it", at: 2 });
+    assert.equal(t.followUpFor("<task-notification><tool-use-id>toolu_bg</tool-use-id>")?.messageId, "m_1");
+    assert.equal(t.followUpFor("<tool-use-id>toolu_fg</tool-use-id>"), undefined);
+    assert.equal(t.followUpFor("<tool-use-id>toolu_other</tool-use-id>"), undefined);
   });
 
   it("a turn that merged someone else's queued prompt with ours is ambiguous", () => {
