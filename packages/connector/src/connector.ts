@@ -84,6 +84,21 @@ export const runConnector = (options: ConnectorOptions) =>
     );
     log(`machine ${options.machine}: listening on ${loopback.socketPath}`);
 
+    // Nobody has registered with this process yet: any Claude Code participant homed
+    // here is offline until its session does. Best effort; the web view also
+    // treats a machine whose connector isn't heard from as offline.
+    yield* api.homed.pipe(
+      Effect.flatMap(({ participants }) =>
+        Effect.forEach(
+          participants.filter((p) => p.home.harness === "claude-code" && p.state !== "retired"),
+          (p) => api.presence(p.participant.name, "offline"),
+          { discard: true },
+        ),
+      ),
+      Effect.catch((e) => Effect.sync(() => log(`resetting presence: ${e.message}`))),
+      Effect.forkScoped,
+    );
+
     yield* Effect.sync(() => sessions.sweep()).pipe(Effect.repeat(Schedule.spaced(Duration.seconds(5))), Effect.forkScoped);
     yield* api.heartbeat.pipe(
       Effect.catch((e) => Effect.sync(() => log(`heartbeat: ${e.message}`))),

@@ -56,5 +56,12 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - [ ] Live against Hazel's T3 on 3780: needs her handoff (base URL, how to get a bearer, test thread ids) and her API notes to confirm busy-thread and typed-in behavior per provider
 - [ ] Presence from T3 session state (idle/busy)
 
+## M4: the web view
+- [x] `apps/web` (Vite + React + Convex subscriptions): directory with presence; promote a T3 thread or a Claude Code terminal; pause/resume/retire; conversations; create group; add/remove members; per-recipient delivery states with `uncertain` highlighted; posting as a person with @mentions (shows who will be woken)
+- [x] Phone layout: one pane at a time
+- [x] Checked headless (Chrome + Playwright) against the local deployment; screenshots in `validation/m4/`
+- [x] Connector resets Claude Code participants' presence to offline at start (stale "idle" seen in the check)
+- Reaching it from Lee's phone needs a reachable deployment: M6
+
 ## Later
-M4 web · M5 local milestone · M6 integration and cloud
+M5 local milestone · M6 integration and cloud
