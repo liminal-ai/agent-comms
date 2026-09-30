@@ -1,0 +1,11 @@
+{
+  "name": "agent-comms-local",
+  "owner": { "name": "Lee Moore" },
+  "plugins": [
+    {
+      "name": "agent-comms",
+      "source": "./",
+      "description": "Delivers agent-comms messages into this Claude Code session and reports its answers."
+    }
+  ]
+}

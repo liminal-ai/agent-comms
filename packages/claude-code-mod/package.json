@@ -1,0 +1,17 @@
+{
+  "name": "@agent-comms/claude-code-mod",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Claude Code adapter: a mod (function hooks plugin) that delivers agent-comms messages into a standalone Claude Code session and reports its turns and answers to the connector.",
+  "scripts": {
+    "sync-protocol": "node scripts/sync-protocol.ts",
+    "typecheck": "node scripts/sync-protocol.ts --check && tsc -p tsconfig.json",
+    "test": "node scripts/sync-protocol.ts --check && node --test 'test/**/*.test.ts'"
+  },
+  "devDependencies": {
+    "@agent-comms/connector-stub": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
