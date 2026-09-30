@@ -179,8 +179,8 @@ Live (`runs/interrupt-{native,lhc,codex}.jsonl`): A running, B steered in, inter
 
 | Provider | Session events after interrupt | `latestTurn.state` | Steered B |
 |---|---|---|---|
-| native Claude | `ready` (activeTurnId null), then `stopped` 2 s later | `completed`, `assistantMessageId: null` | dropped, never answered |
-| Claude-LHC | `ready`, then `stopped` | `completed`, `assistantMessageId: null` | dropped |
+| native Claude | `ready` (activeTurnId null), then `stopped` 2 s later | `completed`; `assistantMessageId: null` here (interrupted before any text streamed) | dropped, never answered |
+| Claude-LHC | `ready`, then `stopped` | `completed`, `assistantMessageId: null` (same) | dropped |
 | Codex | `ready` | `completed`, assistant message = the partial text so far | dropped |
 
 - The Claude adapter's interrupt stops the whole provider session; the next `thread.turn.start`
@@ -189,7 +189,10 @@ Live (`runs/interrupt-{native,lhc,codex}.jsonl`): A running, B steered in, inter
   `turn.completed` with state `interrupted`, which the server maps to session `ready`. The
   projection even records the turn as `completed`. The adapter can only know it interrupted a turn
   if it issued the interrupt itself; a turn Lee stops from the UI looks like a completed turn
-  whose last assistant message may be partial (Codex) or absent (Claude).
+  whose last assistant message may be partial or absent. Correction from Cedar's live run
+  (validation/m3 in his lane): a Claude interrupt after text started streaming is recorded as
+  `completed` with `assistantMessageId` set to the partial message. The tell for Claude is the
+  session going `ready` then `stopped` right after; his adapter watches for that. Codex has no tell.
 - The `turnId` on the interrupt command is optional; without it the active turn is interrupted.
 
 ## 7. Claude turns with no user message
