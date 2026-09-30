@@ -46,4 +46,17 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
   an outcome for answer deliveries. Question: how a T3 agent learns it must `comms reply`.
 - Awaiting Cedar's decisions; Part D proceeds on the current contract.
 
-## Part D: Claude Code mod — in progress
+## Part D: Claude Code mod — acceptance against the stub done 2026-09-30
+
+- `packages/claude-code-mod` (commits b06bbb9, 021f3aa, db880b6, 8a46f6a). README and
+  VALIDATION.md there.
+- Every acceptance check in 02 part D passed live on Claude Code 2.1.286 against the stub (Sonnet,
+  and Opus for the ten requests), plus Claude Code ↔ Claude Code through an installed plugin.
+- Answers to the plan's open questions: task-notification rows do carry `toolUseId`; text typed
+  during our turn enters it (so ambiguous, then `comms reply`); the flag works from the user
+  settings layer, and mods are also gated by a server rollout switch (on for this account now).
+- Added beyond the plan: the mod tells the agent when its reply couldn't be matched, and reminds it
+  to `comms reply` when background work from an already-answered request finishes.
+- Needs Cedar: merge branch hazel; regenerate `pnpm-lock.yaml` for the new package (root file,
+  not committed by me); decisions on the three contract edges from Part C.
+- Next: run the same checks against the real connector, then M6 and the shared acceptance check.
