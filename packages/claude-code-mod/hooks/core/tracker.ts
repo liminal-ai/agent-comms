@@ -123,8 +123,8 @@ export class Tracker {
       d.turnId = turnId;
       if (hasOtherPrompt(text, d.rendered)) d.entered.push({ origin: "merged-prompt", at });
       actions.push({ type: "delivered", deliveryId: d.deliveryId, turnId });
-      if (d.kind === "answer") {
-        // An answer is delivered, never collected: its turn is the requester's own.
+      if (d.kind !== "request") {
+        // An answer or a notice is delivered, never collected: its turn is the agent's own.
         d.phase = "done";
         actions.push({ type: "done", deliveryId: d.deliveryId });
       }

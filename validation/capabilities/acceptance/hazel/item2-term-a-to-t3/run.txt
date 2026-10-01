@@ -1,0 +1,4 @@
+case: item2-term-a-to-t3
+started: 2026-10-01T18:37:27Z
+turn ended: 2026-10-01T18:37:48Z (seen busy: 1)
+ended: 2026-10-01T18:40:28Z

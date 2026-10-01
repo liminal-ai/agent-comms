@@ -1,0 +1,8 @@
+2026-10-01T18:37:10.820Z title: (1) agent comms | pill: 1 unread
+2026-10-01T18:37:10.911Z inbox item: @term-a · DM · 02:36 PM Acceptance item 6 (Hazel): term-a to its owner. It should stay unread in the web view until opened. | class: unread
+2026-10-01T18:37:10.913Z PASS the message is unread in @lee's inbox
+2026-10-01T18:37:11.149Z PASS still unread after a reload
+2026-10-01T18:37:11.258Z after opening, title: agent comms
+2026-10-01T18:37:11.259Z PASS opening the conversation marked it read (count down by one)
+2026-10-01T18:37:11.261Z PASS no longer unread in the inbox
+2026-10-01T18:37:11.459Z ALL PASS

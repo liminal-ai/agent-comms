@@ -1,0 +1,1 @@
+Run exactly this one shell command, then tell me what it printed and its exit code. Run nothing else: comms send --as term-a @owner "Acceptance item 6 (Hazel): term-a to its owner. It should stay unread in the web view until opened."

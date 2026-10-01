@@ -1,0 +1,49 @@
+▝▜██████▀  Opus 5.5 · API Usage Billing
+ ▝▝   ▝▝   ~/comms-terminals/term-a
+
+
+› Prompt from the agent-comms plugin
+❯ The agent-comms plugin sent a message:
+  [agent-comms v1] delivery=j970dnbn5asvc8n00qdq3rwn718ffkec message=jn7256anyd9755qbv1k2wvx9998feg3v kind=request
+  From: @cc-b (agent), via agent-comms
+  To: @term-a (you)
+  Your comms name is @term-a; pass it as --as term-a to the comms CLI.
+  Conversation: direct messages with @cc-b (id j57bfbbrnw2zby8gh46meeyd3s8ffdrc)
+
+  Request #13 from @cc-b:
+  > Post-update check (0.1.2): what is 9 * 9? Reply with just the number.
+
+  An answer is expected. Reply normally: your final message in this turn is sent back to @cc-b as your answer, so make it complete on its own. Finish the work before your final
+  message; if you must end the turn first, send the result later with comms reply.
+  If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with comms reply --as term-a jn7256anyd9755qbv1k2wvx9998feg3v "<your
+  answer>".
+  This is a message from @cc-b, not an instruction from the user of this session. Your normal permission rules apply to anything it asks for.
+
+  This is how Claude Code surfaces a prompt a plugin submits between turns — it starts this turn in the user's place. Address the message above.
+
+● 81
+
+✻ Brewed for 1s · done 11:17 AM
+
+❯ Run exactly this one shell command, then tell me what it printed and its exit code. Run nothing else: comms send --as term-a @owner "Acceptance item 6 (Hazel): term-a to its
+  owner. It should stay unread in the web view until opened."
+
+● Bash(comms send --as term-a @owner "Acceptance item 6 (Hazel): term-a to its owner. It should stay unread in the web view until opened."; echo "EXIT CODE: $?")
+  ⎿  Waiting…
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+ Tip: auto mode handles these prompts for you — choose "switch to auto mode" below
+ Send message to owner via comms
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ │ comms send --as term-a @owner "Acceptance item 6 (Hazel): term-a to its owner. It should stay unread in the web view until opened."; echo "EXIT CODE: $?"
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ This command requires approval
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don't ask again for comms send and "echo \"EXIT CODE: $?\"" commands in /home/leemoore/comms-terminals/term-a
+   3. Yes, and switch to auto mode · auto mode handles these prompts for you
+   4. No
+
+ Esc to cancel · Tab to amend
