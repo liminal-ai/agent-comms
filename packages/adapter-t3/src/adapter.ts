@@ -5,16 +5,28 @@
 // - Our message id is `comms-<delivery id>`, so it can always be found again.
 // - We wait for the thread to be idle before starting a turn, as a courtesy
 //   only: ownership comes from the event order, not from the wait.
-// - Ambiguous (Hazel's rule): our message joined a turn already running, or
-//   another user message was appended after ours before our turn ended. Only
-//   the fact is reported, never that message's text.
+// - Ambiguous: our message joined a turn already running, a foreign message
+//   was waiting for the same turn (1.1), the turn wasn't started by our message
+//   (1.2), or another user message entered before our turn ended. Only the
+//   fact is reported, never that message's text.
 // - After a restart: replay the thread's events from the cursor saved with
-//   `delivered`; if they're gone, link from the snapshot only when it's
-//   certain (see linkFromSnapshot), else say we can't tell.
+//   `delivered`. If the replay doesn't cover our turn from before our message
+//   to its end, we can't tell: `unknown` (uncertain), never collected (1.3).
+// - Our turn's end state is our turn's own (1.4); if it can't be read, uncertain.
 // - Reads nothing else from the thread.
 
 import { type Delivery, type EnteredInput, renderDelivery, renderUnmatchedNotice } from "@agent-comms/protocol";
-import { isBusy, linkFromSnapshot, T3Rejected, type T3Client, type T3StreamItem, type T3Thread, TurnTracker } from "./model.ts";
+import {
+  decodeCursor,
+  encodeCursor,
+  isBusy,
+  startedBy,
+  T3Rejected,
+  type T3Client,
+  type T3StreamItem,
+  type T3Thread,
+  TurnTracker,
+} from "./model.ts";
 
 export interface Target {
   participant: string;
@@ -29,7 +41,9 @@ export type HandOff =
 export type Outcome =
   | { _tag: "replied"; answer: string }
   | { _tag: "ambiguous"; entered: EnteredInput[] }
-  | { _tag: "failed"; reason: "aborted" | "refusal" | "error"; detail?: string };
+  | { _tag: "failed"; reason: "aborted" | "refusal" | "error"; detail?: string }
+  /** We can't prove what happened in our turn: never collected, never re-run. */
+  | { _tag: "uncertain"; detail: string };
 export type Check =
   | { _tag: "absent" }
   | { _tag: "running"; turnId: string }
@@ -138,32 +152,46 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
   async function replay(target: Target, delivery: Delivery): Promise<Follower | undefined> {
     const existing = following.get(delivery.id);
     if (existing) return existing;
-    const cursor = delivery.status.cursor !== undefined ? Number(delivery.status.cursor) : undefined;
-    if (cursor === undefined || !Number.isFinite(cursor)) return undefined;
+    const cursor = decodeCursor(delivery.status.cursor);
+    if (!cursor) return undefined;
     const tracker = new TurnTracker(messageIdFor(delivery.id));
-    tracker.start(null, cursor);
-    const f = await follow(target.locator, tracker, cursor);
+    tracker.start(null, cursor.sequence);
+    const f = await follow(target.locator, tracker, cursor.sequence);
     // Done when our turn has ended, or the replay has gone quiet.
     await f.wait(() => (tracker.ended || f.synced || Date.now() - f.lastItemAt > replayQuietMs ? true : undefined), 30_000);
     if (!tracker.seenOurs) {
       f.stop();
       return undefined;
     }
+    if (tracker.turnId !== undefined && cursor.confirmedTurnId === tracker.turnId) tracker.startedByUs = true;
     following.set(delivery.id, f);
     return f;
   }
 
-  function outcomeOf(thread: T3Thread, tracker: { turnId: string; joined: boolean; foreign: number; stopped?: boolean }): Outcome {
-    if (tracker.joined || tracker.foreign > 0) {
-      const entered: EnteredInput[] = [];
-      if (tracker.joined) entered.push({ origin: "t3-turn-already-running" });
-      for (let i = 0; i < tracker.foreign; i++) entered.push({ origin: "t3-user-message" });
-      return { _tag: "ambiguous", entered };
-    }
-    const latest = thread.latestTurn?.turnId === tracker.turnId ? thread.latestTurn : null;
-    const state = latest?.state ?? "completed";
+  /**
+   * The outcome of a turn that has ended, from what the tracker saw and the
+   * thread's records. Confirms `startedByUs` from the snapshot if still unknown.
+   */
+  function outcomeOf(thread: T3Thread, t: TurnTracker): Outcome {
+    const turnId = t.turnId!;
+    if (t.startedByUs === undefined) t.startedByUs = startedBy(thread, t.messageId, turnId) ?? false;
+    if (t.ambiguous) return { _tag: "ambiguous", entered: t.entered() };
+    const latest = thread.latestTurn?.turnId === turnId ? thread.latestTurn : null;
+    // Our turn's own end state: the latest turn's record if it's ours, else what ended it (1.4).
+    const state = latest
+      ? latest.state
+      : t.endStatus === "interrupted"
+        ? "interrupted"
+        : t.endStatus === "error"
+          ? "error"
+          : t.endStatus === "ready" || t.endStatus === "stopped"
+            ? "completed"
+            : undefined;
+    if (state === undefined) return { _tag: "uncertain", detail: "can't read how its turn ended (another turn took over)" };
     if (state === "interrupted") return { _tag: "failed", reason: "aborted", detail: "the turn was interrupted" };
-    if (state === "error") return { _tag: "failed", reason: "error", detail: thread.session?.lastError ?? "the turn ended in an error" };
+    if (state === "error") {
+      return { _tag: "failed", reason: "error", detail: (latest ? thread.session?.lastError : t.endError) ?? "the turn ended in an error" };
+    }
     // v0.0.44 reports an interrupted Claude turn as completed with no answer (Hazel's notes §6).
     // Codex keeps the partial text as its answer; that can't be told from a real one.
     if (latest && latest.assistantMessageId === null) {
@@ -171,13 +199,25 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
     }
     // Interrupted after part of the answer streamed: recorded as completed with that
     // part as its answer, then the session stops (live on 3780, native Claude).
-    if (tracker.stopped) return { _tag: "failed", reason: "aborted", detail: "the turn was interrupted; its partial answer wasn't collected" };
-    const named = latest ? thread.messages.find((m) => m.id === latest.assistantMessageId && m.text?.trim()) : undefined;
-    const final =
-      named ??
-      thread.messages.filter((m) => m.role === "assistant" && m.turnId === tracker.turnId && !m.streaming && m.text?.trim()).at(-1);
-    if (!final) return { _tag: "failed", reason: "error", detail: "the turn produced no answer" };
-    return { _tag: "replied", answer: final.text! };
+    if (t.stoppedAfterEnd) return { _tag: "failed", reason: "aborted", detail: "the turn was interrupted; its partial answer wasn't collected" };
+    const answerId = latest?.assistantMessageId ?? t.answerId;
+    if (!answerId) return { _tag: "failed", reason: "error", detail: "the turn produced no answer" };
+    const answer = thread.messages.find((m) => m.id === answerId && m.role === "assistant");
+    if (!answer) return { _tag: "uncertain", detail: "its answer isn't in the thread" };
+    if (!answer.text?.trim()) return { _tag: "failed", reason: "error", detail: "the turn produced no answer" };
+    return { _tag: "replied", answer: answer.text };
+  }
+
+  /** After our turn ended: watch briefly for the interrupt signal, then read the outcome. */
+  async function settle(target: Target, f: Follower): Promise<Outcome> {
+    await f.wait(() => (f.tracker.stoppedAfterEnd || Date.now() - (f.tracker.endedAt ?? 0) > interruptWindowMs ? true : undefined));
+    let thread = await client.getThread(target.locator, 5);
+    if (!thread) return { _tag: "uncertain", detail: `T3 thread ${target.locator} is gone` };
+    const t = f.tracker;
+    const latest = thread.latestTurn;
+    const wanted = latest && latest.turnId === t.turnId ? latest.assistantMessageId : t.answerId;
+    if (wanted && !thread.messages.some((m) => m.id === wanted)) thread = (await client.getThread(target.locator)) ?? thread;
+    return outcomeOf(thread, t);
   }
 
   /** Waits (by polling snapshots) for the thread to go idle. Used for the courtesy wait and notices. */
@@ -201,22 +241,17 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
     if (!thread.messages.some((m) => m.id === messageId)) return { _tag: "absent" };
     if (thread.turnStartFailures.includes(messageId)) return { _tag: "unknown", detail: "T3 couldn't start its turn" };
 
+    // Only a replay that covers our turn from before our message to its end can vouch for it (1.3).
     const f = await replay(target, delivery).catch(() => undefined);
-    if (f) {
-      const t = f.tracker;
-      if (!t.turnId) return { _tag: "later", detail: "our message isn't in a turn yet" };
-      if (!t.ended) return { _tag: "running", turnId: t.turnId };
-      f.stop();
-      following.delete(delivery.id);
-      return { _tag: "completed", turnId: t.turnId, outcome: outcomeOf(thread, { turnId: t.turnId, joined: t.joined, foreign: t.foreign }) };
-    }
-
-    // No events to replay: only what the snapshot proves.
-    const link = linkFromSnapshot(thread, messageId);
-    if (!link) return { _tag: "unknown", detail: "can't tell which turn it went into (its events are gone)" };
-    if (isBusy(thread) && thread.session?.activeTurnId === link.turnId) return { _tag: "later", detail: "its turn is still running" };
-    // Foreign messages can't be ordered from a snapshot; a joined turn is ambiguous regardless.
-    return { _tag: "completed", turnId: link.turnId, outcome: outcomeOf(thread, { turnId: link.turnId, joined: link.joined, foreign: 0 }) };
+    if (!f) return { _tag: "unknown", detail: "can't replay its turn's events; nothing is collected" };
+    const t = f.tracker;
+    if (!t.turnId) return { _tag: "later", detail: "our message isn't in a turn yet" };
+    if (!t.ended) return { _tag: "running", turnId: t.turnId };
+    const outcome = await settle(target, f);
+    f.stop();
+    following.delete(delivery.id);
+    if (outcome._tag === "uncertain") return { _tag: "unknown", detail: outcome.detail };
+    return { _tag: "completed", turnId: t.turnId, outcome };
   }
 
   return {
@@ -260,8 +295,11 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
           f.stop();
           return { _tag: "lost", detail: `message ${messageId} wasn't in a turn after ${acceptTimeoutMs} ms` };
         }
+        // Confirm our message started this turn (1.2), while it's still the latest.
+        const now = await client.getThread(threadId, 3).catch(() => null);
+        tracker.startedByUs = tracker.joined ? false : (now ? startedBy(now, messageId, tracker.turnId!) : undefined) ?? false;
         following.set(delivery.id, f);
-        return { _tag: "accepted", turnId: tracker.turnId!, cursor };
+        return { _tag: "accepted", turnId: tracker.turnId!, cursor: encodeCursor(Number(cursor), tracker.startedByUs ? tracker.turnId : undefined) };
       } catch (error) {
         return { _tag: "lost", detail: error instanceof Error ? error.message : String(error) };
       }
@@ -272,14 +310,11 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
         const f = following.get(delivery.id) ?? (await replay(target, delivery));
         if (!f) return { _tag: "lost", detail: "can't follow the turn's events; the restart check decides" };
         await f.wait(() => (f.tracker.ended ? true : undefined));
-        // Watch a little longer for the session stopping: the sign of an interrupt.
-        await f.wait(() => (f.tracker.stoppedAfterEnd || Date.now() - (f.tracker.endedAt ?? 0) > interruptWindowMs ? true : undefined));
+        f.tracker.turnId ??= turnId;
+        const outcome = await settle(target, f);
         f.stop();
         following.delete(delivery.id);
-        const thread = await client.getThread(target.locator, 5);
-        if (!thread) return { _tag: "lost", detail: `T3 thread ${target.locator} is gone` };
-        const t = f.tracker;
-        return outcomeOf(thread, { turnId: t.turnId ?? turnId, joined: t.joined, foreign: t.foreign, stopped: t.stoppedAfterEnd });
+        return outcome;
       } catch (error) {
         return { _tag: "lost", detail: error instanceof Error ? error.message : String(error) };
       }

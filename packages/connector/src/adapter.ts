@@ -26,6 +26,8 @@ export type Outcome =
   | { _tag: "replied"; answer: string }
   | { _tag: "ambiguous"; entered: EnteredInput[] }
   | { _tag: "failed"; reason: "aborted" | "refusal" | "error"; detail?: string }
+  /** The adapter can't prove what happened in the turn: recorded `uncertain`, never collected or re-run. */
+  | { _tag: "uncertain"; detail: string }
   /** We lost sight of the turn; recovered by a later check. */
   | { _tag: "lost"; detail: string };
 

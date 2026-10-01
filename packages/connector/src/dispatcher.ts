@@ -130,6 +130,8 @@ export const runDispatcher = (options: DispatcherOptions) =>
           );
         case "failed":
           return write("failed", id, api.failed(id, claimId, turnId, outcome.reason, outcome.detail));
+        case "uncertain":
+          return write("uncertain", id, api.uncertain(id, claimId, outcome.detail));
       }
     };
 

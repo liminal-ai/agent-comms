@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Delivery } from "@agent-comms/protocol";
 import {
+  decodeCursor,
   makeT3Adapter,
   messageIdFor,
   noticeIdFor,
@@ -193,7 +194,7 @@ describe("T3 adapter: live", () => {
     const { t3, adapter } = setup();
     const h = await accepted(adapter);
     assert.equal(h.turnId, "turn-1");
-    assert.ok(h.cursor !== undefined && Number(h.cursor) > 0);
+    assert.deepEqual(decodeCursor(h.cursor), { sequence: 100, confirmedTurnId: "turn-1" }, "cursor: before our message, turn confirmed ours");
     assert.equal(t3.lastStart!.messageId, messageIdFor("d_1"));
     assert.equal(t3.lastStart!.runtimeMode, "approval-required", "never forces full access");
     assert.match(t3.lastStart!.text, /^\[agent-comms v1\] delivery=d_1 /);
@@ -353,32 +354,13 @@ describe("T3 adapter: restart check", () => {
     assert.deepEqual(c, { _tag: "completed", turnId: h.turnId, outcome: { _tag: "ambiguous", entered: [{ origin: "t3-user-message" }] } });
   });
 
-  it("without a cursor, links only what the snapshot proves", async () => {
-    {
-      const { t3, adapter } = setup();
-      await accepted(adapter);
-      t3.assistant("4");
-      t3.finish();
-      const fresh = makeT3Adapter({ client: t3 });
-      assert.deepEqual(await fresh.check(target, delivery(), undefined), {
-        _tag: "completed",
-        turnId: "turn-1",
-        outcome: { _tag: "replied", answer: "4" },
-      });
-    }
-    {
-      // Our message was dropped, then Claude woke on its own: never ours.
-      const { t3, adapter } = setup();
-      t3.failStart = true;
-      await adapter.handOff(target, delivery());
-      t3.failStart = false;
-      t3.wake();
-      t3.assistant("background task finished");
-      t3.finish();
-      const fresh = makeT3Adapter({ client: t3 });
-      const c = await fresh.check(target, delivery(), undefined);
-      assert.equal(c._tag, "unknown");
-    }
+  it("without a cursor, never collects from the snapshot alone (1.3)", async () => {
+    const { t3, adapter } = setup();
+    await accepted(adapter);
+    t3.assistant("4");
+    t3.finish();
+    const fresh = makeT3Adapter({ client: t3 });
+    assert.equal((await fresh.check(target, delivery(), undefined))._tag, "unknown");
   });
 });
 

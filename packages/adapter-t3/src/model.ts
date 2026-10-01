@@ -88,24 +88,38 @@ export function isBusy(thread: Pick<T3Thread, "session">): boolean {
 }
 
 /**
- * Follows the server's events around our message:
- * - our turn is the first turn the session runs after our message was
- *   appended; if a turn was already running when it was appended, we joined
- *   someone else's turn (`joined`);
+ * Follows the server's events around our message, from a snapshot taken
+ * before we send it:
+ * - foreign user messages appended after that snapshot and before ours, with
+ *   no turn starting in between, are waiting for the same turn as ours
+ *   (`preceded`, fix pass 1.1);
+ * - our turn is the first turn the session runs after our message; if a turn
+ *   was already running when ours was appended, we joined it (`joined`);
+ *   whether we started it is confirmed separately (`startedByUs`, 1.2);
  * - any other user message appended after ours and before our turn ends is
  *   foreign input (`foreign`);
- * - our turn ends when the session stops running it.
- * Hazel's rule: joined or foreign makes the delivery ambiguous.
+ * - how our turn ended (`endStatus`) is the session status at the event that
+ *   ended it, or `superseded` if another turn simply took over (1.4);
+ * - our answer is the last assistant message our turn produced (`answerId`).
+ * Any of joined, preceded, foreign, or startedByUs === false makes the delivery
+ * ambiguous.
  */
 export class TurnTracker {
   readonly messageId: string;
   private busy = false;
   private active: string | null = null;
+  private pending = 0;
   seenOurs = false;
   turnId: string | undefined;
   joined = false;
+  preceded = 0;
   foreign = 0;
+  /** True once confirmed that our message started our turn; false if it can't be. Undefined until checked. */
+  startedByUs: boolean | undefined;
   ended = false;
+  endStatus: "ready" | "interrupted" | "error" | "stopped" | "superseded" | undefined;
+  endError: string | null = null;
+  answerId: string | undefined;
   /** When our turn ended (local clock), for the interrupt signature below. */
   endedAt: number | undefined;
   /**
@@ -133,17 +147,23 @@ export class TurnTracker {
     this.lastSequence = event.sequence;
     switch (event.type) {
       case "session": {
-        const running = RUNNING.has(event.session.status);
+        const status = event.session.status;
+        const running = RUNNING.has(status);
         const active = running ? event.session.activeTurnId : null;
-        if (this.seenOurs && !this.ended) {
+        if (!this.seenOurs) {
+          if (running) this.pending = 0; // a turn started: whatever was waiting went into it
+        } else if (!this.ended) {
           if (this.turnId === undefined) {
             if (running && active) this.turnId = active;
           } else if (active !== this.turnId) {
             this.ended = true;
             this.endedAt = Date.now();
-            if (event.session.status === "stopped") this.stoppedAfterEnd = true;
+            this.endError = event.session.lastError;
+            if (running) this.endStatus = "superseded";
+            else this.endStatus = status === "interrupted" || status === "error" || status === "stopped" ? status : "ready";
+            if (status === "stopped") this.stoppedAfterEnd = true;
           }
-        } else if (this.ended && event.session.status === "stopped") {
+        } else if (status === "stopped") {
           this.stoppedAfterEnd = true;
         }
         this.busy = running;
@@ -154,13 +174,19 @@ export class TurnTracker {
         if (event.messageId === this.messageId) {
           if (this.seenOurs) return;
           this.seenOurs = true;
+          this.preceded = this.pending;
           if (this.busy) {
             this.joined = true;
             if (this.active) this.turnId = this.active;
           }
-        } else if (this.seenOurs && !this.ended) {
+        } else if (!this.seenOurs) {
+          this.pending += 1;
+        } else if (!this.ended) {
           this.foreign += 1;
         }
+        return;
+      case "assistant-message":
+        if (this.turnId !== undefined && event.turnId === this.turnId && !this.ended) this.answerId = event.messageId;
         return;
       case "turn-start-failed":
         if (event.requestId === this.messageId) this.startFailed = true;
@@ -176,26 +202,40 @@ export class TurnTracker {
   }
 
   get ambiguous(): boolean {
-    return this.joined || this.foreign > 0;
+    return this.joined || this.preceded > 0 || this.foreign > 0 || this.startedByUs === false;
+  }
+
+  /** What entered our turn besides our message, as reported (kinds only, never text). */
+  entered(): { origin: string }[] {
+    const out: { origin: string }[] = [];
+    if (this.joined) out.push({ origin: "t3-turn-already-running" });
+    if (this.startedByUs === false && !this.joined) out.push({ origin: "t3-turn-not-started-by-us" });
+    for (let i = 0; i < this.preceded; i++) out.push({ origin: "t3-user-message-before-ours" });
+    for (let i = 0; i < this.foreign; i++) out.push({ origin: "t3-user-message" });
+    return out;
   }
 }
 
 /**
- * Snapshot-only fallback for a restart check whose events are gone: link our
- * message only to the latest turn, and only if that turn was requested at our
- * message's own timestamp (measured live: a turn our message starts has
- * `requestedAt` equal to its `createdAt`; both come from our command), or was
- * already running across it (joined). Anything else can't be linked without
- * guessing.
+ * Whether the thread's latest turn is `turnId` and was started by our message:
+ * T3 copies the starting command's `createdAt` into the turn's `requestedAt`
+ * (measured live). Undefined if the latest turn is a different one (can't tell).
  */
-export function linkFromSnapshot(thread: T3Thread, messageId: string): { turnId: string; joined: boolean } | undefined {
+export function startedBy(thread: T3Thread, messageId: string, turnId: string): boolean | undefined {
   const ours = thread.messages.find((m) => m.id === messageId);
-  const latest = thread.latestTurn;
-  if (!ours || !latest) return undefined;
-  const at = Date.parse(ours.createdAt);
-  const requested = Date.parse(latest.requestedAt);
-  if (requested === at) return { turnId: latest.turnId, joined: false };
-  const stillOpenAt = latest.completedAt === null || Date.parse(latest.completedAt) >= at;
-  if (requested < at && stillOpenAt) return { turnId: latest.turnId, joined: true };
-  return undefined;
+  if (!ours || thread.latestTurn?.turnId !== turnId) return undefined;
+  return Date.parse(thread.latestTurn.requestedAt) === Date.parse(ours.createdAt);
+}
+
+/** The cursor saved with a delivery: the event sequence just before our message, and the turn we confirmed was ours. */
+export function encodeCursor(sequence: number, confirmedTurnId?: string): string {
+  return confirmedTurnId ? `${sequence}:${confirmedTurnId}` : String(sequence);
+}
+
+export function decodeCursor(cursor: string | undefined): { sequence: number; confirmedTurnId?: string } | undefined {
+  if (cursor === undefined) return undefined;
+  const [seq, turn] = cursor.split(":", 2);
+  const sequence = Number(seq);
+  if (!Number.isFinite(sequence)) return undefined;
+  return turn ? { sequence, confirmedTurnId: turn } : { sequence };
 }
