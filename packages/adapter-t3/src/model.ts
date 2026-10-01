@@ -116,6 +116,13 @@ export class TurnTracker {
   foreign = 0;
   /** True once confirmed that our message started our turn; false if it can't be. Undefined until checked. */
   startedByUs: boolean | undefined;
+  /**
+   * The session went `starting` after our message and before our turn ran: what
+   * a turn started by a user command does. A turn Claude starts by itself (a
+   * finished background task) goes straight to `running` (recorded live,
+   * validation/fix-pass-1/1).
+   */
+  sawStarting = false;
   ended = false;
   endStatus: "ready" | "interrupted" | "error" | "stopped" | "superseded" | undefined;
   endError: string | null = null;
@@ -156,6 +163,7 @@ export class TurnTracker {
           if (running) this.pending = 0; // a turn started: whatever was waiting went into it
         } else if (!this.ended) {
           if (this.turnId === undefined) {
+            if (status === "starting") this.sawStarting = true;
             if (running && active) this.turnId = active;
           } else if (active !== this.turnId) {
             this.ended = true;
@@ -204,14 +212,14 @@ export class TurnTracker {
   }
 
   get ambiguous(): boolean {
-    return this.joined || this.preceded > 0 || this.foreign > 0 || this.startedByUs === false;
+    return this.joined || this.preceded > 0 || this.foreign > 0 || this.startedByUs === false || (!this.joined && !this.sawStarting);
   }
 
   /** What entered our turn besides our message, as reported (kinds only, never text). */
   entered(): { origin: string }[] {
     const out: { origin: string }[] = [];
     if (this.joined) out.push({ origin: "t3-turn-already-running" });
-    if (this.startedByUs === false && !this.joined) out.push({ origin: "t3-turn-not-started-by-us" });
+    if ((this.startedByUs === false || !this.sawStarting) && !this.joined) out.push({ origin: "t3-turn-not-started-by-us" });
     for (let i = 0; i < this.preceded; i++) out.push({ origin: "t3-user-message-before-ours" });
     for (let i = 0; i < this.foreign; i++) out.push({ origin: "t3-user-message" });
     return out;

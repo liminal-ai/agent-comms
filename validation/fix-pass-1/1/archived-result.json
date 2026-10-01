@@ -1,0 +1,6 @@
+{
+ "threadId": "thr-fp1-archived-9781a9d5",
+ "httpStatus": 200,
+ "body": "{\"sequence\":1826}",
+ "snapshotAfter": "/api/orchestration/threads/thr-fp1-archived-9781a9d5: HTTP 404"
+}
