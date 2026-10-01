@@ -314,7 +314,9 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
         // Confirm our message started this turn (1.2), while it's still the latest.
         const now = await client.getThread(threadId, 3).catch(() => null);
         tracker.startedByUs = tracker.joined ? false : (now ? startedBy(now, messageId, tracker.turnId!) : undefined) ?? false;
-        following.set(delivery.id, f);
+        // An answer's delivery is never followed: stop its subscription now (3.3).
+        if (delivery.message.kind === "request") following.set(delivery.id, f);
+        else f.stop();
         return { _tag: "accepted", turnId: tracker.turnId!, cursor: encodeCursor(Number(cursor), tracker.startedByUs ? tracker.turnId : undefined) };
       } catch (error) {
         return { _tag: "lost", detail: error instanceof Error ? error.message : String(error) };

@@ -24,7 +24,7 @@ type EventInput = T3Event extends infer E ? (E extends T3Event ? Omit<E, "sequen
 class FakeT3 implements T3Client {
   private thread: T3Thread;
   private log: T3Event[] = [];
-  private listeners = new Set<(i: T3StreamItem) => void>();
+  listeners = new Set<(i: T3StreamItem) => void>();
   private seq = 100;
   private clock = Date.parse("2026-09-30T12:00:00Z");
   private turns = 0;
@@ -498,5 +498,16 @@ describe("fix pass 2.2 / 2.3", () => {
     mode = "drop";
     assert.equal(await kind(), "transport");
     server.close();
+  });
+});
+
+describe("fix pass 3.3", () => {
+  it("3.3 an answer's delivery leaves no subscription behind", async () => {
+    const { t3, adapter } = setup();
+    const answer = delivery("d_ans");
+    answer.message = { ...answer.message, kind: "answer", inReplyTo: "m_x" };
+    const h = await adapter.handOff(target, answer);
+    assert.equal(h._tag, "accepted");
+    assert.equal(t3.listeners.size, 0);
   });
 });

@@ -202,12 +202,20 @@ export class ClaudeCodeSessions {
   // -------------------------------------------------------------------------
   // Housekeeping
 
+  /** Sessions held in memory, superseded ones included until freed. */
+  sessionCount(): number {
+    return this.sessions.size;
+  }
+
   /** Drop sessions that stopped polling and reports nobody asked for. */
   sweep(): void {
     const now = this.now();
     for (const s of this.sessions.values()) {
       if (!s.superseded && !s.polling && now - s.lastSeen > this.staleMs) {
         this.lose(s.id, "stopped polling");
+        this.sessions.delete(s.id);
+      } else if (s.superseded && !s.polling) {
+        // Its last poll has been answered (with session_superseded); nothing refers to it now (3.3).
         this.sessions.delete(s.id);
       }
     }

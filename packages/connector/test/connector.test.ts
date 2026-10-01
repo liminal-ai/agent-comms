@@ -230,3 +230,16 @@ describe("fix pass 3.6", () => {
     expect(classify("send", new TypeError("fetch failed")).message).toContain("fetch failed");
   });
 });
+
+describe("fix pass 3.3", () => {
+  it("3.3 a superseded session is freed once its last poll is answered", async () => {
+    const w = await world();
+    const r = await startConnector(w.api, w.socket);
+    running.push(r);
+    const old = new Mod(w.socket, "b", "old");
+    await old.register();
+    await new Mod(w.socket, "b", "new").register();
+    await old.op("poll", { waitMs: 10 } as never);
+    await until("freed", async () => (r.sessions?.sessionCount() ?? -1) === 1, 8_000);
+  });
+});
