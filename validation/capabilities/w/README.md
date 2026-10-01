@@ -25,3 +25,15 @@ Promotion for R1's API (Cedar's heads-up): the promote form now has an owner pic
 works before and after R1. Reserved names are refused in the form. Failing tests first (58ece7d,
 `view-tests-4-before.txt`); 19 of 19 pass. Live: `promote-check.mjs` → `live-r0/promote-output.txt` and
 `7-promote-owner.png` (the owner list, and @reminders refused; nothing promoted).
+
+## Against R1 (main 436b0f9)
+
+`live-r1.mjs` → `live-r1/output.txt` (ALL PASS) and screenshots, on my dev server (3791) and the local
+Convex:
+- the registry lists @reminders and @alerts under System with no controls, and agents with their owner (@lee);
+- @hazel-w promoted through the form with owner @lee, then retired at the end;
+- `comms send --as hazel-w @owner …` → "→ @lee: in their inbox"; the title, the Inbox tab and the header
+  pill go from 0 to 1 unread;
+- opening the conversation from the Conversations list marks it read; a message arriving while it's open
+  doesn't stay unread; clicking an unread inbox item opens its conversation and marks it read.
+Web tests 19/19 and mod 44/44 pass on R1.

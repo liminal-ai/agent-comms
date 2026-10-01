@@ -1,0 +1,29 @@
+2026-10-01T18:07:23.887Z registry groups: People, System
+2026-10-01T18:07:23.889Z PASS @reminders and @alerts are listed (System)
+2026-10-01T18:07:23.891Z PASS system participants have no controls
+2026-10-01T18:07:23.893Z term-a row: @term-a claude-code · lim-builder · owner @lee · idle for 3m Edit Pause Retire Test terminal for the Claude Code mod (Hazel's live checks). Answers requests from the mod's live checks Runs in manual permission mode
+2026-10-01T18:07:23.893Z PASS agents show their owner (@lee after the backfill)
+2026-10-01T18:07:24.082Z promote: @hazel-w promoted, owned by @lee. Start its terminal with AGENT_COMMS_PARTICIPANT=hazel-w.
+2026-10-01T18:07:24.082Z PASS promoted through the form with owner @lee
+2026-10-01T18:07:24.086Z hazel-w row: @hazel-w claude-code · lim-builder · owner @lee · mod not connected Edit Pause Retire
+2026-10-01T18:07:24.087Z unread before: 0
+2026-10-01T18:07:24.087Z $ comms send --as hazel-w @owner "W inbox check 1: opening the conversation should mark this read."
+2026-10-01T18:07:24.216Z sent jn79cgazs2fp9r69f1zmz511598ffyaj (#1 in j57fw7v08x361a7ash2p94q3z58fe1d1)
+  → @lee: in their inbox (people read in the web view)
+2026-10-01T18:07:24.216Z PASS comms send @owner says it's in @lee's inbox
+2026-10-01T18:07:24.263Z PASS title shows (1)
+2026-10-01T18:07:24.358Z PASS the Inbox tab carries the count
+2026-10-01T18:07:24.359Z PASS the header pill carries the count
+2026-10-01T18:07:24.496Z PASS opening the conversation marked it read
+2026-10-01T18:07:24.497Z PASS the inbox item is no longer unread
+2026-10-01T18:07:24.549Z $ comms send --as hazel-w @owner "W inbox check 2: arrives while the conversation is open."
+2026-10-01T18:07:24.669Z sent jn7f9rhxxh0g5a1j4bb2xqkhmx8fermg (#2 in j57fw7v08x361a7ash2p94q3z58fe1d1)
+  → @lee: in their inbox (people read in the web view)
+2026-10-01T18:07:26.203Z PASS a message arriving in the open conversation doesn't stay unread
+2026-10-01T18:07:26.376Z $ comms send --as hazel-w @owner "W inbox check 3: clicking this in the inbox should open it and mark it read."
+2026-10-01T18:07:26.503Z sent jn78rzwf3mdb4bwebmz714z8ss8fffmg (#3 in j57fw7v08x361a7ash2p94q3z58fe1d1)
+  → @lee: in their inbox (people read in the web view)
+2026-10-01T18:07:26.729Z PASS clicking the inbox item opened it and marked it read
+2026-10-01T18:07:26.883Z dialog: confirm "Retire @hazel-w? It gets no more deliveries, and this can't be undone."
+2026-10-01T18:07:27.704Z PASS @hazel-w retired
+2026-10-01T18:07:27.873Z ALL PASS
