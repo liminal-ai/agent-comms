@@ -79,3 +79,12 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
 - Found while doing it: a background helper's hand-back arrives as a `peer` prompt
   (`<agent-message from="<agentId>">`). It's linked to our turn only if that agent is ours; otherwise other input.
 - 1.9 needed no protocol change: the report keeps 49 entries plus `+N more`.
+
+### Section 3, my items — done 2026-10-01
+- Mod 3.8, 3.8a, 3.9, 3.10: 9db5e24. 39 mod tests pass. Live: folder 0700 and files 0600 after
+  loosening; the log kept across sessions; deliveries still collected.
+- T3 3.11-3.15: t3code-v044 `lhc-provider` 43c935261c and 5790b946b2. Evidence in
+  `validation/fix-pass-1/` there. 3780 restarted on it; LHC recall still works from the same store,
+  now derived from the T3 home in code.
+- Depends on Cedar 3.1: the mod's start deadline only surfaces as `uncertain` if the connector sends a
+  check for a Claude Code delivery that never reports `delivered`. Asked (relay ff7d6d1b).
