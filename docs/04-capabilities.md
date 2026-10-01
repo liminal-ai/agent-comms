@@ -1,6 +1,6 @@
 # Capabilities pass: reminders, registry, send-and-wait, people, alerts
 
-Draft 3 by Reed, 2026-10-01: Cedar's review of draft 1, then Alder's and Wrenn's review of draft 2, folded in. Builds on `main` after fix pass 1 is signed off.
+Draft 4 by Reed, 2026-10-01: Cedar's review of draft 1, Alder's and Wrenn's reviews of drafts 2 and 3, folded in. Builds on `main` after fix pass 1 is signed off.
 
 ## Why
 
@@ -45,9 +45,14 @@ All behaviour lives in Convex and the connector. Agents reach it through the `co
 - **The answer returns to the call, not as a new turn.**
   - It's handled outside the per-participant delivery loop. The requester is mid-turn while its CLI waits, so the dispatcher treats it as busy and works its in-flight delivery first (`dispatcher.ts:348, 358-364`); the answer would never be looked at.
   - A separate pass over the work stream matches pending answer deliveries against the waits this connector holds, ignoring busy state and serial order. Add each answer delivery's `inReplyTo` to the work query for this (`convex/connector.ts:105-116` doesn't carry it today).
-  - **One Convex mutation consumes it,** and only while the wait is still open. It compare-and-sets the wait from `open` to `answered`, storing the answer's message id on the wait row. In the same transaction it sets the delivery from `pending` to `delivered`, with detail "returned to the waiting send". It must not be a claim followed by `delivered`, which would race the normal path.
-  - **The CLI reads the answer from the wait row, not from the connector's memory.** If the connector dies between consuming and returning, the CLI reconnects and `await` finds the stored answer.
-  - **Timeout and answer can't both win.** The wait ends by the same kind of compare-and-set: `open` to `answered`, or `open` to `expired` when the CLI's bound or `until` passes. An answer arriving after `expired` goes into the thread as normal. So an answer is returned exactly once, either to the call or to the thread.
+  - **One Convex mutation consumes it,** and only while that recipient's result is still open. A wait holds one result per addressed agent (`open`, `answered`, `expired`); the first answer in a group closes only its own result. The mutation compare-and-sets that result from `open` to `answered`, storing the answer's message id. In the same transaction it sets the delivery from `pending` to `delivered`, with detail "returned to the waiting send". It must not be a claim followed by `delivered`, which would race the normal path.
+  - **The CLI reads answers from the stored results, not from the connector's memory.** If the connector dies between consuming and returning, the CLI reconnects and `await` finds them.
+  - **Routing is decided once; receipt isn't guaranteed.** A result ends by compare-and-set, `open` to `answered` or `open` to `expired` (when the CLI's bound or `until` passes), so an answer is routed either to the call or to the thread, never both and never neither. That can't prove the CLI process actually printed it. So:
+    - after printing, the CLI acknowledges each result with an `ack` operation;
+    - an `answered` result not acknowledged within a set time (default 2 minutes) is also delivered into the requester's thread as a normal answer, marked "may already have been returned to a waiting send";
+    - results stay readable through `await` and `comms status <id>` either way.
+    
+    So an answer reaches the agent at least once, and at most twice in the one case where the CLI printed it and died before acknowledging.
   - **What ends the wait, per recipient:**
     - `replied`: the collected answer, or a `comms reply` that completes the delivery, is returned.
     - `ambiguous`: keep waiting, since the agent will finish it with `comms reply`.
@@ -66,7 +71,7 @@ All behaviour lives in Convex and the connector. Agents reach it through the `co
   - A `waits` table `{participantId, messageId, until}`, indexed by participant.
   - The check and the insert happen in the same mutation as the send. Convex's serializable transactions then order two simultaneous sends, so the second sees the first's wait.
   - **The rule is "the target is busy waiting", not cycle detection.** A waiting send to a participant that is itself in an active wait, on anyone, doesn't wait: it falls back to `--continue` and tells the agent "@B is waiting on another request; your message is queued, check with `comms status <id>`." That's broader than a cycle, which is fine since B can't answer until its own wait ends, and it closes every cycle, including A→B→C→A, without timing out.
-  - Waits are removed on completion or timeout, and expire at `until`, so a crashed CLI's wait ends on its own.
+  - **Waits stop being active, but their results stay.** When every result is final, or at `until`, the wait stops counting as "busy waiting" (so a crashed CLI's wait ends on its own). The wait and its per-recipient results are kept for `comms status` (for the same 30 days as other records, or until a cleanup pass), not deleted.
 - `comms status <message-id>` shows each addressed recipient's delivery state, and the answer text if there is one. `comms status` with no argument keeps showing the connector's own status.
 
 ### 4. Reminders
@@ -79,7 +84,7 @@ All behaviour lives in Convex and the connector. Agents reach it through the `co
 - **No pile-up:** a fire is skipped while the previous fire's delivery isn't final. Final means not `pending`, `claimed` or `delivered`. An `ambiguous` fire counts as not final for one interval, since `comms reply` can still complete it, and as final after that, so a reminder can't stall forever. Every skip is logged on the reminder with its reason.
 - **`--idle-for`:** fires only once a participant has been idle at least that long; otherwise it retries next minute. By default that's the reminder's own target, which covers what `lhc-monitor` does.
 - **`--watch @x`:** the idle condition is checked on `@x` instead of the target. "Wake Reed once Hazel has been idle for 20 minutes" is `comms remind @reed "check on Hazel" --watch @hazel --idle-for 20m`.
-- **Idle needs `presence.idleSince`,** which changes only on the transition to idle, since `presence.at` moves on every write, including each mod re-registration and the connector's reset at start (`connector/src/connector.ts:96`). A stale presence (connector not heard from) doesn't count as idle.
+- **Idle needs `presence.idleSince`,** which changes only on the transition to idle, since `presence.at` moves on every write, including each mod re-registration and the connector's reset at start (`connector/src/connector.ts:96`). A stale presence (connector not heard from) never counts as idle, for the target and for a `--watch` participant alike, so a sleeping Mac doesn't read as "idle for hours".
 - **Pausing or cancelling stops future fires only.** A turn already running from an earlier fire runs to its end, and its answer is still recorded.
 - **`--max` and expiry:** stops after n fires. Every reminder expires (default 7 days, maximum 30), and its creator is told.
 - **States:** `active`, `paused`, `blocked`, `done`, `cancelled`, `expired`. Only `active` fires.
@@ -114,6 +119,7 @@ It's worth splitting because the web view and the measurements are independent o
 - the new loopback operations and their JSON, including `await`, and the CLI's JSON output and exit codes for `send`, `await` and `status` (a distinct code for "bound reached, still pending"), since the mod and any later MCP wrapper build on them;
 - the reminder and alert renderings in `render.ts`;
 - **every** Convex query and mutation the web view will call: registry edit, inbox, reminders and alerts.
+- the wait contract: per-recipient results, `ack`, the acknowledgement window and its fallback into the thread, and how long results are kept.
 
 Hazel reviews R0 before R1.
 
@@ -121,7 +127,7 @@ Hazel reviews R0 before R1.
 
 **R2 (Cedar):** send-and-wait (`await`, the consuming pass and mutation), `--continue`, `comms status <id>`, the waits table (open, answered, expired, with the stored answer) and the busy-waiting rule.
 
-**R3 (Cedar):** reminders, including system-recipient handling, `idleSince` and `--watch`.
+**R3 (Cedar):** reminders, including system-recipient handling, `idleSince`, `--watch`, and the stale-presence rule for both the target and the watched participant.
 
 **R4 (Cedar):** alerts.
 
@@ -137,8 +143,11 @@ Rules as before: a failing test before each behaviour, one progress file per lan
 4. A waits on B, then B sends to A: B's send falls back to `--continue` at once with the "busy waiting" message, and both requests complete. The same for two simultaneous sends, and for a three-agent cycle A→B→C→A.
 5. A group request waited on by one agent returns both answers; a group with Lee in it returns the agents' answers and lists Lee as "in inbox".
 6. `comms send @owner` from an agent returns at once and reaches Lee's inbox in the web view, unread until opened.
-7. **Restart while waiting:** the connector is killed after consuming an answer and before the CLI gets it; the CLI reconnects and gets the stored answer, once. The CLI is killed mid-wait; its wait expires and the answer goes into the thread.
-8. **Answer at the bound:** an answer arriving as the wait expires is returned exactly once, either to the call or to the thread, never both, never neither (forced by fault injection).
+7. **Restart while waiting:**
+   - the connector is killed after consuming an answer and before the CLI gets it: the CLI reconnects and gets the stored answer;
+   - the CLI is killed mid-wait: its wait expires and later answers go into the thread;
+   - the CLI is killed after the answer is stored and before it acknowledges: the answer reaches the thread after the acknowledgement window, and stays readable with `comms status`.
+8. **Answer at the bound:** an answer arriving as the wait expires is routed exactly once, either to the call or to the thread, never both, never neither (forced by fault injection). In a group wait, one recipient answering doesn't close the others' results.
 9. A reminder every 2 minutes to a T3 agent fires, arrives labelled as a reminder from `reminders` with its creator, collects the answer, and reports to `@lee`. A slow answer causes skipped fires, not a pile-up; an ambiguous fire stops blocking after one interval.
 10. `--idle-for` defers a fire while the target is busy; `--watch` defers it on another agent's activity; `--max 3` stops after three; `done` and `blocked` stop it; a short expiry ends it and tells the creator. Pausing or cancelling while a fire's turn is running stops later fires and lets that turn finish.
 11. An injected `uncertain` delivery and a stopped connector each produce exactly one alert to the owner. Stopping the connector, restarting it, and stopping it again produces two alerts.
