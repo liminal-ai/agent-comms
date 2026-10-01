@@ -1,0 +1,2 @@
+ [32m✓[39m [30m[45m connector [49m[39m packages/connector/test/claude-code.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m

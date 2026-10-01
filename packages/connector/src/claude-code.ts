@@ -315,10 +315,15 @@ export class ClaudeCodeSessions {
       }),
     awaitOutcome: (target, delivery, turnId) =>
       Effect.promise(async (): Promise<Outcome> => {
-        const known = this.reports.get(delivery.id)?.outcome;
-        if (known) return toOutcome(known);
+        const report = this.reports.get(delivery.id);
+        if (report?.outcome) return toOutcome(report.outcome);
         const s = this.session(target);
         if (!s) return { _tag: "lost", detail: `no session for @${target.participant}` };
+        // Only the session that ran the turn reports its outcome. If it was replaced before we
+        // started waiting, the new one never will: recovery asks it instead (found in acceptance 11a).
+        if (report?.sessionId !== undefined && report.sessionId !== s.id) {
+          return { _tag: "lost", detail: `session ${report.sessionId}, which ran the turn, was replaced by ${s.id}` };
+        }
         void turnId;
         return this.wait(this.outcomes, delivery.id, s.id);
       }),

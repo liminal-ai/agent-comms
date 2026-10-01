@@ -1,0 +1,4 @@
+[31m     [31m×[31m the outcome isn't awaited from the new session (which never ran the turn): it's lost, so recovery asks[39m[33m 509[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[31m[1mAssertionError[22m: expected 'still waiting' to match object { _tag: 'lost' }[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[90m (1)[39m
