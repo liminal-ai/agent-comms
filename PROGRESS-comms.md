@@ -46,7 +46,7 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - After a connector restart, recovery waits for the old lease to expire (60 s default) before asking the session.
 
 ## M3: the T3 adapter
-- [x] `packages/adapter-t3`: T3's own client runtime (linked read-only from a v0.0.44 checkout by `link-deps.sh` into `src/t3/node_modules`), promise API, no T3 or Effect types across the boundary
+- [x] `packages/adapter-t3`: a T3 v0.0.44 client (fix pass 0.2: now vendored in `src/t3/wire.ts` on this repo's effect; no T3 checkout), promise API, no T3 or Effect types across the boundary
 - [x] Deliver: courtesy wait for idle, `thread.turn.start` with message id `comms-<delivery id>`, the thread's own runtime and interaction modes (never forced full access), T3 rendering with source line
 - [x] Match from T3's records. v0.0.44 user messages carry `turnId: null` (Hazel, live), so our turn is: the first turn-tagged message after ours, else the session's active turn, else the latest turn requested at our message's timestamp. Any other user message inside that turn's window → ambiguous (origin only, no text); final assistant message → answer; interrupted/error → failed; a stale `latestTurn` never ends our turn; a later turn starting does
 - [x] Restart check: our message id in the whole thread → absent / running / completed with outcome

@@ -9,12 +9,12 @@
     "./client": "./src/t3/client.ts"
   },
   "scripts": {
-    "link-deps": "./link-deps.sh",
-    "typecheck": "tsc -p tsconfig.json && if [ -d src/t3/node_modules ]; then tsc -p tsconfig.t3.json; else echo \"adapter-t3: T3 not linked; skipped src/t3\"; fi",
+    "typecheck": "tsc -p tsconfig.json",
     "test": "node --test --test-timeout=30000 'test/**/*.test.ts'"
   },
   "dependencies": {
-    "@agent-comms/protocol": "workspace:*"
+    "@agent-comms/protocol": "workspace:*",
+    "effect": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -6,7 +6,7 @@ Live Convex subscriptions throughout. Auth is the development admin token (`COMM
 
 ```sh
 # dev, on lim-builder (127.0.0.1:3790), token pre-filled from a file so it's never typed:
-AGENT_COMMS_ADMIN_TOKEN_FILE=/srv/agents/cedar/secrets/admin-token VITE_CONVEX_URL=http://127.0.0.1:3240 npx vite
+AGENT_COMMS_ADMIN_TOKEN_FILE=<file holding the admin token> VITE_CONVEX_URL=http://127.0.0.1:3240 npx vite
 # static build:
 VITE_CONVEX_URL=<deployment url> npx vite build   # → dist/
 ```
