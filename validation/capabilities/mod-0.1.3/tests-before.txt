@@ -1,0 +1,62 @@
+▶ W notices
+  ✖ W notice: the tracker finishes a notice at delivered and collects nothing from its turn (7.496513ms)
+  ✖ W notice: the mod submits a notice saying no reply is expected, reports it delivered, and never reports an outcome (38.282185ms)
+✖ W notices (47.266456ms)
+ℹ tests 2
+ℹ suites 1
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10372.492335
+
+✖ failing tests:
+
+test at test/capabilities.test.ts:14:3
+✖ W notice: the tracker finishes a notice at delivered and collects nothing from its turn (7.496513ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      {
+        deliveryId: 'd_1',
+        turnId: 't1',
+        type: 'delivered'
+      },
+  -   {
+  -     deliveryId: 'd_1',
+  -     type: 'done'
+  -   }
+    ]
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/capabilities.test.ts:18:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1794:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { type: 'delivered', deliveryId: 'd_1', turnId: 't1' } ],
+    expected: [ { type: 'delivered', deliveryId: 'd_1', turnId: 't1' }, { type: 'done', deliveryId: 'd_1' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/capabilities.test.ts:25:3
+✖ W notice: the mod submits a notice saying no reply is expected, reports it delivered, and never reports an outcome (38.282185ms)
+  AssertionError [ERR_ASSERTION]: a notice's turn is never reported as its answer
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/capabilities.test.ts:49:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
