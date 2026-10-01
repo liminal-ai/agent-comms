@@ -102,3 +102,26 @@ describe("R0 renderings", () => {
     assert.match(P.renderAlert({ cause: "connector-silent", subject: { kind: "machine", id: "lim-builder" }, detail: "not heard from for 12m" }), /^Alert: the connector on lim-builder hasn't been heard from/);
   });
 });
+
+describe("R0 review (Hazel)", () => {
+  it("requires a reason for reminder-update blocked in the decoder", () => {
+    assert.equal(P.decodeRequest("reminder-update", { as: "a", id: "r_1", action: "blocked" }).ok, false);
+    assert.equal(P.decodeRequest("reminder-update", { as: "a", id: "r_1", action: "blocked", reason: " " }).ok, false);
+    assert.equal(P.decodeRequest("reminder-update", { as: "a", id: "r_1", action: "blocked", reason: "creds" }).ok, true);
+    assert.equal(P.decodeRequest("reminder-update", { as: "a", id: "r_1", action: "pause" }).ok, true);
+  });
+
+  it("parses --at as ISO 8601 with a time, or HH:MM as the next occurrence in local time", () => {
+    const now = new Date(2026, 9, 1, 15, 0).getTime();
+    assert.equal(P.parseAt("2026-10-01T14:30:00Z", now), Date.UTC(2026, 9, 1, 14, 30));
+    assert.equal(P.parseAt("2026-10-02T09:00+02:00", now), Date.UTC(2026, 9, 2, 7, 0));
+    assert.equal(P.parseAt("16:30", now), new Date(2026, 9, 1, 16, 30).getTime());
+    assert.equal(P.parseAt("14:30", now), new Date(2026, 9, 2, 14, 30).getTime());
+    for (const bad of ["2026-10-01", "25:00", "9:5", "tomorrow", ""]) assert.equal(P.parseAt(bad, now), null, bad);
+  });
+
+  it("renders a schedule for the reminder line", () => {
+    assert.equal(P.formatSchedule({ everyMs: 1_800_000 }), "every 30m");
+    assert.equal(P.formatSchedule({ at: Date.UTC(2026, 9, 1, 14, 30) }), "once at 2026-10-01 14:30 UTC");
+  });
+});

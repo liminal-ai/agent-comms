@@ -13,9 +13,14 @@ async function alertShape(ctx: QueryCtx, a: Doc<"alerts">): Promise<Alert> {
   return {
     id: a._id,
     cause: a.cause,
-    subject: { kind: a.subjectKind, id: a.subjectId },
+    subject: {
+      kind: a.subjectKind,
+      id: a.subjectId,
+      ...(a.subjectConversationId ? { conversationId: a.subjectConversationId } : {}),
+    },
     owner: await refById(ctx, a.ownerId),
     messageId: a.messageId,
+    conversationId: a.conversationId,
     openedAt: a.openedAt,
     ...(a.resolvedAt !== undefined ? { resolvedAt: a.resolvedAt } : {}),
     summary: a.summary,

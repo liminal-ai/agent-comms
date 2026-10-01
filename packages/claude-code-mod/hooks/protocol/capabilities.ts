@@ -5,6 +5,7 @@
 // are in loopback.ts; the renderings in render.ts.
 
 import type {
+  ConversationId,
   ConversationRef,
   DeliveryId,
   DeliveryState,
@@ -51,6 +52,12 @@ export interface Presence {
   at: number;
   /** When it last changed to `idle` (not on repeated idle writes). Absent unless idle. */
   idleSince?: number;
+  /**
+   * When it last changed to `busy` (not on repeated busy writes). Absent unless busy.
+   * A waiter whose `busySince` is after its wait began is in a later turn than the
+   * one that ran the CLI, so its `ack` doesn't count.
+   */
+  busySince?: number;
   /** The participant's machine hasn't been heard from: the status can't be trusted, and never counts as idle. */
   stale: boolean;
 }
@@ -89,7 +96,9 @@ export const WAIT_RETENTION_MS = 7 * 24 * 60 * 60_000;
  * - `open` → `answered` (the answer was returned to the wait; its message is stored)
  * - `open` → `expired` (the wait's bound or `until` passed first; a later answer goes to the thread)
  * - `open` → `ended` (the delivery ended `failed` or `uncertain`, or the agent was retired: no answer is coming)
- * - `answered` → `acknowledged` (the CLI printed it and said so)
+ * - `answered` → `acknowledged` (the CLI printed it and said so, while the waiter's turn that ran
+ *   the CLI is still running: the waiter is `busy`, not stale, and `busySince` is no later than the
+ *   wait's `createdAt`. Otherwise the ack is ignored: printed isn't seen, H0)
  * - `answered` → `fell-back` (not acknowledged within ACK_WINDOW_MS: delivered once into the thread)
  * `ambiguous` keeps the result `open`: the agent will finish it with `comms reply`.
  */
@@ -112,7 +121,7 @@ export interface Wait {
   id: string;
   messageId: MessageId;
   waiter: ParticipantRef;
-  /** The wait stops counting as "busy waiting" at this time, or when every result is final, whichever is first. */
+  /** The wait stops counting as "busy waiting" at this time, or when no result is `open`, whichever is first. */
   until: number;
   /** Still counts as busy waiting for the mutual-wait rule. */
   active: boolean;
@@ -176,6 +185,10 @@ export interface ReminderSchedule {
 }
 
 export interface Reminder {
+  /** The most recent fire, for lists. */
+  lastFire?: { messageId: MessageId; deliveryState: DeliveryState; firedAt: number };
+  /** The most recent skip, for lists. */
+  lastSkip?: ReminderSkip;
   id: string;
   name: string;
   text: string;
@@ -223,11 +236,13 @@ export type AlertCause = "uncertain-delivery" | "connector-silent" | "reminder-b
 export interface Alert {
   id: string;
   cause: AlertCause;
-  subject: { kind: "delivery" | "machine" | "reminder"; id: string };
+  /** For a delivery, `conversationId` is the conversation it's in. */
+  subject: { kind: "delivery" | "machine" | "reminder"; id: string; conversationId?: ConversationId };
   /** The human it was posted to (the affected agent's owner). */
   owner: ParticipantRef;
-  /** The alert message posted by @alerts. */
+  /** The alert message posted by @alerts, and its conversation (the DM between @alerts and the owner). */
   messageId: MessageId;
+  conversationId: ConversationId;
   openedAt: number;
   /** When the condition cleared; a recurrence opens a new incident. */
   resolvedAt?: number;
@@ -270,3 +285,33 @@ export function formatDuration(ms: number): string {
   }
   return `${Math.round(ms / 1000)}s`;
 }
+
+/**
+ * `comms remind --at`: ISO 8601 with a time ("2026-10-01T14:30Z", "2026-10-02T09:00+02:00";
+ * no zone means local time), or "HH:MM", the next time it's that time locally (today if
+ * still ahead, else tomorrow). A date alone is refused. Null if neither.
+ */
+export function parseAt(text: string, now: number): number | null {
+  const t = text.trim();
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})?$/.test(t)) {
+    const ms = Date.parse(t);
+    return Number.isNaN(ms) ? null : ms;
+  }
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t);
+  if (!m) return null;
+  const hours = Number(m[1]);
+  const minutes = Number(m[2]);
+  if (hours > 23 || minutes > 59) return null;
+  const at = new Date(now);
+  at.setHours(hours, minutes, 0, 0);
+  if (at.getTime() <= now) at.setDate(at.getDate() + 1);
+  return at.getTime();
+}
+
+/** A schedule as the reminder line shows it: "every 30m", or "once at 2026-10-01 14:30 UTC". */
+export function formatSchedule(schedule: ReminderSchedule): string {
+  if (schedule.everyMs !== undefined) return `every ${formatDuration(schedule.everyMs)}`;
+  const iso = new Date(schedule.at ?? 0).toISOString();
+  return `once at ${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+}
+

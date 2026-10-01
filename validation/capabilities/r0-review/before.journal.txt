@@ -1,0 +1,24 @@
+    not ok 1 - requires a reason for reminder-update blocked in the decoder
+    not ok 2 - parses --at as ISO 8601 with a time, or HH:MM as the next occurrence in local time
+    not ok 3 - renders a schedule for the reminder line
+not ok 4 - R0 review (Hazel)
+# pass 46
+# fail 3
+   [32m✓[39m R0 schema [2m(1)[22m
+     [32m✓[39m accepts the system kind, ownerId, description, duties and idleSince, but promotion refuses system[32m 31[2mms[22m[39m
+   [32m✓[39m R0 registry (web) [2m(3)[22m
+     [32m✓[39m lists every participant as a registry entry, with presence staleness from the machine's heartbeat[32m 43[2mms[22m[39m
+     [32m✓[39m idleSince moves only on the transition to idle, not on repeated idle writes[32m 5[2mms[22m[39m
+     [32m✓[39m edits description and duties within their caps; empty clears[32m 6[2mms[22m[39m
+   [32m✓[39m R0 inbox (web) [2m(1)[22m
+     [32m✓[39m lists a person's inbox newest first with the unread count, and marks read by message or conversation[32m 17[2mms[22m[39m
+   [32m✓[39m R0 reminders (web) [2m(2)[22m
+     [32m✓[39m creates a reminder as a person, with its first fire one interval out and the default expiry[32m 15[2mms[22m[39m
+     [32m✓[39m lists, shows with fires and skips, and moves through pause, resume, blocked, done[32m 9[2mms[22m[39m
+   [32m✓[39m R0 alerts (web) [2m(1)[22m
+     [32m✓[39m lists incidents newest first, open only on request, and reads and sets the thresholds[32m 10[2mms[22m[39m
+[31m     [31m×[31m busySince moves only on the transition to busy (an ack counts only within the same busy stretch, R2)[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m an alert carries its DM's conversation id, and a delivery subject's conversation too[39m[32m 11[2mms[22m[39m
+[31m     [31m×[31m reminders.list carries each reminder's last fire and last skip[39m[32m 6[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m8 passed[39m[22m[90m (11)[39m

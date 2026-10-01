@@ -156,12 +156,12 @@ Participant `kind` gains `system`. `reminders` and `alerts` are created at deplo
 | `open` | `answered` | the recipient's answer (collected, or a `comms reply` completing the delivery) is returned to the wait; its message is stored on the result |
 | `open` | `expired` | the wait's bound passed first; a later answer goes into the thread as normal |
 | `open` | `ended` | the delivery ended `failed` or `uncertain`, or the recipient was retired: no answer is coming. *Not in the brief's list;* it's what "failed or uncertain: the wait ends for that recipient" needs as a state |
-| `answered` | `acknowledged` | the CLI printed it and called `ack` |
+| `answered` | `acknowledged` | the CLI printed it and called `ack` **while the waiter's turn that ran the CLI is still running**: the waiter is `busy`, its presence isn't stale, and its `busySince` is no later than the wait's creation. Otherwise the ack is ignored and the result stays `answered` (printed isn't seen: Claude Code moves a command past its timeout to the background, and a Codex agent that stops polling never reads the output; Hazel's H0) |
 | `answered` | `fell-back` | not acknowledged within `ACK_WINDOW_MS` (2 min): delivered **once** into the requester's thread, as a delivery with `fallback: true` that renders "may already have been returned to your waiting `comms send`" |
 
-`ambiguous` keeps a result `open` (the agent will finish it with `comms reply`). An `ack` and the fallback race on the same compare-and-set, so a result ends `acknowledged` or `fell-back`, and the fallback is sent at most once. `await` reads answers from the stored results, so a restarted connector serves them. A wait stops counting as busy waiting once every result is final or at `until`; it and its results are kept `WAIT_RETENTION_MS` (7 days) after that for `await` and `comms status`. A waiting send to an agent that is itself in an active wait doesn't wait (`noWait.reason: "busy-waiting"`, naming them); with no agent to wait for it's `"nobody-to-wait-for"`.
+`ambiguous` keeps a result `open` (the agent will finish it with `comms reply`). An `ack` and the fallback race on the same compare-and-set, so a result ends `acknowledged` or `fell-back`, and the fallback is sent at most once. `await` reads answers from the stored results, so a restarted connector serves them. A wait stops counting as busy waiting once no result is `open` (answered ones included) or at `until`; it and its results are kept `WAIT_RETENTION_MS` (7 days) after that for `await` and `comms status`. A waiting send to an agent that is itself in an active wait doesn't wait (`noWait.reason: "busy-waiting"`, naming them); with no agent to wait for it's `"nobody-to-wait-for"`.
 
-`DEFAULT_WAIT_MS` (100 s) is a placeholder until Hazel's H0 measurement; `MAX_WAIT_MS` is 60 min.
+`DEFAULT_WAIT_MS` is 100 s, under Claude Code's 120 s Bash default (H0 confirmed; Codex has no shell limit); `MAX_WAIT_MS` is 60 min. The usage text says: Claude Code agents raise the Bash timeout above the bound for any `--wait` over 100 s (600 s foreground maximum); Codex agents keep polling the shell session until `comms` exits.
 
 ### The CLI: JSON and exit codes
 
@@ -182,11 +182,11 @@ With `--json` each command prints exactly one JSON object on stdout, the connect
 - `comms await <message-id> [--wait <duration>]`: reattach to a wait (after exit 4, or from another shell); prints the final `await` result.
 - `comms status <message-id>`: the `message-status` result. `comms status` with no id is unchanged.
 
-Durations on the command line are `<n>s|m|h|d` (`parseDuration`, `formatDuration`).
+Durations on the command line are `<n>s|m|h|d` (`parseDuration`, `formatDuration`). `comms remind --at` takes ISO 8601 with a time (`2026-10-01T14:30Z`; no zone means local) or `HH:MM`, the next time it's that time locally (`parseAt`); a date alone is refused. `reminder-update` with `blocked` needs a non-blank `reason` (the decoder refuses it otherwise).
 
 ### Renderings
 
-- A **reminder fire** is an ordinary request from `@reminders` in the target's DM with it, rendered by `renderDelivery` with a `Reminder: <name> (id …), set by @x, every 30m. Fire n.` line and how to `comms reminder done` or `blocked` it.
+- A **reminder fire** is an ordinary request from `@reminders` in the target's DM with it, rendered by `renderDelivery` with a `Reminder: <name> (id …), set by @x, every 30m. Fire n.` line (`formatSchedule`: `every 30m`, or `once at 2026-10-01 14:30 UTC`) and how to `comms reminder done` or `blocked` it.
 - The **fallback** answer delivery (`fallback: true`) says it may already have been returned to the waiting send.
 - `renderReminderReport`, `renderReminderEnded` and `renderAlert` are the texts `@reminders` and `@alerts` post.
 
@@ -201,15 +201,15 @@ All take `adminToken`. Errors are `ConvexError`s with `{code, message}` as above
 | `inbox.list` | `human`, `unreadOnly?`, `limit?` (≤ 200) | `{items: InboxItem[], unread}`, newest first |
 | `inbox.unreadCount` | `human` | `{unread}` |
 | `inbox.markRead` | `human`, exactly one of `messageIds` and `conversationId` | `{marked, unread}` |
-| `reminders.list` | `state?` | `{reminders}`, newest first |
+| `reminders.list` | `state?` | `{reminders}`, newest first, each with `lastFire` (message, delivery state, fired at) and `lastSkip` |
 | `reminders.get` | `id` | `{reminder, fires, skips}` |
 | `reminders.create` | `as` (a person), then as `remind` | `{reminder}` |
 | `reminders.update` | `id`, `action`, `reason?` | `{reminder}` |
-| `alerts.list` | `openOnly?`, `limit?` | `{alerts: Alert[]}`, newest first |
+| `alerts.list` | `openOnly?`, `limit?` | `{alerts: Alert[]}`, newest first, each with the `conversationId` of its DM (and `subject.conversationId` for a delivery) |
 | `alerts.config` | — | `AlertConfig` (defaults until set) |
 | `alerts.setConfig` | any of `connectorSilentMs`, `reminderBlockedMs`, `maxClaims` | `AlertConfig` |
 
-`directory.list` and the conversation functions are unchanged. Presence in a `RegistryEntry` is `null` for people and system participants, and `stale` when the agent's machine hasn't heartbeated for `PRESENCE_STALE_MS` (90 s); `idleSince` moves only on the transition to idle.
+`directory.list` and the conversation functions are unchanged. Presence in a `RegistryEntry` is `null` for people and system participants, and `stale` when the agent's machine hasn't heartbeated for `PRESENCE_STALE_MS` (90 s); `idleSince` and `busySince` move only on the transition to idle and busy.
 
 ## Not in the contract
 

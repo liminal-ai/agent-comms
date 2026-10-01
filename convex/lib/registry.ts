@@ -15,11 +15,12 @@ import { fail, ref, refById } from "./core";
 
 type StoredPresence = Doc<"participants">["presence"];
 
-/** The presence to store for a status write: `idleSince` moves only on the transition to idle. */
+/** The presence to store for a status write: `idleSince` and `busySince` move only on the transition. */
 export function nextPresence(previous: StoredPresence, status: StoredPresence["status"], now: number): StoredPresence {
-  if (status !== "idle") return { status, at: now };
-  const idleSince = previous.status === "idle" ? (previous.idleSince ?? previous.at) : now;
-  return { status, at: now, idleSince };
+  const since = previous.status === status ? ((status === "idle" ? previous.idleSince : previous.busySince) ?? previous.at) : now;
+  if (status === "idle") return { status, at: now, idleSince: since };
+  if (status === "busy") return { status, at: now, busySince: since };
+  return { status, at: now };
 }
 
 /** Machine id → last heartbeat, for staleness. */
@@ -37,6 +38,7 @@ export function presenceOf(p: Doc<"participants">, seen: Map<string, number | nu
     status: p.presence.status,
     at: p.presence.at,
     ...(p.presence.status === "idle" && p.presence.idleSince !== undefined ? { idleSince: p.presence.idleSince } : {}),
+    ...(p.presence.status === "busy" && p.presence.busySince !== undefined ? { busySince: p.presence.busySince } : {}),
     stale,
   };
 }

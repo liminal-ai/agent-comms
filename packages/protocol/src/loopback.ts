@@ -431,12 +431,18 @@ const requestDecoders = {
    * creator, the target and the target's owner. Pausing or cancelling stops
    * future fires only. Errors: `unknown_reminder`, `conflict` (not allowed, or the state doesn't allow it).
    */
-  "reminder-update": object({
-    as: name,
-    id,
-    action: literal("pause", "resume", "done", "cancel", "blocked"),
-    reason: optional(string({ max: 2000 })),
-  }),
+  "reminder-update": (value: unknown, path: string) => {
+    const r = object({
+      as: name,
+      id,
+      action: literal("pause", "resume", "done", "cancel", "blocked"),
+      reason: optional(string({ max: 2000 })),
+    })(value, path);
+    if (r.action === "blocked" && !r.reason?.trim()) {
+      throw new DecodeError(path ? `${path}.reason` : "reason", "a reason for blocked");
+    }
+    return r;
+  },
 
   /**
    * Read a conversation's messages, oldest first. Without `before`, the newest

@@ -209,8 +209,12 @@ export default defineSchema({
     cause: alertCause,
     subjectKind: alertSubjectKind,
     subjectId: v.string(),
+    /** For a delivery subject: the conversation it's in. */
+    subjectConversationId: v.optional(v.id("conversations")),
     ownerId: v.id("participants"),
+    /** The alert message and its conversation (the DM between @alerts and the owner). */
     messageId: v.id("messages"),
+    conversationId: v.id("conversations"),
     openedAt: v.number(),
     resolvedAt: v.optional(v.number()),
     summary: v.string(),
