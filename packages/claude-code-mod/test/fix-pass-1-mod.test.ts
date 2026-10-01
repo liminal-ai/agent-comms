@@ -79,6 +79,35 @@ describe("1.8 journal safety", () => {
     assert.equal(third.ops("check-result")[0].found, "no");
   });
 
+  it("1.8 (Reed): a delivery created before the journal was lost is unknown even when checked more than 24 h later", async () => {
+    const session = new FakeSession(ctx.socketPath);
+    const createdBeforeLoss = session.clock - 60_000;
+    session.journal = null; // history lost now
+    const mod = makeMod(session);
+    await mod.start();
+    // The journal is written again after the loss (a later submission)...
+    await post({ sender: "mod-b", to: ["mod-a"], text: "journal written after the loss" });
+    await pumpUntil(mod, () => session.submitted.length === 1, "a submission writes the journal");
+    session.clock += 25 * 60 * 60 * 1000; // ...and the connector was down for over a day
+    await (mod as any).check({ deliveryId: "d_old", messageId: "m_old", state: "claimed", createdAt: createdBeforeLoss });
+    await until(() => session.ops("check-result").length === 1, "the check result");
+    assert.equal(session.ops("check-result")[0].found, "unknown");
+  });
+
+  it("1.8 (Reed): a delivery created after the loss, absent from the journal, is no", async () => {
+    const session = new FakeSession(ctx.socketPath);
+    session.journal = null;
+    const mod = makeMod(session);
+    await mod.start(); // loss recorded at this clock
+    await post({ sender: "mod-b", to: ["mod-a"], text: "journal written" });
+    await pumpUntil(mod, () => session.submitted.length === 1, "a submission writes the journal");
+    const createdAfterLoss = session.clock + 10 * 60 * 1000;
+    session.clock = createdAfterLoss + 1_000;
+    await (mod as any).check({ deliveryId: "d_new", messageId: "m_new", state: "claimed", createdAt: createdAfterLoss });
+    await until(() => session.ops("check-result").length === 1, "the check result");
+    assert.equal(session.ops("check-result")[0].found, "no");
+  });
+
   it("1.8: a delivery another session of this participant journaled after we loaded is seen at check time", async () => {
     const shared = { journal: null as string | null };
     const a = new FakeSession(ctx.socketPath);
