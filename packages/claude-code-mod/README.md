@@ -13,18 +13,51 @@ The mod does nothing unless the session's environment names its participant.
 |---|---|
 | `AGENT_COMMS_PARTICIPANT` | the promoted participant's name (required) |
 | `AGENT_COMMS_SOCKET` | the connector socket, if not the default (`$XDG_RUNTIME_DIR/agent-comms/connector.sock`, else `/run/user/<uid>/…`; macOS `~/.agent-comms/…`) |
-| `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` | forces mods on. On Claude Code 2.1.286 they are also gated by a server-side rollout switch; set the flag in the user settings' `env` block so the mod loads regardless |
+| `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` | forces mods on. On Claude Code 2.1.286 they are also gated by a server-side rollout switch; set the flag in the terminal's own user settings (`$CLAUDE_CONFIG_DIR/settings.json`, `env` block) so the mod loads regardless |
 
 Development: `claude --plugin-dir packages/claude-code-mod`.
 
-A promoted terminal: install from this folder (it is its own local marketplace), then start the
-terminal with the participant set:
+### Promoting a terminal agent (as executed for fix pass 1, 4.2, on 2026-10-01)
 
-```sh
-claude plugin marketplace add /srv/work/agent-comms/packages/claude-code-mod
-claude plugin install agent-comms@agent-comms-local
-AGENT_COMMS_PARTICIPANT=<name> claude
-```
+1. **Every promoted terminal gets its own Claude Code home (`CLAUDE_CONFIG_DIR`).** Its
+   `settings.json` is that terminal's user settings: the mods flag and the plugin go there, and
+   Lee's own `~/.claude` is never touched. Create it private, with the flag:
+   ```sh
+   D=~/.config/agent-comms/claude/<name>
+   mkdir -p -m 700 ~/.config/agent-comms/claude "$D"
+   printf '{ "env": { "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1" } }\n' > "$D/settings.json"
+   ```
+2. Install the mod into that home from the main checkout (it's its own local marketplace):
+   ```sh
+   CLAUDE_CONFIG_DIR="$D" claude plugin marketplace add /srv/work/agent-comms/packages/claude-code-mod
+   CLAUDE_CONFIG_DIR="$D" claude plugin install agent-comms@agent-comms-local
+   CLAUDE_CONFIG_DIR="$D" claude plugin list   # agent-comms@agent-comms-local, enabled
+   ```
+3. Promote it in the web view (`http://127.0.0.1:3790`): Name `<name>`, Lives in *Claude Code
+   terminal*, Promote. It shows **mod not connected** until its terminal starts.
+4. Give it its own folder, outside every agent's home and with no `CLAUDE.md`/`AGENTS.md` above
+   it: `mkdir -p ~/comms-terminals/<name>`.
+5. Start it there:
+   ```sh
+   cd ~/comms-terminals/<name>
+   CLAUDE_CONFIG_DIR=~/.config/agent-comms/claude/<name> AGENT_COMMS_PARTICIPANT=<name> claude
+   ```
+   First run: pick a theme, then trust the folder. The web view then shows it idle/busy, and an
+   `@<name>` post wakes it.
+
+**Which account and endpoint it uses.** A fresh `CLAUDE_CONFIG_DIR` has no login of its own.
+- Started from an environment that carries `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` (as for
+  4.2, started from the agent environment on lim-builder): inference goes through the local proxy
+  at `http://lim-builder:8317` (`cli-proxy-api.service`), and the banner says *API Usage Billing*.
+  The upstream account is whichever one that proxy is configured with; its config wasn't read.
+- Started from Lee's own shell, which sets no `ANTHROPIC_*` variables: it has no credentials until
+  Lee runs `/login` once in that terminal. It then uses the account he logs into, the same path as
+  his normal terminals (which use the login stored in `~/.claude`).
+
+Nothing is copied from `~/.claude`. Two other differences from Lee's normal terminals: a fresh home
+starts in Claude Code's default permission mode (*auto* on 2.1.286), and Lee's shell `PATH` also
+holds `lhc-agent` and `lhc-monitor`, so a promoted terminal could reach the LHC relay if something
+told it to. Keeping the folder free of seat instructions (step 4) is what prevents that.
 
 `comms` must be on the session's `PATH` for the agent to `comms reply`.
 

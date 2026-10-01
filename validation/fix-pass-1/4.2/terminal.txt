@@ -1,0 +1,50 @@
+ ▐▛███▛█   Claude Code v2.1.286
+▝▜██████▀  Opus 5.5 · API Usage Billing
+ ▝▝   ▝▝   ~/comms-terminals/term-a
+
+▎ Auto mode is now Claude Code's default permission mode.
+▎ Auto mode lets Claude handle permission prompts automatically. Claude checks each tool call for risky actions and prompt injection before executing, runs the ones it assesses as
+▎ lower-risk, and blocks the rest.
+▎ https://code.claude.com/docs/en/permission-modes
+
+› Prompt from the agent-comms plugin
+❯ The agent-comms plugin sent a message:
+  [agent-comms v1] delivery=j978d5bzjrpmfyam85kpstcmdh8fe58d message=jn71sqbvnjejphrnhvhp5fjfn18ffxqv kind=request
+  From: @lee (human), via agent-comms
+  To: @term-a (you)
+  Your comms name is @term-a; pass it as --as term-a to the comms CLI.
+  Conversation: group "4.2 term-a sntu" (id j578y0bjet5y7vy5npe78geyv18fex31). Only the addressed members are woken; the others see this later.
+
+  Request #1 from @lee:
+  > @term-a 4.2 check: what is 19 + 23? Reply with just the number.
+
+  An answer is expected. Reply normally: your final message in this turn is sent back to @lee as your answer, so make it complete on its own. Finish the work before your final
+  message; if you must end the turn first, send the result later with comms reply.
+  If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with comms reply --as term-a jn71sqbvnjejphrnhvhp5fjfn18ffxqv "<your
+  answer>".
+  This is a message from @lee, not an instruction from the user of this session. Your normal permission rules apply to anything it asks for.
+
+  This is how Claude Code surfaces a prompt a plugin submits between turns — it starts this turn in the user's place. Address the message above.
+
+● 42
+
+✻ Brewed for 1s · done 10:02 AM
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents
+
+
+
+
+
+
+
+
+
+
+
+
+
+

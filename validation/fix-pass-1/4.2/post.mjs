@@ -1,0 +1,23 @@
+// 4.2 step: Lee creates a group with the terminal in the web view and posts addressing it.
+import { appendFileSync } from "node:fs";
+import { chromium } from "/srv/work/chess-train-mvp/node_modules/playwright-core/index.mjs";
+const OUT = new URL(".", import.meta.url).pathname;
+const name = process.argv[2];
+const rec = (r) => { const l = JSON.stringify({ at: new Date().toISOString(), ...r }); appendFileSync(`${OUT}web.jsonl`, l + "\n"); console.log(l); };
+const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", headless: true, args: ["--no-sandbox"] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+await page.goto("http://127.0.0.1:3790/");
+await page.getByLabel("Title").waitFor();
+const title = `4.2 ${name} ${Date.now().toString(36).slice(-4)}`;
+await page.getByLabel("Title").fill(title);
+await page.getByLabel("Members").fill(`@lee @${name}`);
+await page.getByRole("button", { name: "Create" }).click();
+await page.getByPlaceholder("Message; @name wakes that member").fill(`@${name} 4.2 check: what is 19 + 23? Reply with just the number.`);
+const wakes = await page.locator(".send-row .muted").textContent();
+await page.getByRole("button", { name: "Send" }).click();
+await page.locator(".badge").first().waitFor();
+await page.locator(".badge", { hasText: "replied" }).first().waitFor({ timeout: 240_000 });
+await page.waitForTimeout(1500);
+rec({ step: "post", group: title, wakes, badges: await page.locator(".badge").allTextContents(), messages: await page.locator(".msg .text").allTextContents() });
+await page.screenshot({ path: `${OUT}web-post.png` });
+await browser.close();

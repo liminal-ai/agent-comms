@@ -1,0 +1,16 @@
++(eval):1> mkdir -p -m 700 /home/leemoore/.config/agent-comms/claude /home/leemoore/.config/agent-comms/claude/term-a
++(eval):1> printf '{ "env": { "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1" } }\n'
++(eval):1> CLAUDE_CONFIG_DIR=/home/leemoore/.config/agent-comms/claude/term-a claude plugin marketplace add /srv/work/agent-comms/packages/claude-code-mod
+Adding marketplace…✔ Successfully added marketplace: agent-comms-local (declared in user settings)
++(eval):1> CLAUDE_CONFIG_DIR=/home/leemoore/.config/agent-comms/claude/term-a claude plugin install agent-comms@agent-comms-local
+Installing plugin "agent-comms@agent-comms-local"...✔ Successfully installed plugin: agent-comms@agent-comms-local (scope: user)
++(eval):1> CLAUDE_CONFIG_DIR=/home/leemoore/.config/agent-comms/claude/term-a claude plugin list
+Installed plugins:
+
+  ❯ agent-comms@agent-comms-local
+    Version: 0.1.0
+    Scope: user
+    Status: ✔ enabled
+
++(eval):1> mkdir -p /home/leemoore/comms-terminals/term-a
++(eval):1> set +x
