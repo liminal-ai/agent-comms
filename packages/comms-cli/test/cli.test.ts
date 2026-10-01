@@ -56,6 +56,7 @@ describe("comms CLI against the stub", () => {
     assert.equal(r.code, EXIT.ok, r.stderr);
     assert.match(r.stdout, /→ @hazel: delivery/);
     assert.doesNotMatch(r.stdout, /@lee: delivery/, "humans read in the web view");
+    assert.match(r.stdout, /→ @lee: in their inbox \(people read in the web view\)/);
     const quiet = await comms(["send", "--as", "cedar", "--conversation", "g1", "just a note"]);
     assert.match(quiet.stdout, /wakes no one/);
   });

@@ -281,7 +281,9 @@ function describeSend(verb: string, r: SendResult): string {
   const lines = [`${verb} ${m.id} (#${m.seq} in ${m.conversationId})`];
   for (const d of r.deliveries) lines.push(`  → @${d.recipient}: delivery ${d.id} ${d.state}`);
   for (const s of r.skipped) lines.push(`  → @${s.name}: not delivered (${s.reason})`);
-  if (r.deliveries.length === 0 && r.skipped.length === 0) lines.push("  (no one addressed; visible to members, wakes no one)");
+  const people = m.recipients.filter((p) => p.kind === "human" && !r.skipped.some((s) => s.name === p.name));
+  for (const p of people) lines.push(`  → @${p.name}: in their inbox (people read in the web view)`);
+  if (m.recipients.length === 0) lines.push("  (no one addressed; visible to members, wakes no one)");
   return lines.join("\n") + "\n";
 }
 
