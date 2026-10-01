@@ -109,6 +109,20 @@ class FakeT3 implements T3Client {
     this.setSession("running", turnId);
     return turnId;
   }
+  /** A user message appended without a turn starting yet (a queued web message flushing, say). */
+  appendOnly(messageId: string): void {
+    this.thread.messages.push({ id: messageId, role: "user", turnId: null, streaming: false, createdAt: this.at() });
+    this.emit({ type: "user-message", messageId });
+  }
+  /** A turn starts for messages already appended; `requestedAt` from the given message. */
+  startFor(messageId: string): string {
+    const turnId = `turn-${++this.turns}`;
+    const requestedAt = this.thread.messages.find((m) => m.id === messageId)!.createdAt;
+    this.thread.latestTurn = { turnId, state: "running", requestedAt, completedAt: null, assistantMessageId: null };
+    this.setSession("starting", null);
+    this.setSession("running", turnId);
+    return turnId;
+  }
   /** A turn with no user message (Claude waking for a background task). */
   wake(): string {
     const turnId = `turn-${++this.turns}`;
@@ -365,5 +379,88 @@ describe("T3 adapter: restart check", () => {
       const c = await fresh.check(target, delivery(), undefined);
       assert.equal(c._tag, "unknown");
     }
+  });
+});
+
+describe("fix pass 1: reply ownership", () => {
+  it("1.1 a foreign message landing just before ours, with no turn started in between, makes it ambiguous", async () => {
+    const { t3, adapter } = setup();
+    t3.startTurn = async (_id, turn) => {
+      t3.lastStart = turn;
+      t3.appendOnly("lee-queued"); // Lee's queued web message flushes on the same ready
+      t3.appendOnly(turn.messageId);
+      t3.startFor("lee-queued"); // one turn takes both
+    };
+    const h = await adapter.handOff(target, delivery());
+    const outcome = h._tag === "accepted" ? await (async () => {
+      const o = adapter.awaitOutcome(target, delivery(), h.turnId);
+      t3.assistant("answer to Lee and to us");
+      t3.finish();
+      return o;
+    })() : h;
+    assert.equal(outcome._tag, "ambiguous", JSON.stringify(outcome));
+  });
+
+  it("1.2 a background turn starting between our message and our turn isn't taken as ours", async () => {
+    const { t3, adapter } = setup();
+    t3.startTurn = async (_id, turn) => {
+      t3.lastStart = turn;
+      t3.appendOnly(turn.messageId); // ours lands, then Claude wakes for a background task first
+      t3.wake();
+    };
+    const h = await adapter.handOff(target, delivery());
+    const outcome = h._tag === "accepted" ? await (async () => {
+      const o = adapter.awaitOutcome(target, delivery(), h.turnId);
+      t3.assistant("background task finished");
+      t3.finish();
+      return o;
+    })() : h;
+    assert.notEqual(outcome._tag, "replied", JSON.stringify(outcome));
+    assert.equal(outcome._tag, "ambiguous");
+  });
+
+  it("1.3 recovery without the turn's full events reports uncertain, never collects", async () => {
+    const { t3, adapter } = setup();
+    await accepted(adapter);
+    t3.assistant("4");
+    t3.finish();
+    const fresh = makeT3Adapter({ client: t3 });
+    const c = await fresh.check(target, delivery(), undefined); // no cursor: events can't be replayed
+    assert.equal(c._tag, "unknown", JSON.stringify(c));
+  });
+
+  it("1.3 the restart check never collects an interrupted turn's partial answer", async () => {
+    const { t3, adapter } = setup();
+    const h = await accepted(adapter);
+    t3.assistant("Once upon a ti");
+    t3.interrupt();
+    await tick(60); // the session's ready -> stopped lands
+    const fresh = makeT3Adapter({ client: t3, replayQuietMs: 100, interruptWindowMs: 150 });
+    const d = delivery("d_1", { state: "delivered", at: 0, turnId: h.turnId, cursor: h.cursor! });
+    const c = await fresh.check(target, d, h.turnId);
+    assert.equal(c._tag, "completed");
+    assert.notEqual((c as { outcome: { _tag: string } }).outcome._tag, "replied", JSON.stringify(c));
+  });
+
+  it("1.4 reads our turn's own end state when a later turn has started", async () => {
+    const { t3, adapter } = setup();
+    const h = await accepted(adapter);
+    const outcome = adapter.awaitOutcome(target, delivery(), h.turnId);
+    t3.assistant("Let me check that.");
+    t3.finish("error", "provider crashed");
+    t3.userMessage("lee-next"); // Lee's next turn is latest before we read the outcome
+    const o = await outcome;
+    assert.notEqual(o._tag, "replied", JSON.stringify(o));
+    assert.equal(o._tag, "failed");
+  });
+
+  it("1.4 can't read our turn's end state: uncertain", async () => {
+    const { t3, adapter } = setup();
+    const h = await accepted(adapter);
+    const outcome = adapter.awaitOutcome(target, delivery(), h.turnId);
+    t3.assistant("partial");
+    t3.wake(); // another turn takes over with no end event for ours
+    const o = await outcome;
+    assert.equal(o._tag, "uncertain", JSON.stringify(o));
   });
 });
