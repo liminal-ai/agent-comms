@@ -1,0 +1,8 @@
+2026-10-01T14:19:21.508Z poll: unavailable: agent-comms: $.http.fetch(http://connector/v1/poll) over /run/user/1000/agent-comms/connector.sock failed: ECONNRESET: ECONNRESET: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()
+2026-10-01T14:19:22.393Z poll: unknown_session: session f60e8de8-fd51-4dcc-b149-f25946873471 is not registered; register again
+2026-10-01T14:19:24.395Z registered as @term-a
+2026-10-01T14:19:25.116Z j971wfrvj1mmbnnympfk7hfdhd8fe99j: delivered
+2026-10-01T14:19:26.393Z poll: unavailable: agent-comms: $.http.fetch(http://connector/v1/poll) over /run/user/1000/agent-comms/connector.sock failed: ECONNREFUSED: ECONNREFUSED: Was there a typo in the url or port?
+2026-10-01T14:19:26.633Z j971wfrvj1mmbnnympfk7hfdhd8fe99j: outcome replied
+2026-10-01T14:19:26.633Z j971wfrvj1mmbnnympfk7hfdhd8fe99j: done
+2026-10-01T14:19:26.695Z registered as @term-a
