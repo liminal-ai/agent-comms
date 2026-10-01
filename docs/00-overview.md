@@ -145,3 +145,14 @@ The cloud and cross-host checkpoint is separate (comms lane, M6).
 - Helpers run through `claude-subagent start`, not built-in background agents.
 - Don't reverse-engineer Claude Code internals, including its binary and internal sockets. Use documented surfaces only: the mods API and its types, and the T3 contracts.
 - Commit per step, update your lane's progress file, and report blockers to Reed.
+
+## Design rules for later multi-user support (deferred, agreed 2026-10-01)
+
+Multi-user isn't built. These rules keep it an addition rather than a rewrite:
+
+- A conversation's record lives in the venue where it was created, and that venue's owner sets its rules. Our Convex owns the conversations we create; a Slack channel owns its own. Bridges post into both and own neither. Slack and Teams keep their own copies, under their own workspace rules.
+- Don't hard-code "lee" anywhere except as the current owner. Participant names are unique per owner, not globally.
+- Message ids and `inReplyTo` stay independent of any one venue, so a conversation can be bridged out without renumbering.
+- Every outside surface goes through a connector.
+- Today's identity (machine secret plus `--as`, one admin token) is a trusted-machine shortcut, not authorization. Before adding a second owner: authenticated identities, an owner on participants and conversations, per-conversation permissions, and "a bridge may act only as participants its owner controls".
+- Two fleets meeting on ground nobody owns needs federation, bridged like any other venue.
