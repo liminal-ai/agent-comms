@@ -1,0 +1,4 @@
+2026-10-01T14:01:32.361Z registered as @term-a
+2026-10-01T14:02:24.125Z j978d5bzjrpmfyam85kpstcmdh8fe58d: delivered
+2026-10-01T14:02:25.918Z j978d5bzjrpmfyam85kpstcmdh8fe58d: outcome replied
+2026-10-01T14:02:25.918Z j978d5bzjrpmfyam85kpstcmdh8fe58d: done

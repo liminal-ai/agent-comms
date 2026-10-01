@@ -1,0 +1,3 @@
+{"at":"2026-10-01T13:59:52.870Z","step":"promoted","name":"term-a","alreadyPromoted":false,"promoteNote":"@term-a promoted. Start its terminal with AGENT_COMMS_PARTICIPANT=term-a.","row":"@term-aclaude-code · lim-builder · mod not connectedPauseRetire","dot":"dot unconnected"}
+{"at":"2026-10-01T14:02:08.147Z","step":"connected","name":"term-a","alreadyPromoted":true,"promoteNote":null,"row":"@term-aclaude-code · lim-builderPauseRetire","dot":"dot idle"}
+{"at":"2026-10-01T14:02:27.840Z","step":"post","group":"4.2 term-a sntu","wakes":"wakes @term-a","badges":["@term-a: replied"],"messages":["@term-a 4.2 check: what is 19 + 23? Reply with just the number.","42"]}
