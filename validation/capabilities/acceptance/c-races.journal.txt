@@ -1,0 +1,27 @@
+2026-10-01T19:27:08.197Z @smoke-a check j979agy2sszvwd4hjxr8cck2fd8febbp (claimed) → no 
+2026-10-01T19:27:08.254Z @smoke-a drained j979agy2sszvwd4hjxr8cck2fd8febbp: [run mupx3yxs] item 8b: phase probe: answer
+2026-10-01T19:27:28.600Z measuring the sweep phase
+2026-10-01T19:30:38.828Z sweep phase: 10651 ms past the minute (fallback written 2026-10-01T19:30:10.651Z)
+2026-10-01T19:30:45.148Z the sweep that falls these back: 2026-10-01T19:33:10.651Z; acks at offsets -500, -250, 0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 2750, 3000, 3250, 3500, 3750, 4000 ms
+2026-10-01T19:33:40.753Z PASS 8b ack at sweep -500 ms: result acknowledged, 0 fallback(s) (the ack saw acknowledged) 
+2026-10-01T19:33:40.766Z PASS 8b ack at sweep -250 ms: result acknowledged, 0 fallback(s) (the ack saw acknowledged) 
+2026-10-01T19:33:40.778Z PASS 8b ack at sweep 0 ms: result acknowledged, 0 fallback(s) (the ack saw acknowledged) 
+2026-10-01T19:33:40.792Z PASS 8b ack at sweep 250 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.803Z PASS 8b ack at sweep 500 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.815Z PASS 8b ack at sweep 750 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.828Z PASS 8b ack at sweep 1000 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.840Z PASS 8b ack at sweep 1250 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.851Z PASS 8b ack at sweep 1500 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.862Z PASS 8b ack at sweep 1750 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.874Z PASS 8b ack at sweep 2000 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.885Z PASS 8b ack at sweep 2250 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.897Z PASS 8b ack at sweep 2500 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.908Z PASS 8b ack at sweep 2750 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.919Z PASS 8b ack at sweep 3000 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.930Z PASS 8b ack at sweep 3250 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.941Z PASS 8b ack at sweep 3500 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:40.960Z PASS 8b ack at sweep 3750 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:41.014Z PASS 8b ack at sweep 4000 ms: result fell-back, 1 fallback(s) (the ack saw fell-back) 
+2026-10-01T19:33:41.014Z 8b outcomes by ack offset [[-500,"acknowledged"],[-250,"acknowledged"],[0,"acknowledged"],[250,"fell-back"],[500,"fell-back"],[750,"fell-back"],[1000,"fell-back"],[1250,"fell-back"],[1500,"fell-back"],[1750,"fell-back"],[2000,"fell-back"],[2250,"fell-back"],[2500,"fell-back"],[2750,"fell-back"],[3000,"fell-back"],[3250,"fell-back"],[3500,"fell-back"],[3750,"fell-back"],[4000,"fell-back"]]
+2026-10-01T19:33:41.014Z PASS 8b both outcomes occurred, so acks really raced the fallback 
+2026-10-01T19:33:43.705Z ALL PASS

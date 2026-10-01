@@ -1,0 +1,44 @@
+2026-10-01T18:40:48.081Z @smoke-a check j978vdjtfk9wgsegq48mqa70z98ff9sg (claimed) → no 
+2026-10-01T18:40:48.131Z @smoke-a drained j978vdjtfk9wgsegq48mqa70z98ff9sg: PLAIN-OK
+2026-10-01T18:40:48.273Z @smoke-a drained j9727xp7gakqpm1v9a03qcygqs8fez4t: (stale: left over from an aborted acceptance run)
+2026-10-01T18:40:48.524Z @smoke-a drained j977b2qvwj6xb4dpa0fb4fmn1h8ffbdw: (stale: left over from an aborted acceptance run)
+2026-10-01T18:40:48.661Z @smoke-a drained j97bk2brp5k3r44v41e5qy8tx58ffcj2: item 3: the slow answer
+2026-10-01T18:40:48.803Z @smoke-a drained j976syt9tmwkrfwajne0jkwb918fe1pe: item 4a: B asks A while A waits
+2026-10-01T18:40:52.816Z @smoke-b drained j97bpyjw73msjcx21nfdy9gztd8ffaen: (stale: left over from an aborted acceptance run)
+2026-10-01T18:41:10.681Z item 3
+2026-10-01T18:41:16.100Z cli {"code":4,"signal":null,"stdout":"sent jn72r0car49aa3z9e3ewhwqms18fe51t (#13 in j570v4nve0nsrgamney96m9v8d8fc55c), waiting up to 5s for @smoke-b\nno answer from @smoke-b within 5s; it will arrive in your thread. Check with `comms status jn72r0car49aa3z9e3ewhwqms18fe51t --as smoke-a`.\n","stderr":""}
+2026-10-01T18:41:16.100Z PASS 3 exit 4 at the bound, with the id and the status command 
+2026-10-01T18:41:16.263Z PASS 3 the late answer arrives as a normal answer delivery 
+2026-10-01T18:41:16.271Z PASS 3 comms status shows the answer, the result expired {"at":1790880076041,"delivery":{"id":"j97c4n0ppnbmprv9b312emdjc18fe6pb","state":"replied"},"recipient":{"id":"js7c1bgnzc2stqhmsmdf1xv57s8fcke1","kind":"agent","name":"smoke-b"},"state":"expired"}
+2026-10-01T18:41:16.379Z status cli jn72r0car49aa3z9e3ewhwqms18fe51t (#13 in j570v4nve0nsrgamney96m9v8d8fc55c) from @smoke-a: [run mupvr5r3] item 3: answer me slowly
+@smoke-b: replied · answered: [run mupvr5r3] item 3: the slow answer
+wait: answered 0 of 1, ended
+
+2026-10-01T18:41:16.379Z item 4a
+2026-10-01T18:41:16.822Z B's send {"code":0,"signal":null,"stdout":"sent jn7bmzrjq6yh58n94jpx71nsad8fezq0 (#16 in j570v4nve0nsrgamney96m9v8d8fc55c)\n  → @smoke-a: delivery j97ch6tn8c40n7a57n8rnfn8598fffhq pending\n@smoke-a is waiting on another request, so this send didn't wait. Your message is queued; check with `comms status jn7bmzrjq6yh58n94jpx71nsad8fezq0 --as smoke-b`.\n","stderr":""}
+2026-10-01T18:41:16.822Z PASS 4a B's send returns at once with the busy-waiting message 
+2026-10-01T18:41:17.049Z A's cli {"code":0,"signal":null,"stdout":"sent jn70dg7816j9ntyqwh59jxr7fd8ff8db (#15 in j570v4nve0nsrgamney96m9v8d8fc55c), waiting up to 1m for @smoke-b\n@smoke-b answered (jn75v5epzj0yef6xrmnkxhh6ss8fenr9):\n  [run mupvr5r3] item 4a: B's answer\n","stderr":""}
+2026-10-01T18:41:17.049Z PASS 4a A's send gets B's answer in the call 
+2026-10-01T18:41:17.050Z PASS 4a B's request reaches A once A's wait is over 
+2026-10-01T18:41:17.301Z PASS 4a and B gets A's answer 
+2026-10-01T18:41:17.302Z item 4b
+2026-10-01T18:41:18.019Z A {"code":0,"wait":false,"noWait":{"busy":["smoke-b"],"reason":"busy-waiting"}} B {"code":0,"wait":true}
+2026-10-01T18:41:18.019Z PASS 4b exactly one of the two simultaneous sends waited; the other said busy-waiting 
+2026-10-01T18:41:18.019Z PASS 4b both exit 0 
+2026-10-01T18:41:18.079Z PASS 4b the non-waiting sender gets its answer as a normal delivery 
+2026-10-01T18:41:18.079Z PASS 4b the waiter got its answer in the call 
+2026-10-01T18:41:18.079Z item 4c
+2026-10-01T18:41:18.775Z PASS 4c C's send to A doesn't wait (A is busy waiting) sent jn7famcb2h25b9fecvqhpv1yhn8ffrn9 (#1 in j5711krkkqj95t95dd0hmde26s8feb76)
+  → @smoke-a: delivery j97ejp592r9k8em6y9bjamssdn8ff5eg pending
+@smoke-a is waiting on another request, so this send didn't wait. Your message is queued; check with `comms status jn7famcb2h25b9fecvqhpv1yhn8ffrn9 --as cc-a`.
+
+2026-10-01T18:41:18.980Z PASS 4c B's wait on C returns C's answer 
+2026-10-01T18:41:19.094Z PASS 4c A's wait on B returns B's answer 
+2026-10-01T18:41:19.094Z PASS 4c the cycle closed without waiting out a bound 1015 ms
+2026-10-01T18:41:19.494Z PASS 4c C's request to A completes too 
+2026-10-01T18:41:19.494Z item 5
+2026-10-01T18:41:21.229Z cli {"code":0,"signal":null,"stdout":"sent jn7f2je6hkth6zj7g9558ewbex8ffr04 (#1 in j574wt7d9a83gs3dyxcqhkbmj18feh84), waiting up to 100s for @smoke-b, @cc-a\n  → @lee: in their inbox (people read in the web view)\n@smoke-b answered (jn78hq1dpev59wje2ej2mesbv58ffp7m):\n  [run mupvr5r3] item 5: B here\n@cc-a answered (jn7d3syn836rky236311c8stp58ff7j4):\n  [run mupvr5r3] item 5: C here\n","stderr":""}
+2026-10-01T18:41:21.229Z PASS 5 both agents' answers come back in the call; Lee is listed in their inbox 
+2026-10-01T18:41:21.249Z PASS 5 one answer didn't close the other's result: both answered/acknowledged separately [["smoke-b","acknowledged"],["cc-a","acknowledged"]]
+2026-10-01T18:41:21.267Z PASS 5 the message is in Lee's inbox, unread 
+2026-10-01T18:41:21.292Z ALL PASS

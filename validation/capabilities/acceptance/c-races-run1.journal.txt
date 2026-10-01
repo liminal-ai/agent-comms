@@ -1,0 +1,24 @@
+2026-10-01T19:18:46.739Z @smoke-a check j97at3g385e5ebjtt1zaw7qap18fe5bs (claimed) → no 
+2026-10-01T19:18:46.790Z @smoke-a drained j97at3g385e5ebjtt1zaw7qap18fe5bs: [run mupwuz1r] item 8b: phase probe: answer
+2026-10-01T19:19:14.962Z PASS 8a reply at bound -400 ms: returned in the call (cli exit 0, result acknowledged) 
+2026-10-01T19:19:23.046Z PASS 8a reply at bound -150 ms: returned in the call (cli exit 0, result acknowledged) 
+2026-10-01T19:19:31.119Z PASS 8a reply at bound -50 ms: returned in the call (cli exit 0, result acknowledged) 
+2026-10-01T19:19:39.273Z @smoke-a finished answer j97f40dr1gh3zy94h46kr3m7vn8ff81k (fallback): [run mupwuz1r] item 8b: ack at sweep -200 ms: answer
+2026-10-01T19:19:39.530Z @smoke-a finished answer j9711phsvp1v7jc9kak3vhe2498ffndn (fallback): [run mupwuz1r] item 8b: ack at sweep -40 ms: answer
+2026-10-01T19:19:39.741Z @smoke-a finished answer j973r666yssqy53xmjyp4sfxgh8ferws (fallback): [run mupwuz1r] item 8b: ack at sweep -10 ms: answer
+2026-10-01T19:19:39.976Z @smoke-a finished answer j977bv5a9vtqkn3ns0h7jj6d098ffc99 (fallback): [run mupwuz1r] item 8b: ack at sweep +0 ms: answer
+2026-10-01T19:19:40.164Z PASS 8a reply at bound 0 ms: delivered into the thread (cli exit 4, result expired) 
+2026-10-01T19:19:48.483Z PASS 8a reply at bound 50 ms: delivered into the thread (cli exit 4, result expired) 
+2026-10-01T19:19:56.953Z PASS 8a reply at bound 150 ms: delivered into the thread (cli exit 4, result expired) 
+2026-10-01T19:20:05.643Z PASS 8a reply at bound 400 ms: delivered into the thread (cli exit 4, result expired) 
+2026-10-01T19:20:05.643Z measuring the sweep phase
+2026-10-01T19:23:15.884Z sweep phase: 10651 ms past the minute (fallback written 2026-10-01T19:22:10.651Z)
+2026-10-01T19:23:17.851Z the sweep that falls these back: 2026-10-01T19:26:10.651Z; acks at offsets -200, -40, -10, 0, 10, 40, 200 ms
+2026-10-01T19:26:40.730Z PASS 8b ack at sweep -200 ms: result acknowledged, 0 fallback(s) (the ack saw acknowledged) 
+2026-10-01T19:26:40.741Z PASS 8b ack at sweep -40 ms: result acknowledged, 0 fallback(s) (the ack saw acknowledged) 
+2026-10-01T19:26:40.754Z PASS 8b ack at sweep -10 ms: result acknowledged, 0 fallback(s) (the ack saw acknowledged) 
+2026-10-01T19:26:40.766Z PASS 8b ack at sweep 0 ms: result acknowledged, 0 fallback(s) (the ack saw acknowledged) 
+2026-10-01T19:26:40.777Z PASS 8b ack at sweep 10 ms: result acknowledged, 0 fallback(s) (the ack saw acknowledged) 
+2026-10-01T19:26:40.798Z PASS 8b ack at sweep 40 ms: result acknowledged, 0 fallback(s) (the ack saw acknowledged) 
+2026-10-01T19:26:40.828Z PASS 8b ack at sweep 200 ms: result acknowledged, 0 fallback(s) (the ack saw acknowledged) 
+2026-10-01T19:26:45.745Z ALL PASS
