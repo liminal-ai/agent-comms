@@ -28,37 +28,74 @@ AGENT_COMMS_PARTICIPANT=<name> claude
 
 `comms` must be on the session's `PATH` for the agent to `comms reply`.
 
+**Start a promoted terminal in its own folder, never in an agent's home** (such as
+`/srv/agents/<name>`). Claude Code loads the `CLAUDE.md`/`AGENTS.md` of the folder it starts in and
+its parents. A terminal started inside a seat's home reads that seat's instructions and can reach
+the seat's tools (on lim-builder, the LHC relay and its live seats). This happened once during the
+acceptance check (`validation/acceptance/README.md`, Incident).
+
 The mod keeps a journal and a log per participant in `$XDG_STATE_HOME/agent-comms/mod/`
-(`~/.local/state/…`): `<name>.json` (what this participant's sessions submitted, for restart
-checks) and `<name>.log` (the last 200 matching decisions).
+(`~/.local/state/…`), folder 0700, files 0600: `<name>.json` (what this participant's sessions
+submitted, for restart checks) and `<name>.log` (the last 200 decisions, kept across sessions).
+
+### When the mod isn't connected
+
+The terminal shows nothing: the mod never writes to the screen. In the web view the participant
+shows **mod not connected** (promoted as a Claude Code terminal, but no session registered), not
+"offline". Requests to it stay `pending` until a session registers. To find out why, look at
+`~/.local/state/agent-comms/mod/<name>.log` (no file, or no "registered as" line, means the mod
+never got that far), then check in this order:
+
+1. `AGENT_COMMS_PARTICIPANT` is set in the terminal's environment, to the promoted name.
+2. The plugin is installed and enabled: `claude plugin list` shows `agent-comms@agent-comms-local`.
+3. Mods are on: the user settings' `env` block has `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: "1"`.
+4. The connector is running: `comms status` answers.
+5. The state folder can be made private (the mod stays off if it can't set 0700/0600).
 
 ## What it does
 
 - `session.start`: registers with the connector (`register`), then every 2 s keeps exactly one
-  poll outstanding (the connector holds it up to 20 s).
+  poll outstanding (the connector holds it up to 20 s). Every connector call has a deadline (a
+  poll: its hold plus 10 s; anything else: 10 s). A connector that never answers counts as
+  unavailable, and a hung poll leads to a fresh registration, so polling never stops silently and
+  session exit never hangs.
 - A delivery: rendered with the protocol's `renderDelivery` (`harnessLabelsSource: true`), recorded
   in the journal, then `$.prompt.submit`. On an idle session it runs at once; on a busy one Claude
-  Code runs it as its own turn when the current one ends.
+  Code runs it as its own turn when the current one ends. If the journal can't be written, the
+  delivery isn't submitted and is reported `failed`.
+- Start deadline: if the session has been idle for 60 s and our prompt hasn't started, it was
+  cleared or never queued. Claude Code can't list or cancel queued prompts, so the mod keeps
+  tracking it, reports it if it does start, and answers a restart check `unknown`, so the
+  connector marks it `uncertain` and never re-runs it.
 - `turn.start` whose text carries our header (found as a whole line inside Claude Code's plugin
   wrapper): our turn; `delivered` with its turn id. An answer delivery ends there.
 - Our main-loop `turn.complete`: `replied` with `answer`, or `failed` (`aborted`, `refusal`,
   `error`, or an answer turn with no text), unless other input entered the turn.
-- Other input in our turn makes it `ambiguous` (only the kind of input is reported):
-  - a prompt submitted with our turn id (typed at the terminal, a peer, the bridge…), unless the
-    next turn starts with that prompt's text within 3 s (then it waited for its own turn);
-  - a task notification delivered into our turn, unless its transcript row names a tool call or a
-    subagent our turn started (`toolUseId` or task id);
+- Our turn's own work, by identity only: the main loop's tool calls during our turn; the subagents
+  those Agent calls name in their results (or `agent.spawn` reports while one runs), their
+  descendants and their tool calls; and the background shells our calls started
+  (`backgroundTaskId`).
+- Other input in our turn makes it `ambiguous` (only the kind of input is reported, at most 50
+  entries, the last saying `+N more`):
+  - any prompt submitted with our turn id: typed at the terminal, a peer, the bridge, the SDK,
+    another plugin;
+  - except a task notification whose every `<task-id>`/`<tool-use-id>` names our own work, and a
+    subagent hand-back (`<agent-message from="…">`) from one of our own subagents;
   - a turn whose text holds anything besides the wrapper and our rendering (merged prompts).
   After reporting `ambiguous`, the mod submits the protocol's unmatched notice
   (`renderUnmatchedNotice`) telling the agent to answer with `comms reply`. Its header is not a
   delivery header, so its turn is never collected.
 - Follow-ups: a task notification for background work of a request whose turn already ended gets
-  context telling the agent to send the result with `comms reply`.
+  context telling the agent to send the result with `comms reply`. The note says what actually
+  happened to that turn's reply (sent, not sent because of other input, or no answer).
 - Presence: busy from any main-loop `turn.start` to its `turn.complete`. Nothing else about turns
   that aren't ours is sent.
-- Restart checks: answered from the journal (same session: running, or completed with the outcome;
-  an earlier session's unfinished one: `unknown`), else from the transcript (`$.session.messages`:
-  found → `unknown`, absent → `no`). A check for a prompt still queued waits until its turn starts.
+- Restart checks: answered from the journal, re-read from disk at check time (another session of
+  the participant may have written it). Same session: running, or completed with the outcome. An
+  earlier session's unfinished one: `unknown`. `no` only when the journal was read whole, never
+  dropped ids, and doesn't name it (it's written before every submission). The transcript only ever
+  proves presence (`unknown`), since a compacted transcript can't prove absence. A check for a
+  prompt still queued waits until its turn starts, or until the start deadline (then `unknown`).
 - Reconnect: any `unknown_session` means register again and retry; `session_superseded` stops the
   mod.
 
@@ -79,8 +116,11 @@ the engine will accept (it requires literal `$.env.get` names).
 
 ## Known limits
 
-- Task rows are drawn only on a surface, so in a headless `claude -p` session a task notification
-  inside our turn can't be linked and makes the delivery ambiguous.
+- Notifications are linked by the ids in their text, so headless `claude -p` sessions link them
+  too. Task rows (drawn only on a surface) only add task-id-to-call mappings.
+- A queued plugin prompt can't be cancelled; past the start deadline it stays tracked, and a late
+  start is reported (the connector may refuse it if the delivery already went `uncertain`; the mod
+  then tells the agent to `comms reply`).
 - The merged-prompt check knows Claude Code 2.1.286's wrapper sentences; if they change, turns
   read as merged and go ambiguous (never mis-collected).
 - Claude Code often ends a turn while a background shell or an async helper still runs; the turn's

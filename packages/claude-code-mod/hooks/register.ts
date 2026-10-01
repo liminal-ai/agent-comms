@@ -38,8 +38,21 @@ async function resolveSocket($: Dollar): Promise<string | null> {
   return socketPath({ platform, xdgRuntimeDir, home, uid });
 }
 
-function makeHost($: Dollar, socket: string, statePath: string): Host {
-  const logLines: string[] = [];
+/**
+ * The journal and log hold delivered requests and answers: the folder is made
+ * 0700 and both files 0600 before anything is written (`$.fs.write` keeps an
+ * existing file's mode). False if that can't be done; the mod then stays off.
+ */
+async function secureStateFiles($: Dollar, dir: string, files: string[]): Promise<boolean> {
+  for (const argv of [["mkdir", "-p", "-m", "700", dir], ["chmod", "700", dir], ["touch", ...files], ["chmod", "600", ...files]]) {
+    if ((await run($, argv)) === undefined) return false;
+  }
+  return true;
+}
+
+function makeHost($: Dollar, socket: string, statePath: string, earlierLog: string[]): Host {
+  // The log keeps its last 200 lines across sessions.
+  const logLines: string[] = earlierLog.slice(-200);
   let logWrite: Promise<void> = Promise.resolve();
   return {
     call: async (path, body) => {
@@ -56,6 +69,7 @@ function makeHost($: Dollar, socket: string, statePath: string): Host {
       return result && typeof result === "object" && "drop" in result ? { dropped: String(result.drop) } : {};
     },
     now: () => Date.now(),
+    sleep: (ms) => $.clock.sleep(ms),
     log: (line) => {
       // The last 200 lines, beside the journal; logging never breaks the session.
       logLines.push(`${new Date().toISOString()} ${line}`);
@@ -82,14 +96,21 @@ export function register(on: any) {
       const home = nonEmpty(await $.env.get("HOME")) ?? ".";
       const stateHome = nonEmpty(await $.env.get("XDG_STATE_HOME")) ?? `${home}/.local/state`;
       const sessionId = String(await $.session.id());
-      mod = new CommsMod(makeHost($, socket, `${stateHome}/agent-comms/mod/${participant}`), {
+      const dir = `${stateHome}/agent-comms/mod`;
+      const statePath = `${dir}/${participant}`;
+      if (!(await secureStateFiles($, dir, [`${statePath}.json`, `${statePath}.log`]))) return result;
+      const earlierLog = String((await $.fs.read(`${statePath}.log`)) ?? "").split("\n").filter((l) => l !== "");
+      mod = new CommsMod(makeHost($, socket, statePath, earlierLog), {
         participant,
         sessionId,
         cwd: e.cwd ?? result?.cwd ?? home,
         pluginName: PLUGIN_NAME,
       });
       await mod.start();
-      $.clock.every(TICK_MS, () => mod?.tick());
+      // Never awaited: a slow tick must not hold up the next period.
+      $.clock.every(TICK_MS, () => {
+        void mod?.tick();
+      });
     } catch {
       // A broken connector never blocks the session.
     }

@@ -125,7 +125,7 @@ export const until = async (test: () => boolean | Promise<boolean>, what: string
   assert.fail(`timed out waiting for ${what}`);
 };
 
-export function makeMod(session: FakeSession, sessionId = "sess-1", participant = "mod-a", extra: { callTimeoutMs?: number } = {}) {
+export function makeMod(session: FakeSession, sessionId = "sess-1", participant = "mod-a", extra: { callTimeoutMs?: number; pollGraceMs?: number; startDeadlineMs?: number } = {}) {
   return new CommsMod(session.host(), { participant, sessionId, cwd: "/tmp", pluginName: "agent-comms", pollWaitMs: 200, ...extra });
 }
 

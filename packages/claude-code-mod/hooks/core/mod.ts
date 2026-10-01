@@ -5,6 +5,7 @@
 
 import { renderDelivery, renderUnmatchedNotice } from "../protocol/render.ts";
 import {
+  MAX_POLL_WAIT_MS,
   type DeliveryCheck,
   type ErrorCode,
   type Op,
@@ -38,9 +39,21 @@ export interface ModOptions {
   sessionId: string;
   cwd: string;
   pluginName: string;
-  /** How long the connector may hold a poll. */
+  /** How long the connector may hold a poll (default: the connector's own, at most MAX_POLL_WAIT_MS). */
   pollWaitMs?: number;
+  /** How long any other connector call may take before it counts as unavailable. */
+  callTimeoutMs?: number;
+  /** Margin on top of a poll's hold before it counts as hung (default POLL_GRACE_MS). */
+  pollGraceMs?: number;
+  /** How long the session may sit idle with our prompt not started before we stop waiting for it. */
+  startDeadlineMs?: number;
 }
+
+/** Margin on top of a poll's hold before the poll counts as hung. */
+const POLL_GRACE_MS = 10_000;
+const DEFAULT_CALL_TIMEOUT_MS = 10_000;
+/** A plugin prompt runs as soon as the session is idle; idle this long without it starting, it isn't coming. */
+const DEFAULT_START_DEADLINE_MS = 60_000;
 
 type Report = { op: "delivered" | "outcome" | "check-result" | "presence"; body: Record<string, unknown> };
 
@@ -73,6 +86,10 @@ export class CommsMod {
   private journalLoaded = false;
   /** False when a journal on disk couldn't be read: absence from it then proves nothing. */
   private journalComplete = true;
+  /** When the session last became idle (no main turn running); undefined while busy. */
+  private idleSince: number | undefined;
+  /** Submitted deliveries whose prompt didn't start by the deadline: still tracked, checks answer unknown. */
+  private stalled = new Set<string>();
 
   private readonly host: Host;
   private readonly options: ModOptions;
@@ -81,6 +98,7 @@ export class CommsMod {
     this.host = host;
     this.options = options;
     this.tracker = new Tracker(options.pluginName);
+    this.idleSince = host.now();
   }
 
   get isStopped(): boolean {
@@ -90,9 +108,24 @@ export class CommsMod {
   // ---------------------------------------------------------------------
   // Connector calls
 
+  /**
+   * One connector call, bounded: a connector that accepts and never answers
+   * counts as unavailable after the timeout (a poll after its hold plus a
+   * margin), so polling and session exit never hang on it.
+   */
   private async call<K extends Op>(op: K, body: Requests[K]): Promise<ResponseBody<K>> {
+    const timeoutMs =
+      op === "poll" ? (this.options.pollWaitMs ?? MAX_POLL_WAIT_MS) + (this.options.pollGraceMs ?? POLL_GRACE_MS) : (this.options.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS);
+    const timedOut = "timed-out" as const;
     try {
-      const res = await this.host.call(opPath(op), JSON.stringify(body));
+      const sleep = this.host.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+      const res = await Promise.race([this.host.call(opPath(op), JSON.stringify(body)), sleep(timeoutMs).then(() => timedOut)]);
+      if (typeof res === "string") {
+        this.host.log(`${op}: no answer from the connector in ${timeoutMs} ms`);
+        // A poll the connector may still hold would refuse the next one: register again, which replaces it.
+        if (op === "poll") this.registered = false;
+        return { ok: false, error: { code: "unavailable", message: `timed out after ${timeoutMs} ms` } };
+      }
       return parseResponse<K>(res.status, res.text);
     } catch (error) {
       return { ok: false, error: { code: "unavailable", message: error instanceof Error ? error.message : String(error) } };
@@ -149,19 +182,46 @@ export class CommsMod {
     await this.register();
   }
 
-  /** Called on every clock tick: settle, flush reports, keep one poll outstanding. */
+  /** Called on every clock tick: start deadlines, flush reports, keep one poll outstanding. */
   async tick(): Promise<void> {
     if (this.stopped) return;
+    this.checkStartDeadlines();
     if (!this.registered && !(await this.register())) return;
     void this.flush();
     if (!this.polling) void this.poll();
   }
 
+  /** Session end: a last flush and unregister, each bounded by the call timeout. */
   async stop(): Promise<void> {
     if (this.stopped) return;
-    await this.flush();
+    const sleep = this.host.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+    await Promise.race([this.flush(), sleep(this.options.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS)]);
     this.stopped = true;
     if (this.registered) await this.call("unregister", { sessionId: this.options.sessionId });
+  }
+
+  /**
+   * A plugin prompt runs once the session is idle. If the session has been
+   * idle past the deadline and ours hasn't started, it was cleared or never
+   * queued. Claude Code can't cancel or list queued prompts, so we can't prove
+   * it won't start: keep tracking it (a late start is still reported), and
+   * answer a restart check `unknown` so the connector never re-runs it.
+   */
+  private checkStartDeadlines(): void {
+    if (this.idleSince === undefined) return;
+    const deadline = this.options.startDeadlineMs ?? DEFAULT_START_DEADLINE_MS;
+    const now = this.host.now();
+    for (const d of this.tracker.deliveries.values()) {
+      if (d.phase !== "submitted" || d.sessionId !== this.options.sessionId || this.stalled.has(d.deliveryId)) continue;
+      if (now - Math.max(d.submittedAt, this.idleSince) < deadline) continue;
+      this.stalled.add(d.deliveryId);
+      this.host.log(`${d.deliveryId}: prompt not started after ${deadline} ms idle; still tracking, checks answer unknown`);
+      const check = this.deferredChecks.get(d.deliveryId);
+      if (check) {
+        this.deferredChecks.delete(d.deliveryId);
+        void this.check(check);
+      }
+    }
   }
 
   private async poll(): Promise<void> {
@@ -237,7 +297,11 @@ export class CommsMod {
 
   onTurnStart(turnId: string, text: string): void {
     this.setBusy(true);
-    this.apply(this.tracker.turnStart(turnId, text, this.host.now()));
+    const actions = this.tracker.turnStart(turnId, text, this.host.now());
+    for (const a of actions) {
+      if (a.type === "delivered" && this.stalled.delete(a.deliveryId)) this.host.log(`${a.deliveryId}: started after its deadline; reporting it`);
+    }
+    this.apply(actions);
   }
 
   onPromptSubmit(input: { turnId?: string; origin: { kind: string; name?: string }; text: string }): void {
@@ -272,8 +336,6 @@ export class CommsMod {
    */
   contextFor(input: { turnId?: string; origin: { kind: string }; text: string }): string | undefined {
     if (input.origin.kind !== "task-notification") return undefined;
-    const running = [...this.tracker.deliveries.values()].find((d) => d.phase === "running");
-    if (running && running.turnId === input.turnId) return undefined;
     const d = this.tracker.followUpFor(input.text);
     if (!d) return undefined;
     this.host.log(`${d.deliveryId}: follow-up notification, reminding the agent to comms reply`);
@@ -291,6 +353,8 @@ export class CommsMod {
 
   private setBusy(busy: boolean): void {
     this.busy = busy;
+    if (busy) this.idleSince = undefined;
+    else this.idleSince ??= this.host.now();
     const status = busy ? "busy" : "idle";
     if (this.presenceSent === status) return;
     this.presenceSent = status;
@@ -346,6 +410,9 @@ export class CommsMod {
     const d = this.tracker.deliveries.get(check.deliveryId);
     if (d && d.sessionId === this.options.sessionId) {
       if (d.phase === "submitted") {
+        if (this.stalled.has(d.deliveryId)) {
+          return this.queue({ op: "check-result", body: { ...base, found: "unknown", detail: "submitted, but the session went idle without starting it" } });
+        }
         this.deferredChecks.set(check.deliveryId, check);
         return;
       }
@@ -422,6 +489,12 @@ export class CommsMod {
         // Not retryable (conflict, bad_request, unknown_delivery, superseded): drop it.
         this.onError(report.op, code, res.error.message);
         this.reports.shift();
+        // The connector no longer takes this turn's answer (e.g. it ran after the
+        // delivery went uncertain): tell the agent to send it with comms reply.
+        if (report.op === "outcome" && code === "conflict" && report.body.outcome === "replied") {
+          const d = this.tracker.deliveries.get(String(report.body.deliveryId));
+          if (d) void this.notifyUnmatched(d);
+        }
       }
     } finally {
       this.flushing = false;
@@ -512,13 +585,26 @@ export function unmatchedNotice(d: Pick<Tracked, "deliveryId" | "messageId" | "s
   return renderUnmatchedNotice(delivery, { harnessLabelsSource: true });
 }
 
-export function followUpNote(d: Pick<Tracked, "messageId" | "sender" | "recipient">, participant: string): string {
+/** The reminder attached to a notification of background work from a request whose turn has ended, worded from what happened. */
+export function followUpNote(d: Pick<Tracked, "messageId" | "sender" | "recipient" | "outcome">, participant: string): string {
   const me = d.recipient ?? participant;
   const from = d.sender ? ` from @${d.sender}` : "";
-  return [
-    `[agent-comms] This notification is for background work you started while answering request ${d.messageId}${from}.`,
-    `Your reply in that turn was already sent as the answer. If this completes the answer, send the result with: comms reply --as ${me} ${d.messageId} "<result>"`,
-  ].join("\n");
+  const send = `comms reply --as ${me} ${d.messageId} "<result>"`;
+  const lines = [`[agent-comms] This notification is for background work you started while answering request ${d.messageId}${from}.`];
+  switch (d.outcome?.outcome) {
+    case "replied":
+      lines.push(`Your final message in that turn was sent as the answer. If this result completes or changes it, send it with: ${send}`);
+      break;
+    case "ambiguous":
+      lines.push(`Your reply in that turn was not sent, because other input entered that turn. If you haven't already, send your answer with: ${send}`);
+      break;
+    case "failed":
+      lines.push(`That turn ended without an answer being sent (${d.outcome.reason}). Send your answer with: ${send}`);
+      break;
+    default:
+      lines.push(`It isn't known whether your reply in that turn was sent. If this completes the answer, send it with: ${send}`);
+  }
+  return lines.join("\n");
 }
 
 export type { Responses };
