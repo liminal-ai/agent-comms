@@ -1,0 +1,2218 @@
+[
+ {
+  "conversation": {
+   "id": "j571ddgnzyj615cgnjeq5wn92d8ff65t",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 typed-in 13:59:03",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790863168136,
+      "detail": "other input entered the turn: t3-user-message",
+      "id": "j976zr7nv6hg1b4b2n1darmg5d8fesz2",
+      "recipient": "fp1-native",
+      "state": "ambiguous"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j571ddgnzyj615cgnjeq5wn92d8ff65t",
+     "createdAt": 1790863143964,
+     "id": "jn74yjrf1rp39adt56b339artd8fes16",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass typed-in check: run `sleep 15` in the foreground, then reply with exactly FP1-TYPED"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790863163078,
+      "id": "j97a2gs2txp6528ammdp42xzd18ffeb3",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j571ddgnzyj615cgnjeq5wn92d8ff65t",
+     "createdAt": 1790863163078,
+     "id": "jn797abv57adptm3qvefgapayd8fe7ym",
+     "inReplyTo": "jn74yjrf1rp39adt56b339artd8fes16",
+     "kind": "answer",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+      "kind": "agent",
+      "name": "fp1-native"
+     },
+     "seq": 2,
+     "text": "FP1-TYPED"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j57cg3bfwfvbr44x0shhrfrdj58fe3j3",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+     "kind": "agent",
+     "name": "fp1-codex"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 crash-window 13:57:55",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+    "kind": "agent",
+    "name": "fp1-codex"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790863142861,
+      "id": "j970p4pj4hb7vrrzxe2fdesmf58ffq0d",
+      "recipient": "fp1-codex",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57cg3bfwfvbr44x0shhrfrdj58fe3j3",
+     "createdAt": 1790863077789,
+     "id": "jn7afbmht40jzepst0nhfb82ts8feew4",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+       "kind": "agent",
+       "name": "fp1-codex"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass crash-window check: without tools, write the numbers one to forty in words, one per line, then a final line FP1-CRASH-DONE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790863142861,
+      "id": "j9743kt85kdq92a0p4pk0304vh8fff83",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j970p4pj4hb7vrrzxe2fdesmf58ffq0d",
+     "conversationId": "j57cg3bfwfvbr44x0shhrfrdj58fe3j3",
+     "createdAt": 1790863142861,
+     "id": "jn78neqeb73zd80fh8peq7qbgs8ffman",
+     "inReplyTo": "jn7afbmht40jzepst0nhfb82ts8feew4",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+      "kind": "agent",
+      "name": "fp1-codex"
+     },
+     "seq": 2,
+     "text": "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nnineteen\ntwenty\ntwenty-one\ntwenty-two\ntwenty-three\ntwenty-four\ntwenty-five\ntwenty-six\ntwenty-seven\ntwenty-eight\ntwenty-nine\nthirty\nthirty-one\nthirty-two\nthirty-three\nthirty-four\nthirty-five\nthirty-six\nthirty-seven\nthirty-eight\nthirty-nine\nforty\nFP1-CRASH-DONE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j574mm92ddtpgtgcdbwcg70nbs8fepq7",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+     "kind": "agent",
+     "name": "fp1-codex"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 baseline 13:57:46",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+    "kind": "agent",
+    "name": "fp1-codex"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790863073885,
+      "id": "j9791mk7fn5egfyeq80h8zv8m98fe166",
+      "recipient": "fp1-codex",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j574mm92ddtpgtgcdbwcg70nbs8fepq7",
+     "createdAt": 1790863066808,
+     "id": "jn71xbscx4pmvh5h3fwx5gp2cs8ffjw0",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+       "kind": "agent",
+       "name": "fp1-codex"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass check: reply with exactly FP1-BASELINE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790863073885,
+      "id": "j978ve6za1aqcdft8hgs44sv518fegp3",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j9791mk7fn5egfyeq80h8zv8m98fe166",
+     "conversationId": "j574mm92ddtpgtgcdbwcg70nbs8fepq7",
+     "createdAt": 1790863073885,
+     "id": "jn7a19ahn1x7a56askf5kfv7fd8ffpeh",
+     "inReplyTo": "jn71xbscx4pmvh5h3fwx5gp2cs8ffjw0",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+      "kind": "agent",
+      "name": "fp1-codex"
+     },
+     "seq": 2,
+     "text": "FP1-BASELINE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j57a8zbsm0hbjwy4hjt2x8ncd18ff5n7",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+     "kind": "agent",
+     "name": "fp1-codex"
+    },
+    {
+     "id": "js72cbv1ckrm8gc3gj7zg9ex4x8fewnc",
+     "kind": "agent",
+     "name": "fp1-term-lccbe"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 web lccbe",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+    "kind": "agent",
+    "name": "fp1-codex"
+   },
+   {
+    "id": "js72cbv1ckrm8gc3gj7zg9ex4x8fewnc",
+    "kind": "agent",
+    "name": "fp1-term-lccbe"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862590602,
+      "id": "j97d4c38mjdz8wfk4c74kqea858ff2gy",
+      "recipient": "fp1-codex",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57a8zbsm0hbjwy4hjt2x8ncd18ff5n7",
+     "createdAt": 1790862584619,
+     "id": "jn7djxcfjg2rbz8jeeyr48szcn8ffb90",
+     "kind": "request",
+     "origin": {
+      "via": "web"
+     },
+     "recipients": [
+      {
+       "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+       "kind": "agent",
+       "name": "fp1-codex"
+      }
+     ],
+     "sender": {
+      "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+      "kind": "human",
+      "name": "lee"
+     },
+     "seq": 1,
+     "text": "@fp1-codex Fix pass web check: reply with exactly FP1-WEB"
+    }
+   },
+   {
+    "deliveries": [],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j97d4c38mjdz8wfk4c74kqea858ff2gy",
+     "conversationId": "j57a8zbsm0hbjwy4hjt2x8ncd18ff5n7",
+     "createdAt": 1790862590602,
+     "id": "jn7bc70typ4s82jvm45sx5f8ch8ffe1x",
+     "inReplyTo": "jn7djxcfjg2rbz8jeeyr48szcn8ffb90",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+       "kind": "human",
+       "name": "lee"
+      }
+     ],
+     "sender": {
+      "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+      "kind": "agent",
+      "name": "fp1-codex"
+     },
+     "seq": 2,
+     "text": "FP1-WEB"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j577w03efq9ksan6a71xse7byd8fex28",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 claim-lost 13:48:21",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862524420,
+      "id": "j9721mkm6gny4b1197m4x37qmn8ffgq9",
+      "recipient": "fp1-native",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j577w03efq9ksan6a71xse7byd8fex28",
+     "createdAt": 1790862504203,
+     "id": "jn774eehc11ygedkx9fc3q9d658ferd5",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass 2.2 check: reply with exactly FP1-CLAIM"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862524420,
+      "id": "j977czdr9ztpgyjt55avavnn4h8ffk7g",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j9721mkm6gny4b1197m4x37qmn8ffgq9",
+     "conversationId": "j577w03efq9ksan6a71xse7byd8fex28",
+     "createdAt": 1790862524420,
+     "id": "jn7a28nj772ah5a2xysnq037698fecdb",
+     "inReplyTo": "jn774eehc11ygedkx9fc3q9d658ferd5",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+      "kind": "agent",
+      "name": "fp1-native"
+     },
+     "seq": 2,
+     "text": "FP1-CLAIM"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j573cx5z84xqy8zv31eqnbh1hh8ffwg1",
+   "kind": "group",
+   "lastSeq": 0,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 0,
+   "title": "fp1 claim-lost 13:48:10",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": []
+ },
+ {
+  "conversation": {
+   "id": "j5764d7mw0b2z7s1cecqm9rty58fefb8",
+   "kind": "group",
+   "lastSeq": 0,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 0,
+   "title": "fp1 claim-lost 13:48:00",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": []
+ },
+ {
+  "conversation": {
+   "id": "j57efj4w1vy8vc2gkqb1wxzhw98ffrrz",
+   "kind": "group",
+   "lastSeq": 0,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 0,
+   "title": "fp1 claim-lost 13:47:51",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": []
+ },
+ {
+  "conversation": {
+   "id": "j57c0d5n031t2gx9h08w26r5758ffmga",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7c322dgjmjw5e0xhss13zcy58fek7e",
+     "kind": "agent",
+     "name": "fp1-rebind-mupl941x"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 rebind 13:47:11",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7c322dgjmjw5e0xhss13zcy58fek7e",
+    "kind": "agent",
+    "name": "fp1-rebind-mupl941x"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862450465,
+      "id": "j973xs8ynga94a0wxy0txq4yc98ffy3k",
+      "recipient": "fp1-rebind-mupl941x",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57c0d5n031t2gx9h08w26r5758ffmga",
+     "createdAt": 1790862431914,
+     "id": "jn71fkqxqffhx97mc2hkfvn96h8ferbn",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7c322dgjmjw5e0xhss13zcy58fek7e",
+       "kind": "agent",
+       "name": "fp1-rebind-mupl941x"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass rebind check: run `sleep 10` in the foreground, then reply with exactly FP1-REBIND"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862450465,
+      "id": "j97b3qr0zhgs830knpfam2t83n8feb35",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j973xs8ynga94a0wxy0txq4yc98ffy3k",
+     "conversationId": "j57c0d5n031t2gx9h08w26r5758ffmga",
+     "createdAt": 1790862450465,
+     "id": "jn7cd0x7qnmgg955sb225582wn8fefcr",
+     "inReplyTo": "jn71fkqxqffhx97mc2hkfvn96h8ferbn",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7c322dgjmjw5e0xhss13zcy58fek7e",
+      "kind": "agent",
+      "name": "fp1-rebind-mupl941x"
+     },
+     "seq": 2,
+     "text": "FP1-REBIND"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j572bxmgph23wvnat23cwdhns98fey0k",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 remove 13:46:52",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862430857,
+      "id": "j972mza375rwd6rd1zmvb4bjdh8fehej",
+      "recipient": "fp1-remove-mupl8p0z",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j572bxmgph23wvnat23cwdhns98fey0k",
+     "createdAt": 1790862412440,
+     "id": "jn7ap3c6jg3d0v6d4q91kqpvx58fff98",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js76z3c3kg78ksqcmyrgyjnhax8fet0h",
+       "kind": "agent",
+       "name": "fp1-remove-mupl8p0z"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass remove check: run `sleep 10` in the foreground, then reply with exactly FP1-REMOVE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862430857,
+      "id": "j97cra8d41qe69yb1azggna1en8fet6x",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j972mza375rwd6rd1zmvb4bjdh8fehej",
+     "conversationId": "j572bxmgph23wvnat23cwdhns98fey0k",
+     "createdAt": 1790862430857,
+     "id": "jn70yvj7p6wjj6kxgrtjmayw8d8fehr7",
+     "inReplyTo": "jn7ap3c6jg3d0v6d4q91kqpvx58fff98",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js76z3c3kg78ksqcmyrgyjnhax8fet0h",
+      "kind": "agent",
+      "name": "fp1-remove-mupl8p0z"
+     },
+     "seq": 2,
+     "text": "FP1-REMOVE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j57b753zgs19x9437pc0ssk0j18fec3y",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7dkaps80phe3ae5wc8zt7s458fefmq",
+     "kind": "agent",
+     "name": "fp1-retire-mupl89zf"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 retire 13:46:32",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7dkaps80phe3ae5wc8zt7s458fefmq",
+    "kind": "agent",
+    "name": "fp1-retire-mupl89zf"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862411931,
+      "id": "j976x99x5f253mw2mkjmd7yf598fewvg",
+      "recipient": "fp1-retire-mupl89zf",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57b753zgs19x9437pc0ssk0j18fec3y",
+     "createdAt": 1790862392878,
+     "id": "jn7f2830ckn9g51jtaytw933v18fers4",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7dkaps80phe3ae5wc8zt7s458fefmq",
+       "kind": "agent",
+       "name": "fp1-retire-mupl89zf"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass retire check: run `sleep 10` in the foreground, then reply with exactly FP1-RETIRE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862411931,
+      "id": "j97bmetd6sm0bndmkte89v302n8ffd3p",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j976x99x5f253mw2mkjmd7yf598fewvg",
+     "conversationId": "j57b753zgs19x9437pc0ssk0j18fec3y",
+     "createdAt": 1790862411931,
+     "id": "jn7be3061jh3bbv0qhtdn766k18fftbw",
+     "inReplyTo": "jn7f2830ckn9g51jtaytw933v18fers4",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7dkaps80phe3ae5wc8zt7s458fefmq",
+      "kind": "agent",
+      "name": "fp1-retire-mupl89zf"
+     },
+     "seq": 2,
+     "text": "FP1-RETIRE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j57e63xftr73f4z5mh9h5r2z8s8fft67",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 queued-race-2 13:46:06",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862385220,
+      "detail": "completed by comms reply jn70zvaaxw6n6ymw4ctkvdg0g18ff85n",
+      "id": "j973qs30mp9y7pgnwb12j4xb818feyxv",
+      "recipient": "fp1-native",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57e63xftr73f4z5mh9h5r2z8s8fft67",
+     "createdAt": 1790862366835,
+     "id": "jn72rv9rqmx711zx1641pstqj98ffrkn",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass 1.1 race check: reply with exactly FP1-RACE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862385220,
+      "id": "j97e04t1rfbqmm56yfce15tzdn8fewts",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57e63xftr73f4z5mh9h5r2z8s8fft67",
+     "createdAt": 1790862385220,
+     "id": "jn70zvaaxw6n6ymw4ctkvdg0g18ff85n",
+     "inReplyTo": "jn72rv9rqmx711zx1641pstqj98ffrkn",
+     "kind": "answer",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+      "kind": "agent",
+      "name": "fp1-native"
+     },
+     "seq": 2,
+     "text": "FP1-RACE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j57bxy1rxr8xdcacqpahjg6k3h8ff04a",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 queued-race-1 13:45:45",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862365577,
+      "detail": "completed by comms reply jn72vsjwkz3he87wgdz57jq7d58ff82p",
+      "id": "j9708c5c38wfqb5agsmp9b28tx8ffj2p",
+      "recipient": "fp1-native",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57bxy1rxr8xdcacqpahjg6k3h8ff04a",
+     "createdAt": 1790862346179,
+     "id": "jn79prypeztn66h352bmqfwj418fexad",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass 1.1 race check: reply with exactly FP1-RACE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862365577,
+      "id": "j972m8afzraa4n193xasvygrz18fe3cj",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57bxy1rxr8xdcacqpahjg6k3h8ff04a",
+     "createdAt": 1790862365577,
+     "id": "jn72vsjwkz3he87wgdz57jq7d58ff82p",
+     "inReplyTo": "jn79prypeztn66h352bmqfwj418fexad",
+     "kind": "answer",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+      "kind": "agent",
+      "name": "fp1-native"
+     },
+     "seq": 2,
+     "text": "FP1-RACE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j57d1w52edn16jqhbvhpm3ycb58ff4g7",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 queued-race-0 13:45:24",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862344334,
+      "detail": "completed by comms reply jn72cjgevp4g2tvnvnp7bc8tys8fevgd",
+      "id": "j97c35erfv80er1zxpw664kwad8fecgk",
+      "recipient": "fp1-native",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57d1w52edn16jqhbvhpm3ycb58ff4g7",
+     "createdAt": 1790862324845,
+     "id": "jn7070kqbpqx2zrtywav1bkb7d8ffb45",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass 1.1 race check: reply with exactly FP1-RACE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862344334,
+      "id": "j975ka48c15xxhvgfydhw6222s8fe61g",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57d1w52edn16jqhbvhpm3ycb58ff4g7",
+     "createdAt": 1790862344334,
+     "id": "jn72cjgevp4g2tvnvnp7bc8tys8fevgd",
+     "inReplyTo": "jn7070kqbpqx2zrtywav1bkb7d8ffb45",
+     "kind": "answer",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+      "kind": "agent",
+      "name": "fp1-native"
+     },
+     "seq": 2,
+     "text": "FP1-RACE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j572ewvrwwczjq8b5t6vvfcnwn8fej60",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 queued-race-0 13:44:59",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862318810,
+      "detail": "completed by comms reply jn7d8h8h989mc4wzq8zxxc3rbd8fe0wk",
+      "id": "j971bv0z64ywjk3njd8r0ht3wn8fe4px",
+      "recipient": "fp1-native",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j572ewvrwwczjq8b5t6vvfcnwn8fej60",
+     "createdAt": 1790862299200,
+     "id": "jn7cgwe8kff8f4x4e9exyqbdxn8ffhw5",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass 1.1 race check: reply with exactly FP1-RACE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862318810,
+      "id": "j97at5xqcynh9dk7s5qp9wzn4s8ff3xr",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j572ewvrwwczjq8b5t6vvfcnwn8fej60",
+     "createdAt": 1790862318810,
+     "id": "jn7d8h8h989mc4wzq8zxxc3rbd8fe0wk",
+     "inReplyTo": "jn7cgwe8kff8f4x4e9exyqbdxn8ffhw5",
+     "kind": "answer",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+      "kind": "agent",
+      "name": "fp1-native"
+     },
+     "seq": 2,
+     "text": "FP1-RACE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j577rpxh9976nb38kvtn9yg0mh8fejbv",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 queued-race-0 13:44:27",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862288222,
+      "detail": "completed by comms reply jn77r7rwbz8ycy01tc0re3f29x8fe28h",
+      "id": "j9731n1vvzfkq85qap3r8p5p2n8feefe",
+      "recipient": "fp1-native",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j577rpxh9976nb38kvtn9yg0mh8fejbv",
+     "createdAt": 1790862267796,
+     "id": "jn7d5eyne03619qtr6nctm9et58ff2mm",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass 1.1 race check: reply with exactly FP1-RACE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862288222,
+      "id": "j9795g8qf22ze8rq05s3c001518ff4dy",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j577rpxh9976nb38kvtn9yg0mh8fejbv",
+     "createdAt": 1790862288222,
+     "id": "jn77r7rwbz8ycy01tc0re3f29x8fe28h",
+     "inReplyTo": "jn7d5eyne03619qtr6nctm9et58ff2mm",
+     "kind": "answer",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+      "kind": "agent",
+      "name": "fp1-native"
+     },
+     "seq": 2,
+     "text": "FP1-RACE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j576km6nx557gttrvrbmtj5jmd8ff0cg",
+   "kind": "group",
+   "lastSeq": 1,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 1,
+   "title": "fp1 interrupt 13:42:55",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862237885,
+      "detail": "aborted: the turn was interrupted; its partial answer wasn't collected",
+      "id": "j97ard45c36zv7gt09yfdmrsc58febva",
+      "recipient": "fp1-native",
+      "state": "failed"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j576km6nx557gttrvrbmtj5jmd8ff0cg",
+     "createdAt": 1790862177179,
+     "id": "jn712pjqj2qk6wm9c5j6tqp81s8fffy3",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass interrupt check: without tools, write a 2,500-word story about a clockmaker. Take your time."
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j57a0fx7cnt9ehhpf1htyv0chs8fea7z",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 typed-in 13:42:28",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862176017,
+      "detail": "completed by comms reply jn788dxkbrqzwa74btcjsy8xed8ffpyb",
+      "id": "j973s6m5dnrzqkr3z5xe7zwhy58fe136",
+      "recipient": "fp1-native",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57a0fx7cnt9ehhpf1htyv0chs8fea7z",
+     "createdAt": 1790862148906,
+     "id": "jn73n6tvhar49tqxhjbsp94wvd8fe67x",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass typed-in check: run `sleep 15` in the foreground, then reply with exactly FP1-TYPED"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862176017,
+      "id": "j97ccjps0drxcbycpdzd7twsvh8ffeef",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57a0fx7cnt9ehhpf1htyv0chs8fea7z",
+     "createdAt": 1790862176017,
+     "id": "jn788dxkbrqzwa74btcjsy8xed8ffpyb",
+     "inReplyTo": "jn73n6tvhar49tqxhjbsp94wvd8fe67x",
+     "kind": "answer",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+      "kind": "agent",
+      "name": "fp1-native"
+     },
+     "seq": 2,
+     "text": "FP1-TYPED"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j571na6j5tbx0nh57ve6mawtch8fexy9",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 queued-flush 13:42:05",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862148486,
+      "id": "j97ddem7p858k6xyxewk2mk4e98ffpez",
+      "recipient": "fp1-native",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j571na6j5tbx0nh57ve6mawtch8fexy9",
+     "createdAt": 1790862125574,
+     "id": "jn73h9234pw0xghmsrh7mqhvwd8fe41d",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass 1.1 check: reply with exactly FP1-QUEUED"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862148486,
+      "id": "j9717fan8m4rr61k7t19mpp8q18ff9e2",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j97ddem7p858k6xyxewk2mk4e98ffpez",
+     "conversationId": "j571na6j5tbx0nh57ve6mawtch8fexy9",
+     "createdAt": 1790862148486,
+     "id": "jn77gyp18p4czx15pv8r5pzqj58ffzjq",
+     "inReplyTo": "jn73h9234pw0xghmsrh7mqhvwd8fe41d",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+      "kind": "agent",
+      "name": "fp1-native"
+     },
+     "seq": 2,
+     "text": "FP1-QUEUED"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j574sgz6mzy5tc0c6hb5cyxntd8feeg0",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+     "kind": "agent",
+     "name": "fp1-codex"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 crash-window 13:40:50",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+    "kind": "agent",
+    "name": "fp1-codex"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862118301,
+      "id": "j970ekp001ss74pramq1b63sn58ffzpb",
+      "recipient": "fp1-codex",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j574sgz6mzy5tc0c6hb5cyxntd8feeg0",
+     "createdAt": 1790862053222,
+     "id": "jn7fpv8vc2n72a5gvy5yncmv9s8ffvtg",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+       "kind": "agent",
+       "name": "fp1-codex"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass crash-window check: without tools, write the numbers one to forty in words, one per line, then a final line FP1-CRASH-DONE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862118301,
+      "id": "j97d43qm9dsqb6d7bjv2y28z8d8fe6pc",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j970ekp001ss74pramq1b63sn58ffzpb",
+     "conversationId": "j574sgz6mzy5tc0c6hb5cyxntd8feeg0",
+     "createdAt": 1790862118301,
+     "id": "jn7cb81qfx3bdj6xntp50tvres8fftbg",
+     "inReplyTo": "jn7fpv8vc2n72a5gvy5yncmv9s8ffvtg",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+      "kind": "agent",
+      "name": "fp1-codex"
+     },
+     "seq": 2,
+     "text": "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nnineteen\ntwenty\ntwenty-one\ntwenty-two\ntwenty-three\ntwenty-four\ntwenty-five\ntwenty-six\ntwenty-seven\ntwenty-eight\ntwenty-nine\nthirty\nthirty-one\nthirty-two\nthirty-three\nthirty-four\nthirty-five\nthirty-six\nthirty-seven\nthirty-eight\nthirty-nine\nforty\nFP1-CRASH-DONE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j57c29nycrbcnf6vf9sv5v5hfh8fer49",
+   "kind": "group",
+   "lastSeq": 0,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+     "kind": "agent",
+     "name": "fp1-codex"
+    }
+   ],
+   "readSeq": 0,
+   "title": "fp1 oversize 13:40:42",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+    "kind": "agent",
+    "name": "fp1-codex"
+   }
+  ],
+  "messages": []
+ },
+ {
+  "conversation": {
+   "id": "j578fvmap6y4mw39972eqndtdd8ff9v9",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+     "kind": "agent",
+     "name": "fp1-codex"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 baseline 13:40:32",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+    "kind": "agent",
+    "name": "fp1-codex"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790862041645,
+      "id": "j97ekgfk59kqvhr8pd2yt942wx8fe4rf",
+      "recipient": "fp1-codex",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j578fvmap6y4mw39972eqndtdd8ff9v9",
+     "createdAt": 1790862032544,
+     "id": "jn7ezt5d1c536tja7x3ajgmzkh8fend5",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+       "kind": "agent",
+       "name": "fp1-codex"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass check: reply with exactly FP1-BASELINE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790862041645,
+      "id": "j97axb2sxp5ndmfxfj86bfbdp98ffgyj",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j97ekgfk59kqvhr8pd2yt942wx8fe4rf",
+     "conversationId": "j578fvmap6y4mw39972eqndtdd8ff9v9",
+     "createdAt": 1790862041645,
+     "id": "jn7a5hcnyt5y63pfe6z4np93pd8ff3zy",
+     "inReplyTo": "jn7ezt5d1c536tja7x3ajgmzkh8fend5",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+      "kind": "agent",
+      "name": "fp1-codex"
+     },
+     "seq": 2,
+     "text": "FP1-BASELINE"
+    }
+   }
+  ]
+ }
+]

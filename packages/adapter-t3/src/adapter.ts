@@ -193,7 +193,7 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
       f.stop();
       return undefined;
     }
-    if (tracker.turnId !== undefined && cursor.confirmedTurnId === tracker.turnId) tracker.startedByUs = true;
+    if (tracker.turnId !== undefined && cursor.confirmedTurnId === tracker.turnId && tracker.sawStarting) tracker.startedByUs = true;
     following.set(delivery.id, f);
     return f;
   }
@@ -347,7 +347,8 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
         }
         // Confirm our message started this turn (1.2), while it's still the latest.
         const now = await client.getThread(threadId, 3).catch(() => null);
-        tracker.startedByUs = tracker.joined ? false : (now ? startedBy(now, messageId, tracker.turnId!) : undefined) ?? false;
+        // Ours only if T3 recorded our message as its start AND it began the way a command-started turn does (1.2).
+        tracker.startedByUs = tracker.joined || !tracker.sawStarting ? false : (now ? startedBy(now, messageId, tracker.turnId!) : undefined) ?? false;
         // An answer's delivery is never followed: stop its subscription now (3.3).
         if (delivery.message.kind === "request") following.set(delivery.id, f);
         else f.stop();

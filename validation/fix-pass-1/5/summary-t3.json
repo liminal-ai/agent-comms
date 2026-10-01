@@ -1,0 +1,39 @@
+{
+ "conversations": 22,
+ "requestDeliveries": 18,
+ "requestStates": {
+  "ambiguous": 1,
+  "replied": 16,
+  "failed": 1
+ },
+ "answerDeliveriesBeyondDelivered": 0,
+ "messagesAppendedInT3": {
+  "deliveriesSeen": 18,
+  "appendedMoreThanOnce": []
+ },
+ "t3Dispatches": {
+  "deliveries": 19,
+  "dispatchedMoreThanOnce": []
+ },
+ "collectedAnswers": 10,
+ "deliveriesWithMoreThanOneCollectedAnswer": [],
+ "scenarios": {
+  "baseline": "replied",
+  "oversize": {},
+  "crashWindow": "replied",
+  "queuedFlush": "replied",
+  "typedIn": "ambiguous",
+  "interruptRecovery": "failed",
+  "queuedRace": [
+   "ambiguous",
+   "ambiguous",
+   "ambiguous"
+  ],
+  "lifecycle": {
+   "retire": "replied",
+   "remove": "replied",
+   "rebind": "replied"
+  },
+  "claimLost": "replied"
+ }
+}

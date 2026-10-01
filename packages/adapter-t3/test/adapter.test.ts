@@ -137,10 +137,14 @@ class FakeT3 implements T3Client {
     this.setSession("running", turnId);
     return turnId;
   }
-  /** A turn with no user message (Claude waking for a background task). */
-  wake(): string {
+  /**
+   * A turn with no user message (Claude waking for a background task). Recorded live on 3780
+   * (validation/fix-pass-1/1/bg-turn-events.jsonl): no `starting`, straight to `running`, and a
+   * `requestedAt` from the server's clock. `requestedAt` lets a test force a coincidence.
+   */
+  wake(requestedAt?: string): string {
     const turnId = `turn-${++this.turns}`;
-    this.thread.latestTurn = { turnId, state: "running", requestedAt: this.at(), completedAt: null, assistantMessageId: null };
+    this.thread.latestTurn = { turnId, state: "running", requestedAt: requestedAt ?? this.at(), completedAt: null, assistantMessageId: null };
     this.setSession("running", turnId);
     return turnId;
   }
@@ -551,5 +555,27 @@ describe("fix pass 3.2", () => {
     t3.finish();
     const o = await outcome;
     assert.equal(o._tag, "uncertain", JSON.stringify(o));
+  });
+});
+
+describe("fix pass 1.2, Reed's follow-up", () => {
+  it("1.2 a background turn isn't ours even if its requestedAt equals our createdAt to the millisecond", async () => {
+    // Live, the wake turn's requestedAt is the server's clock (13:54:51.841 vs our 13:54:07.075 in the
+    // recording), so equality is only a coincidence; the turn's start signature (no `starting`) still differs.
+    const { t3, adapter } = setup();
+    t3.startTurn = async (_id, turn) => {
+      t3.lastStart = turn;
+      t3.appendOnly(turn.messageId);
+      const ours = (await t3.getThread("th1"))!.messages.find((m) => m.id === turn.messageId)!;
+      t3.wake(ours.createdAt); // the coincidence
+    };
+    const h = await adapter.handOff(target, delivery());
+    const outcome = h._tag === "accepted" ? await (async () => {
+      const o = adapter.awaitOutcome(target, delivery(), h.turnId);
+      t3.assistant("background task finished");
+      t3.finish();
+      return o;
+    })() : h;
+    assert.equal(outcome._tag, "ambiguous", JSON.stringify(outcome));
   });
 });
