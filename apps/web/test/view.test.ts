@@ -15,6 +15,7 @@ import {
   parseReminderForm,
   presenceView,
   reminderActions,
+  reminderLast,
   reminderLine,
   scheduleText,
   titleWithUnread,
@@ -125,6 +126,17 @@ describe("W reminders", () => {
     assert.equal(reminderLine(reminder({ max: 3 }), NOW), "active · 2 of 3 fires · next in 5m");
     assert.equal(reminderLine(reminder({ state: "blocked", stateReason: "waiting on Lee", nextFireAt: undefined }), NOW), "blocked: waiting on Lee · 2 fires");
     assert.equal(reminderLine(reminder({ state: "active", nextFireAt: NOW - MIN }), NOW), "active · 2 fires · due now");
+  });
+
+  it("W reminders: the list shows the last fire's delivery state and the last skip, whichever is newer", () => {
+    assert.equal(reminderLast(reminder(), NOW), null, "never fired or skipped");
+    const fired = reminder({ lastFire: { messageId: "m_3", deliveryState: "replied", firedAt: NOW - 25 * MIN } });
+    assert.equal(reminderLast(fired, NOW), "last fire 25m ago: replied");
+    const skipped = reminder({
+      lastFire: { messageId: "m_3", deliveryState: "delivered", firedAt: NOW - 31 * MIN },
+      lastSkip: { at: NOW - MIN, reason: "previous-fire-not-final" },
+    });
+    assert.equal(reminderLast(skipped, NOW), "skipped 1m ago: previous fire not final (last fire 31m ago: delivered)");
   });
 
   it("W reminders: the create form becomes reminders.create arguments", () => {
