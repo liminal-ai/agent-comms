@@ -105,7 +105,9 @@ export function makeT3Client(options: T3ClientOptions): T3Client {
         await connect();
         return true;
       } catch (error) {
-        options.log(`T3 at ${baseUrl}: can't connect (${error instanceof Error ? error.message : String(error)})`);
+        // Never log the ticketed WebSocket URL (3.6).
+        const message = (error instanceof Error ? error.message : String(error)).replace(/wsTicket=[^&\s"']+/g, "wsTicket=<redacted>");
+        options.log(`T3 at ${baseUrl}: can't connect (${message})`);
         return false;
       }
     },

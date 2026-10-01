@@ -25,7 +25,8 @@ export const USAGE = `usage:
 
   --as defaults to $${PARTICIPANT_ENV}. It names you; the connector accepts any
   participant homed on this machine (a trusted-machine shortcut, not proof of identity).
-  Text may be given as several words, or "-" to read it from stdin.
+  Text may be given as several words, or "-" to read it from stdin. Text may start
+  with "-"; anything after "--" is text, whatever it looks like.
   --json prints the connector's response as JSON. --socket <path> overrides the socket.
 
 exit codes: 0 ok, 1 the connector refused, 2 usage, 3 connector unreachable`;
@@ -39,22 +40,47 @@ export interface Io {
 
 class UsageError extends Error {}
 
+const OPTIONS = {
+  as: { type: "string" },
+  conversation: { type: "string" },
+  before: { type: "string" },
+  limit: { type: "string" },
+  key: { type: "string" },
+  json: { type: "boolean" },
+  socket: { type: "string" },
+  help: { type: "boolean", short: "h" },
+} as const;
+
+/**
+ * Our options anywhere; anything else is message text, even if it starts with
+ * "-" (a number, a list item). `--` ends options: everything after it is text (3.7).
+ */
+function parseOptions(argv: string[]): { values: { [K in keyof typeof OPTIONS]?: (typeof OPTIONS)[K]["type"] extends "string" ? string : boolean }; positionals: string[] } {
+  const { tokens } = parseArgs({ args: argv, allowPositionals: true, strict: false, tokens: true, options: OPTIONS });
+  const values: Record<string, string | boolean> = {};
+  const positionals: string[] = [];
+  const unknownAt = new Set<number>();
+  for (const t of tokens) {
+    if (t.kind === "positional") positionals.push(t.value);
+    else if (t.kind === "option") {
+      const spec = (OPTIONS as Record<string, { type: "string" | "boolean" }>)[t.name];
+      if (!spec) {
+        // Not one of ours: the whole argument is text (once, however it was split into short options).
+        if (!unknownAt.has(t.index)) positionals.push(argv[t.index]!);
+        unknownAt.add(t.index);
+      } else if (spec.type === "string") {
+        if (t.value === undefined) throw new Error(`option ${t.rawName} needs a value`);
+        values[t.name] = t.value;
+      } else values[t.name] = true;
+    }
+  }
+  return { values: values as never, positionals };
+}
+
 export async function run(argv: string[], io: Io): Promise<number> {
   let parsed;
   try {
-    parsed = parseArgs({
-      args: argv,
-      allowPositionals: true,
-      options: {
-        as: { type: "string" },
-        conversation: { type: "string" },
-        before: { type: "string" },
-        limit: { type: "string" },
-        json: { type: "boolean" },
-        socket: { type: "string" },
-        help: { type: "boolean", short: "h" },
-      },
-    });
+    parsed = parseOptions(argv);
   } catch (error) {
     io.stderr(`comms: ${(error as Error).message}\n${USAGE}\n`);
     return EXIT.usage;

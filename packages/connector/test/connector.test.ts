@@ -220,3 +220,13 @@ describe("connector restart", () => {
     await until("replied after the outage", async () => (await deliveryState(w.t, sent.message.conversationId, sent.message.id, "b"))?.state === "replied");
   });
 });
+
+describe("fix pass 3.6", () => {
+  it("3.6 an unclassified server error never carries its text (which may echo the secret)", async () => {
+    const { classify } = await import("../src/server-api.ts");
+    const e = classify("send", new Error('ArgumentValidationError: Value does not match validator. Path: .machine Value: {"secret":"box-secret-0123456789"}'));
+    expect(e._tag).toBe("Unavailable");
+    expect(e.message).not.toContain("box-secret");
+    expect(classify("send", new TypeError("fetch failed")).message).toContain("fetch failed");
+  });
+});

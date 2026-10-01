@@ -6,6 +6,7 @@
 // connector: sessions are gone, deliveries aren't.
 
 import {
+  type AttachmentRef,
   boundHistory,
   clipAnswer,
   type ConversationRef,
@@ -105,6 +106,7 @@ export interface PostInput {
   kind?: MessageKind;
   inReplyTo?: string;
   via?: Via;
+  attachments?: AttachmentRef[];
 }
 
 type Listener = () => void;
@@ -247,7 +249,7 @@ export class StubComms {
       kind,
       ...(input.inReplyTo ? { inReplyTo: input.inReplyTo } : {}),
       text: input.text,
-      attachments: [],
+      attachments: input.attachments ?? [],
       createdAt: this.now(),
       origin: { via: input.via ?? "cli" },
     };
@@ -558,14 +560,14 @@ export class StubComms {
 
   send(req: Requests["send"]): Responses["send"] {
     this.actingAs(req.as);
-    const result = this.post({
+    return this.post({
       sender: req.as,
       to: req.to,
       ...(req.conversationId ? { conversationId: req.conversationId } : {}),
       text: req.text,
+      // Set before the message exists, so no delivery is handed out without them (3.7).
+      ...(req.attachments ? { attachments: req.attachments } : {}),
     });
-    if (req.attachments) result.message.attachments = req.attachments;
-    return result;
   }
 
   reply(req: Requests["reply"]): Responses["reply"] {
@@ -579,8 +581,8 @@ export class StubComms {
       text: req.text,
       kind: "answer",
       inReplyTo: original.id,
+      ...(req.attachments ? { attachments: req.attachments } : {}),
     });
-    if (req.attachments) result.message.attachments = req.attachments;
     const open = this.record.deliveries.find(
       (d) =>
         d.messageId === original.id &&

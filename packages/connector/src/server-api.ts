@@ -112,7 +112,7 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
             { machine },
             (value) => void Queue.offerUnsafe(queue, value.deliveries as WorkItem[]),
             // A subscription error is reported, not fatal: the client keeps retrying underneath.
-            (error) => console.error(`agent-comms connector: work subscription error: ${error.message}`),
+            (error) => console.error(`agent-comms connector: work subscription error: ${describeFailure(error)}`),
           ),
         ),
         (unsubscribe) => Effect.sync(unsubscribe),
@@ -209,5 +209,17 @@ export function classify(what: string, error: unknown): ApiError {
     const { code, message } = data as { code: ErrorCode; message?: string };
     return new ProtocolFailure({ code, message: message ?? code });
   }
-  return new Unavailable({ message: `${what}: ${error instanceof Error ? error.message : String(error)}` });
+  return new Unavailable({ message: `${what}: ${describeFailure(error)}` });
+}
+
+/**
+ * A safe description of a failure we didn't classify. Convex error text can
+ * echo the call's arguments (the machine secret among them), so it's never
+ * logged or passed on: only the error's class and a known transport cause (3.6).
+ */
+export function describeFailure(error: unknown): string {
+  const name = error instanceof Error ? error.name : typeof error;
+  const message = error instanceof Error ? error.message : String(error);
+  const known = /\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE|ENOTFOUND|fetch failed|timed out|WebSocket|connection (?:lost|closed))\b/i.exec(message);
+  return known ? `${name} (${known[1]})` : `${name} (details withheld; they may echo arguments)`;
 }

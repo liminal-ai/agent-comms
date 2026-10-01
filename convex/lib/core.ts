@@ -35,22 +35,33 @@ export async function sha256Hex(text: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** Compares two secrets in time that doesn't depend on where they differ (3.6). */
+async function sameSecret(a: string, b: string): Promise<boolean> {
+  const [x, y] = await Promise.all([sha256Hex(a), sha256Hex(b)]);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return diff === 0;
+}
+
 export async function requireMachine(ctx: QueryCtx, auth: { id: string; secret: string }): Promise<Doc<"machines">> {
   const machine = await ctx.db
     .query("machines")
     .withIndex("by_machineId", (q) => q.eq("machineId", auth.id))
     .unique();
-  if (!machine || machine.secretHash !== (await sha256Hex(auth.secret))) {
+  const presented = await sha256Hex(auth.secret);
+  let diff = machine ? presented.length ^ machine.secretHash.length : 1;
+  for (let i = 0; i < presented.length; i++) diff |= presented.charCodeAt(i) ^ (machine?.secretHash.charCodeAt(i) ?? 0);
+  if (!machine || diff !== 0) {
     // Deliberately the same answer for an unknown machine and a wrong secret.
     throw new Error("machine credential rejected");
   }
   return machine;
 }
 
-export function requireAdmin(token: string): void {
+export async function requireAdmin(token: string): Promise<void> {
   const expected = process.env.COMMS_ADMIN_TOKEN;
   if (!expected) throw new Error("COMMS_ADMIN_TOKEN is not set on this deployment");
-  if (token !== expected) throw new Error("admin token rejected");
+  if (!(await sameSecret(token, expected))) throw new Error("admin token rejected");
 }
 
 // ---------------------------------------------------------------------------

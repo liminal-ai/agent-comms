@@ -10,7 +10,7 @@ import { openDm as openDmBetween, post } from "./lib/post";
 export const createGroup = mutation({
   args: { adminToken: v.string(), title: v.string(), members: v.array(v.string()) },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     if (!args.title.trim()) fail("bad_request", "a group needs a title");
     if (args.title.length > MAX_TITLE_CHARS) fail("bad_request", `the title is ${args.title.length} characters; the limit is ${MAX_TITLE_CHARS}`);
     const people = [];
@@ -26,7 +26,7 @@ export const createGroup = mutation({
 export const openDm = mutation({
   args: { adminToken: v.string(), a: v.string(), b: v.string() },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     const c = await openDmBetween(ctx, await participantByName(ctx, args.a), await participantByName(ctx, args.b));
     return { conversation: conversationRef(c) };
   },
@@ -42,7 +42,7 @@ async function group(ctx: Parameters<typeof getOr>[0], id: string): Promise<Doc<
 export const addMember = mutation({
   args: { adminToken: v.string(), conversationId: v.string(), name: v.string() },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     const c = await group(ctx, args.conversationId);
     const p = await participantByName(ctx, args.name);
     const existing = await ctx.db
@@ -60,7 +60,7 @@ export const addMember = mutation({
 export const removeMember = mutation({
   args: { adminToken: v.string(), conversationId: v.string(), name: v.string() },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     const c = await group(ctx, args.conversationId);
     const p = await participantByName(ctx, args.name);
     const existing = await ctx.db
@@ -76,7 +76,7 @@ export const removeMember = mutation({
 export const postAs = mutation({
   args: { adminToken: v.string(), as: v.string(), conversationId: v.string(), to: v.array(v.string()), text: v.string() },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     const sender = await participantByName(ctx, args.as);
     if (sender.kind !== "human") fail("bad_request", "the web view posts as a person");
     if (!args.text.trim()) fail("bad_request", "empty message");
@@ -91,7 +91,7 @@ export const postAs = mutation({
 export const list = query({
   args: { adminToken: v.string() },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     const all = await ctx.db.query("conversations").collect();
     all.sort((a, b) => b.lastAt - a.lastAt);
     return { conversations: await Promise.all(all.map((c) => summary(ctx, c, c.lastSeq))) };
@@ -102,7 +102,7 @@ export const list = query({
 export const view = query({
   args: { adminToken: v.string(), conversationId: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     const c = await getOr(ctx, "conversations", args.conversationId);
     const page = await ctx.db
       .query("messages")
