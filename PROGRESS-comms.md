@@ -79,7 +79,7 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - [x] R0 contract (`validation/capabilities/r0/`): protocol `capabilities.ts` (system kind, reserved names, registry entries, waits with per-recipient results, `CLI_EXIT`, reminders, alerts, inbox, durations); loopback ops `await`, `ack`, `message-status`, `agents`, `agents-set`, `remind`, `reminders`, `reminder`, `reminder-update`, `send` `wait`/`waitMs`; errors `unsupported` (501), `unknown_reminder`; reminder-fire, fallback, report, ended and alert renderings; README contract section
 - [x] R0 Convex: schema (system kind, ownerId, description, duties, presence.idleSince, message meta, delivery claimCount and fallback; tables inbox, waits, waitResults, reminders, reminderFires, alerts, alertConfig); web functions registry.list/setProfile, inbox.list/unreadCount/markRead, reminders.list/get/create/update, alerts.list/config/setConfig; promotion refuses `system`; idleSince moves only on the transition to idle
 - [x] R0 connector and stub answer the new ops `unsupported` until built; a waiting send is refused, never sent unwaited
-- [ ] Hazel's R0 review
+- [x] Hazel's R0 review: approved; her changes taken (`validation/capabilities/r0-review/`): ack counts only within the waiter's same busy stretch (`busySince`), a wait with no open result isn't busy waiting, `--at` format, blocked needs a reason in the decoder, alert conversation ids, reminder lastFire/lastSkip
 - [ ] R1 registry, ownerId migration, reserved names, @owner, inbox
 - [ ] R2 send-and-wait
 - [ ] R3 reminders

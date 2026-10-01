@@ -108,7 +108,16 @@ export async function applyAction(ctx: MutationCtx, r: Doc<"reminders">, action:
 }
 
 export async function reminderShape(ctx: QueryCtx, r: Doc<"reminders">): Promise<Reminder> {
+  const last = await ctx.db
+    .query("reminderFires")
+    .withIndex("by_reminder", (q) => q.eq("reminderId", r._id))
+    .order("desc")
+    .first();
+  const lastDelivery = last ? await ctx.db.get(last.deliveryId) : null;
+  const lastSkip = r.skips[r.skips.length - 1];
   return {
+    ...(last ? { lastFire: { messageId: last.messageId, deliveryState: lastDelivery?.state ?? "failed", firedAt: last.firedAt } } : {}),
+    ...(lastSkip ? { lastSkip } : {}),
     id: r._id,
     name: r.name,
     text: r.text,

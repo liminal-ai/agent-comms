@@ -39,7 +39,12 @@ export const failureReason = v.union(
   v.literal("rejected"),
 );
 
-export const presence = v.object({ status: presenceStatus, at: v.number(), idleSince: v.optional(v.number()) });
+export const presence = v.object({
+  status: presenceStatus,
+  at: v.number(),
+  idleSince: v.optional(v.number()),
+  busySince: v.optional(v.number()),
+});
 
 // ---------------------------------------------------------------------------
 // Capabilities pass (docs/04-capabilities.md)

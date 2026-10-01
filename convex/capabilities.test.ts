@@ -89,7 +89,7 @@ describe("R0 registry (web)", () => {
     expect(p).toEqual({ status: "idle", at: NOW + 60_000, idleSince: NOW });
     await t.mutation(api.connector.presence, { machine: m1, participant: "a", status: "busy" });
     const busy = await t.run(async (ctx) => (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "a")).unique())!.presence);
-    expect(busy).toEqual({ status: "busy", at: NOW + 60_000 });
+    expect(busy).toEqual({ status: "busy", at: NOW + 60_000, busySince: NOW + 60_000 });
   });
 
   it("edits description and duties within their caps; empty clears", async () => {
@@ -197,10 +197,10 @@ describe("R0 alerts (web)", () => {
   it("lists incidents newest first, open only on request, and reads and sets the thresholds", async () => {
     const t = await setup();
     const lee = await idOf(t, "lee");
-    const { messageId } = await seedMessage(t, "Alert: …");
+    const { messageId, conversationId } = await seedMessage(t, "Alert: …");
     await t.run(async (ctx) => {
-      await ctx.db.insert("alerts", { cause: "connector-silent", subjectKind: "machine", subjectId: "m1", ownerId: lee, messageId, openedAt: NOW - 2_000, resolvedAt: NOW - 1_000, summary: "down" });
-      await ctx.db.insert("alerts", { cause: "connector-silent", subjectKind: "machine", subjectId: "m1", ownerId: lee, messageId, openedAt: NOW, summary: "down again" });
+      await ctx.db.insert("alerts", { cause: "connector-silent", subjectKind: "machine", subjectId: "m1", ownerId: lee, messageId, conversationId, openedAt: NOW - 2_000, resolvedAt: NOW - 1_000, summary: "down" });
+      await ctx.db.insert("alerts", { cause: "connector-silent", subjectKind: "machine", subjectId: "m1", ownerId: lee, messageId, conversationId, openedAt: NOW, summary: "down again" });
     });
     const all = await t.query(api.alerts.list, { adminToken: ADMIN });
     expect(all.alerts.map((a) => a.summary)).toEqual(["down again", "down"]);
@@ -213,5 +213,54 @@ describe("R0 alerts (web)", () => {
     expect(set).toEqual({ ...DEFAULT_ALERT_CONFIG, maxClaims: 8 });
     expect(await t.query(api.alerts.config, { adminToken: ADMIN })).toEqual(set);
     expect(await errorCode(t.mutation(api.alerts.setConfig, { adminToken: ADMIN, connectorSilentMs: 1_000 }))).toBe("bad_request");
+  });
+});
+
+describe("R0 review (Hazel)", () => {
+  it("busySince moves only on the transition to busy (an ack counts only within the same busy stretch, R2)", async () => {
+    const t = await setup();
+    await t.mutation(api.connector.presence, { machine: m1, participant: "a", status: "busy" });
+    vi.setSystemTime(new Date(NOW + 60_000));
+    await t.mutation(api.connector.presence, { machine: m1, participant: "a", status: "busy" });
+    const read = () => t.run(async (ctx) => (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "a")).unique())!.presence);
+    expect(await read()).toEqual({ status: "busy", at: NOW + 60_000, busySince: NOW });
+    await t.mutation(api.connector.presence, { machine: m1, participant: "a", status: "idle" });
+    expect(await read()).toEqual({ status: "idle", at: NOW + 60_000, idleSince: NOW + 60_000 });
+    await t.mutation(api.connector.heartbeat, { machine: m1 });
+    vi.setSystemTime(new Date(NOW + 70_000));
+    await t.mutation(api.connector.presence, { machine: m1, participant: "a", status: "busy" });
+    const { agents } = await t.query(api.registry.list, { adminToken: ADMIN });
+    expect(agents.find((e) => e.participant.name === "a")!.presence).toEqual({ status: "busy", at: NOW + 70_000, busySince: NOW + 70_000, stale: false });
+  });
+
+  it("an alert carries its DM's conversation id, and a delivery subject's conversation too", async () => {
+    const t = await setup();
+    const lee = await idOf(t, "lee");
+    const { messageId, conversationId } = await seedMessage(t, "Alert: …");
+    await t.run(async (ctx) => {
+      await ctx.db.insert("alerts", {
+        cause: "uncertain-delivery", subjectKind: "delivery", subjectId: "d_x", subjectConversationId: conversationId,
+        ownerId: lee, messageId, conversationId, openedAt: NOW, summary: "uncertain",
+      });
+    });
+    const [alert] = (await t.query(api.alerts.list, { adminToken: ADMIN })).alerts;
+    expect(alert).toMatchObject({ conversationId, subject: { kind: "delivery", id: "d_x", conversationId } });
+  });
+
+  it("reminders.list carries each reminder's last fire and last skip", async () => {
+    const t = await setup();
+    const { reminder } = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: 60_000 });
+    const { messageId, conversationId } = await seedMessage(t, "fire");
+    await t.run(async (ctx) => {
+      const rid = ctx.db.normalizeId("reminders", reminder.id)!;
+      const a = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "a")).unique())!;
+      const deliveryId = await ctx.db.insert("deliveries", {
+        messageId, conversationId, recipientId: a._id, collect: true, state: "delivered", at: NOW, createdAt: NOW,
+      });
+      await ctx.db.insert("reminderFires", { reminderId: rid, messageId, deliveryId, firedAt: NOW });
+      await ctx.db.patch(rid, { skips: [{ at: NOW + 60_000, reason: "previous-fire-not-final" }] });
+    });
+    const [listed] = (await t.query(api.reminders.list, { adminToken: ADMIN })).reminders;
+    expect(listed).toMatchObject({ lastFire: { messageId, deliveryState: "delivered", firedAt: NOW }, lastSkip: { at: NOW + 60_000, reason: "previous-fire-not-final" } });
   });
 });
