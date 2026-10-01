@@ -81,7 +81,7 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - [x] R0 connector and stub answer the new ops `unsupported` until built; a waiting send is refused, never sent unwaited
 - [x] Hazel's R0 review: approved; her changes taken (`validation/capabilities/r0-review/`): ack counts only within the waiter's same busy stretch (`busySince`), a wait with no open result isn't busy waiting, `--at` format, blocked needs a reason in the decoder, alert conversation ids, reminder lastFire/lastSkip
 - [x] R1 (`validation/capabilities/r1/`): promote requires a person as owner (ownerId) and refuses reserved names; `directory.upgrade` + `scripts/upgrade.ts` (system participants, owner backfill; run after each deploy); owner string dropped (3 deploys); `@owner`; inbox rows from post() for every person addressed, any sender; system participants never addressed, answers to system requests address no one; `agents`/`agents-set` in Convex, connector, stub and `comms agents`
-- [ ] R2 send-and-wait
+- [x] R2 send-and-wait (`validation/capabilities/r2/`): waits registered in the send; answers taken into the wait in the collecting/completing mutation (not a connector pass: atomic, never pending, never claimed); `await` held by the connector on a watch; ack only in the waiter's same busy stretch (presence refreshed from T3 first); one fallback per result from a minute cron; busy-waiting rule; `comms send` waits by default (`--wait`, `--continue`), `comms await`, `comms status <id>`; unwaited fallback on connectors that can't wait
 - [ ] R3 reminders
 - [ ] R4 alerts
 
@@ -90,4 +90,10 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - Wait results are their own table (`waitResults`) so the fallback pass can index answered results by age, and each compare-and-set touches one row.
 - Exit 5 (`endedWithoutAnswer`) is separate from 4 (`pending`): "no answer is coming" vs "not yet".
 - The web view creates reminders as a person (`reminders.create` takes `as`); the CLI creates them as the calling agent.
-- `DEFAULT_WAIT_MS` is 100 s until Hazel's H0 numbers.
+- `DEFAULT_WAIT_MS` is 100 s (H0 confirmed).
+
+### R2 decisions to review
+- Answers are taken into the wait inside the Convex mutation that collects them (or completes an ambiguous delivery with `comms reply`), not by a connector pass over the work stream. Same compare-and-set and the same single transaction, but the delivery is never pending, so there's nothing for the dispatcher to race and no `inReplyTo` in the work query. The connector-holds-the-wait idea becomes `lastAwaitAt`: an answer while no `await` came for 60 s goes to the thread (`expired`).
+- The connector refreshes a T3 waiter's presence before a waiting send and before an ack (its poll is every 20 s, too coarse for busySince).
+- A connector that answers a waiting send `unsupported` gets it again unwaited, and the CLI says so (stub, older connectors).
+- The overview's definition of `delivered` needs its one exception ("returned to the waiting send"); that's Reed's document.

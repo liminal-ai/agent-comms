@@ -1,0 +1,11 @@
+2026-10-01T18:17:18Z
+$ comms send --as cedar-demo --wait 90s @t3-native "R2 live check from Cedar: reply with exactly the word pong."
+sent jn78dw7zyc0ekcv1j6ytadmgdh8ffd45 (#1 in j57d3mgnj4r2jafc723e1awx6d8ffxpf), waiting up to 90s for @t3-native
+@t3-native answered (jn79shqgd05cqkppb6cssjy9098ff0c4):
+  pong
+exit 0
+jn78dw7zyc0ekcv1j6ytadmgdh8ffd45 (#1 in j57d3mgnj4r2jafc723e1awx6d8ffxpf) from @cedar-demo: R2 live check from Cedar: reply with exactly the word pong.
+@t3-native: replied · answered: pong
+wait: answered 1 of 1, ended
+--- after the ack window (2026-10-01T18:20:51Z)
+[{"recipient":"t3-native","state":"fell-back","answer":"pong"}]
