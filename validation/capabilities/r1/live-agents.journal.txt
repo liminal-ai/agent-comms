@@ -1,0 +1,21 @@
+@alerts (system, active)
+@cc-a (agent, active) offline · claude-code
+@cc-b (agent, active) offline · claude-code
+@cedar-demo (agent, active) offline · t3
+@fp1-codex (agent, active) idle for 167m · t3
+@fp1-lhc (agent, active) idle for 167m · t3
+@fp1-native (agent, active) idle for 167m · t3
+@fp1-rebind-mupl941x (agent, active) idle for 167m · t3
+@fp1-remove-mupl8p0z (agent, active) idle for 167m · t3
+@fp1-req (agent, active) offline · claude-code
+@fp1-term-lccbe (agent, active) offline · claude-code
+@lee (human, active)
+@mod-a (agent, active) offline · claude-code
+@mod-b (agent, active) offline · claude-code
+@reminders (system, active)
+@smoke-a (agent, active) offline · claude-code
+@smoke-b (agent, active) offline · claude-code
+@t3-codex (agent, active) idle for 167m · t3
+@t3-lhc (agent, active) idle for 167m · t3
+@t3-native (agent, active) idle for 167m · t3
+@term-a (agent, active) offline · claude-code — Test terminal for the Claude Code mod (Hazel's live checks).

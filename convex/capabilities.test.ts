@@ -293,7 +293,6 @@ describe("R1 promotion: owner and reserved names", () => {
     expect(r.participant.name).toBe("x");
     const x = await byName(t, "x");
     expect(x.ownerId).toBe(await idOf(t, "lee"));
-    expect(x.owner).toBeUndefined();
     const entry = (await t.query(api.registry.list, { adminToken: ADMIN })).agents.find((e) => e.participant.name === "x")!;
     expect(entry).toMatchObject({ owner: { name: "lee", kind: "human" }, description: "does x", duties: ["one"] });
     expect(await errorCode(promote({ name: "y", kind: "human", owner: "lee" }))).toBe("bad_request");
@@ -301,29 +300,26 @@ describe("R1 promotion: owner and reserved names", () => {
 });
 
 describe("R1 upgrade: system participants and the owner backfill", () => {
-  it("creates @reminders and @alerts, backfills ownerId from the old owner string (else the default), and clears the string", async () => {
+  it("creates @reminders and @alerts and gives every agent without an owner the default, idempotently", async () => {
     const t = await setup();
     await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "sam", kind: "human" });
     await t.run(async (ctx) => {
       const now = Date.now();
       const base = { kind: "agent" as const, state: "active" as const, presence: { status: "offline" as const, at: now }, createdAt: now };
-      await ctx.db.insert("participants", { ...base, name: "legacy-sam", owner: "sam", home: agentHome("legacy-sam") });
       await ctx.db.insert("participants", { ...base, name: "legacy-none", home: agentHome("legacy-none") });
-      await ctx.db.insert("participants", { ...base, name: "legacy-gone", owner: "nobody", home: agentHome("legacy-gone") });
-      await ctx.db.insert("participants", { kind: "human", state: "active", presence: { status: "offline", at: now }, createdAt: now, name: "pat", owner: "x" });
+      const sam = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "sam")).unique())!;
+      await ctx.db.insert("participants", { ...base, name: "owned", ownerId: sam._id, home: agentHome("owned") });
     });
     const first = await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
-    expect(first).toEqual({ systemCreated: ["reminders", "alerts"], ownersSet: 3, ownerStringsCleared: 3 });
-    const owner = async (name: string) => (await byName(t, name)).ownerId;
-    expect(await owner("legacy-sam")).toBe(await idOf(t, "sam"));
-    expect(await owner("legacy-none")).toBe(await idOf(t, "lee"));
-    expect(await owner("legacy-gone")).toBe(await idOf(t, "lee"));
-    expect((await byName(t, "pat")).ownerId).toBeUndefined();
-    for (const name of ["legacy-sam", "legacy-gone", "pat"]) expect((await byName(t, name)).owner, name).toBeUndefined();
+    expect(first).toEqual({ systemCreated: ["reminders", "alerts"], ownersSet: 1 });
+    expect((await byName(t, "legacy-none")).ownerId).toBe(await idOf(t, "lee"));
+    expect((await byName(t, "owned")).ownerId).toBe(await idOf(t, "sam"));
+    expect((await byName(t, "sam")).ownerId).toBeUndefined();
     const reminders = await byName(t, "reminders");
     expect(reminders).toMatchObject({ kind: "system", state: "active" });
     expect(reminders.home).toBeUndefined();
-    expect(await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" })).toEqual({ systemCreated: [], ownersSet: 0, ownerStringsCleared: 0 });
+    expect(await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" })).toEqual({ systemCreated: [], ownersSet: 0 });
+    expect(await errorCode(t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "a" }))).toBe("bad_request");
   });
 
   it("refuses when a non-system participant holds a system name", async () => {

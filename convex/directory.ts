@@ -128,10 +128,10 @@ export const list = query({
 
 /**
  * Brings an existing deployment up to the capabilities pass; idempotent, run
- * after each deploy. Creates the system participants (`reminders`, `alerts`),
- * and migrates owners (R1 step 2 of 3): every agent without `ownerId` gets the
- * person its old `owner` string named, else `defaultOwner`; every old `owner`
- * string is then cleared, so step 3 can drop the field from the schema.
+ * after each deploy (`scripts/upgrade.ts`). Creates the system participants
+ * (`reminders`, `alerts`) and gives every agent without an owner `defaultOwner`.
+ * (The owner migration's step 2 also moved old `owner` strings to `ownerId`;
+ * step 3 dropped the field, on lim-builder after upgrading on 2026-10-01.)
  */
 export const upgrade = mutation({
   args: { adminToken: v.string(), defaultOwner: v.string() },
@@ -152,25 +152,11 @@ export const upgrade = mutation({
       systemCreated.push(name);
     }
     let ownersSet = 0;
-    let ownerStringsCleared = 0;
     for (const p of await ctx.db.query("participants").collect()) {
-      const patch: { ownerId?: typeof fallback._id; owner?: undefined } = {};
-      if (p.kind === "agent" && !p.ownerId) {
-        const named = p.owner
-          ? await ctx.db
-              .query("participants")
-              .withIndex("by_name", (q) => q.eq("name", p.owner!))
-              .unique()
-          : null;
-        patch.ownerId = named && named.kind === "human" ? named._id : fallback._id;
-        ownersSet++;
-      }
-      if (p.owner !== undefined) {
-        patch.owner = undefined;
-        ownerStringsCleared++;
-      }
-      if (Object.keys(patch).length > 0) await ctx.db.patch(p._id, patch);
+      if (p.kind !== "agent" || p.ownerId) continue;
+      await ctx.db.patch(p._id, { ownerId: fallback._id });
+      ownersSet++;
     }
-    return { systemCreated, ownersSet, ownerStringsCleared };
+    return { systemCreated, ownersSet };
   },
 });

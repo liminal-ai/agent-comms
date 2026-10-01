@@ -150,7 +150,7 @@ Participant `kind` gains `system`. `reminders` and `alerts` are created at deplo
 ### Registry, owners and the inbox (R1)
 
 - **Promotion** (`directory.promote`) requires `owner`, a person's name, for an agent (stored as `ownerId`), and refuses reserved names. It also takes `description` and `duties`.
-- **`directory.upgrade({defaultOwner})`**, run after each deploy (idempotent; `scripts/dev-setup.ts` runs it): creates `@reminders` and `@alerts` (a `conflict` if a non-system participant holds either name), gives every agent without `ownerId` the person its old `owner` string named, else `defaultOwner`, and clears the old strings. That's step 2 of the owner migration; step 3 drops `owner` from the schema, which Convex refuses while any row still has it.
+- **`directory.upgrade({defaultOwner})`**, run after each deploy (idempotent; `scripts/upgrade.ts`, and `scripts/dev-setup.ts` runs it): creates `@reminders` and `@alerts` (a `conflict` if a non-system participant holds either name) and gives every agent without `ownerId` `defaultOwner`. The owner migration's three steps are done: `ownerId` added (R0), backfilled (R1, 20 agents on lim-builder, no old strings found), and the old `owner` string dropped from the schema.
 - **`@owner`** in `send`'s `to` is the sending agent's owner (`bad_request` if it has none). Sends from the web view are by people, who have no owner.
 - **System participants** are never addressed (`bad_request` from any send or post) and get no deliveries; an answer to a system request (a reminder fire), collected or by `comms reply`, addresses no one.
 - **Inbox:** `post()` writes an inbox row for each person a message addresses (not retired), whoever sends it, agents and system participants alike. That's the person's unread count.
