@@ -446,3 +446,57 @@ describe("fix pass 1: reply ownership", () => {
     assert.equal(o._tag, "uncertain", JSON.stringify(o));
   });
 });
+
+describe("fix pass 2.2 / 2.3", () => {
+  it("2.2 the claim is re-checked right before sending; a lost claim sends nothing", async () => {
+    const { t3, adapter } = setup();
+    const gate = { confirm: async () => false, signal: new AbortController().signal };
+    const h = await (adapter.handOff as (...a: unknown[]) => Promise<{ _tag: string }>)(target, delivery(), gate);
+    assert.notEqual(h._tag, "accepted");
+    assert.deepEqual(t3.userMessages(), [], "nothing was sent");
+  });
+
+  it("2.2 an aborted handoff (claim lost during the courtesy wait) sends nothing", async () => {
+    const { t3, adapter } = setup();
+    t3.userMessage("lee-busy"); // the thread is busy: we wait
+    const abort = new AbortController();
+    let confirmed = 0;
+    const gate = { confirm: async () => (confirmed++, true), signal: abort.signal };
+    const handOff = (adapter.handOff as (...a: unknown[]) => Promise<{ _tag: string }>)(target, delivery(), gate);
+    await tick(80);
+    abort.abort();
+    t3.finish(); // the thread goes idle after the claim was lost
+    const h = await Promise.race([handOff, tick(2000).then(() => ({ _tag: "hung" }))]);
+    assert.notEqual(h._tag, "accepted");
+    assert.equal(confirmed, 0);
+    assert.deepEqual(t3.userMessages(), ["lee-busy"], "ours was never sent");
+  });
+
+  it("2.3 the real client: an HTTP 4xx refusal is rejected; a 5xx or a dropped connection is not", async () => {
+    const { createServer } = await import("node:http");
+    const { mkdtemp, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { makeT3Client } = await import("../src/t3/client.ts");
+    let mode: "400" | "500" | "drop" = "400";
+    const server = createServer((req, res) => {
+      if (mode === "drop") return req.socket.destroy();
+      res.writeHead(Number(mode), { "content-type": "application/json" });
+      res.end('{"_tag":"EnvironmentRequestInvalidError"}');
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+    const port = (server.address() as { port: number }).port;
+    const dir = await mkdtemp(join(tmpdir(), "t3client-"));
+    await writeFile(join(dir, "token"), "dummy-bearer", { mode: 0o600 });
+    const client = makeT3Client({ baseUrl: `http://127.0.0.1:${port}`, authFile: join(dir, "token"), log: () => {} });
+    const turn = { messageId: "comms-d", text: "x", runtimeMode: "auto", interactionMode: "default" };
+    const kind = async () => client.startTurn("th", turn).then(() => "ok", (e) => (e instanceof T3Rejected ? "rejected" : "transport"));
+    mode = "400";
+    assert.equal(await kind(), "rejected");
+    mode = "500";
+    assert.equal(await kind(), "transport");
+    mode = "drop";
+    assert.equal(await kind(), "transport");
+    server.close();
+  });
+});
