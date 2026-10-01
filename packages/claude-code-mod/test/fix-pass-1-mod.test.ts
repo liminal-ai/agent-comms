@@ -1,6 +1,7 @@
 // Fix pass 1, section 1, mod-level items (1.8, 1.9) against the connector stub.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { JOURNAL_LOSS_WINDOW_MS } from "../hooks/core/mod.ts";
 import { FakeSession, makeMod, pumpUntil, stubOps, until, useStub, wrap } from "./support.ts";
 
 const ctx = useStub("comms-mod-fp1-");
@@ -47,6 +48,35 @@ describe("1.8 journal safety", () => {
     await (mod as any).check({ deliveryId: "d_empty", messageId: "m_empty", state: "claimed" });
     await until(() => session.ops("check-result").length === 1, "the check result");
     assert.equal(session.ops("check-result")[0].found, "unknown");
+  });
+
+  it("1.8: a lost journal stays inconclusive across sessions until the loss window ends", async () => {
+    const first = new FakeSession(ctx.socketPath);
+    first.journal = null;
+    const mod1 = makeMod(first, "sess-1");
+    await mod1.start();
+    await post({ sender: "mod-b", to: ["mod-a"], text: "write the journal" });
+    await pumpUntil(mod1, () => first.submitted.length === 1, "a submission writes the journal");
+    assert.match(first.journal ?? "", /incompleteUntil/);
+
+    // A later session reads that journal: still inconclusive inside the window...
+    const second = new FakeSession(ctx.socketPath);
+    second.journal = first.journal;
+    const mod2 = makeMod(second, "sess-2");
+    await mod2.start();
+    await (mod2 as any).check({ deliveryId: "d_unseen", messageId: "m_unseen", state: "claimed" });
+    await until(() => second.ops("check-result").length === 1, "the check result");
+    assert.equal(second.ops("check-result")[0].found, "unknown");
+
+    // ...and conclusive after it.
+    const third = new FakeSession(ctx.socketPath);
+    third.journal = first.journal;
+    third.clock = first.clock + JOURNAL_LOSS_WINDOW_MS + 1;
+    const mod3 = makeMod(third, "sess-3");
+    await mod3.start();
+    await (mod3 as any).check({ deliveryId: "d_unseen", messageId: "m_unseen", state: "claimed" });
+    await until(() => third.ops("check-result").length === 1, "the check result");
+    assert.equal(third.ops("check-result")[0].found, "no");
   });
 
   it("1.8: a delivery another session of this participant journaled after we loaded is seen at check time", async () => {

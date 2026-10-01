@@ -60,12 +60,22 @@ type Report = { op: "delivered" | "outcome" | "check-result" | "presence"; body:
 const JOURNAL_KEEP = 200;
 /** Delivery ids remembered for restart checks; past this the journal is marked incomplete. */
 const SEEN_KEEP = 5_000;
+/**
+ * After the journal's history is lost (missing, empty or unreadable file, or ids
+ * dropped), absence from it proves nothing for this long. A delivery is in flight
+ * for at most the connector's deadlines (tens of minutes), so after a day nothing
+ * from the lost history can still be asked about; without a bound, one lost file
+ * would disable `no` for good.
+ */
+export const JOURNAL_LOSS_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 interface JournalFile {
   participant?: string;
   deliveries?: Tracked[];
   seen?: string[];
-  /** Set once ids were dropped or a journal was lost: absence then proves nothing. */
+  /** Until this time (epoch ms) absence from the journal proves nothing: its history was lost. */
+  incompleteUntil?: number;
+  /** Older journals: history lost, no end recorded. */
   incomplete?: boolean;
 }
 
@@ -84,8 +94,8 @@ export class CommsMod {
   /** Every delivery id seen, including ones from earlier sessions of this participant. */
   private seen = new Set<string>();
   private journalLoaded = false;
-  /** False when a journal on disk couldn't be read: absence from it then proves nothing. */
-  private journalComplete = true;
+  /** Until this time absence from the journal proves nothing (see JOURNAL_LOSS_WINDOW_MS). */
+  private incompleteUntil = 0;
   /** When the session last became idle (no main turn running); undefined while busy. */
   private idleSince: number | undefined;
   /** Submitted deliveries whose prompt didn't start by the deadline: still tracked, checks answer unknown. */
@@ -518,28 +528,46 @@ export class CommsMod {
     return true;
   }
 
+  /** Whether absence from the journal proves a delivery was never submitted. */
+  private get journalComplete(): boolean {
+    return this.host.now() >= this.incompleteUntil;
+  }
+
+  private journalLost(reason: string): void {
+    if (this.journalComplete) this.host.log(`journal history lost (${reason}): restart checks answer unknown for a day`);
+    this.incompleteUntil = Math.max(this.incompleteUntil, this.host.now() + JOURNAL_LOSS_WINDOW_MS);
+  }
+
+  /**
+   * The journal on disk. A missing or empty file is history we can't vouch for
+   * (never written, deleted, or truncated), the same as an unreadable one: the
+   * journal then counts as incomplete. Returns null for missing/empty (nothing to
+   * merge), undefined when unreadable.
+   */
   private async readJournalFile(): Promise<JournalFile | null | undefined> {
     let text: string | null;
     try {
       text = await this.host.loadJournal();
     } catch (error) {
-      this.host.log(`journal unreadable: ${String(error)}`);
-      this.journalComplete = false;
+      this.journalLost(`unreadable: ${String(error)}`);
       return undefined;
     }
-    if (!text) return null;
+    if (!text || text.trim() === "") {
+      this.journalLost(text === null ? "no journal file" : "empty journal file");
+      return null;
+    }
     try {
       return JSON.parse(text) as JournalFile;
     } catch (error) {
-      this.host.log(`journal unreadable: ${String(error)}`);
-      this.journalComplete = false;
+      this.journalLost(`unreadable: ${String(error)}`);
       return undefined;
     }
   }
 
   private merge(file: JournalFile | null): void {
     if (!file) return;
-    if (file.incomplete) this.journalComplete = false;
+    if (typeof file.incompleteUntil === "number") this.incompleteUntil = Math.max(this.incompleteUntil, file.incompleteUntil);
+    if (file.incomplete) this.journalLost("marked incomplete by an earlier version");
     for (const id of file.seen ?? []) this.seen.add(id);
     for (const d of file.deliveries ?? []) {
       this.seen.add(d.deliveryId);
@@ -557,12 +585,12 @@ export class CommsMod {
     if (onDisk !== undefined) this.merge(onDisk);
     const deliveries = [...this.tracker.deliveries.values()].slice(-JOURNAL_KEEP);
     const seen = [...this.seen];
-    if (seen.length > SEEN_KEEP) this.journalComplete = false;
+    if (seen.length > SEEN_KEEP) this.journalLost("old delivery ids dropped");
     const file: JournalFile = {
       participant: this.options.participant,
       deliveries,
       seen: seen.slice(-SEEN_KEEP),
-      ...(this.journalComplete ? {} : { incomplete: true }),
+      ...(this.journalComplete ? {} : { incompleteUntil: this.incompleteUntil }),
     };
     try {
       await this.host.saveJournal(JSON.stringify(file));
