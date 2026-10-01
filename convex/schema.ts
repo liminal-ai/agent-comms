@@ -138,8 +138,10 @@ export default defineSchema({
     waiterId: v.id("participants"),
     messageId: v.id("messages"),
     until: v.number(),
-    /** Counts as busy waiting: false once every result is final or `until` passed. */
+    /** Counts as busy waiting: false once no result is `open`, or `until` passed. */
     active: v.boolean(),
+    /** The last `await` from the waiting CLI (or the send): answers are taken only while it's recent (WAIT_HELD_MS). */
+    lastAwaitAt: v.number(),
     /** People addressed by the request: in their inbox, never waited on. */
     inInboxIds: v.array(v.id("participants")),
     endedAt: v.optional(v.number()),

@@ -1,0 +1,20 @@
+ℹ duration_ms 11361.897081
+$ node --test --test-timeout=30000 'test/**/*.test.ts'
+▶ comms CLI against the stub
+  ✖ sends a DM request and reports the delivery (11.6605ms)
+  ✖ sends in a group, addressing some members (2.490578ms)
+  ✖ takes --as from AGENT_COMMS_PARTICIPANT and text from stdin (1.321207ms)
+  ✖ replies with inReplyTo, reads history and lists conversations (1.299018ms)
+  ✔ prints the connector's response with --json (1.280498ms)
+  ✔ shows status in plain text (0.876516ms)
+  ✖ exits 1 with the connector's error code (0.853457ms)
+  ✔ exits 2 on usage errors (0.572966ms)
+  ✔ exits 3 when no connector is listening (0.937977ms)
+  ✔ runs as a real binary, quickly (101.992368ms)
+✖ comms CLI against the stub (128.986999ms)
+▶ fix pass 3.7
+  ✖ 3.7 accepts text starting with -, and -- before text that looks like options (1.620825ms)
+✖ fix pass 3.7 (1.858174ms)
+▶ fix pass 3.1
+  ✖ 3.1 a send repeated with the same --key posts once (2.087986ms)
+✖ fix pass 3.1 (2.297685ms)

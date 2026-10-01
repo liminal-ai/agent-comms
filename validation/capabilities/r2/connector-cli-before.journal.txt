@@ -1,0 +1,7 @@
+[31m     [31m×[31m comms send waits, prints the answer, and acks it in the turn that ran it; the answer never arrives as a turn[39m[32m 113[2mms[22m[39m
+[31m     [31m×[31m --continue returns at once; a send to a person returns at once with the inbox; --json prints one object[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m exits 4 at the bound with the answer still to come, and 5 when a recipient's delivery ends without one[39m[32m 10[2mms[22m[39m
+[31m     [31m×[31m doesn't wait on an agent that is itself waiting, and says so[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m comms await reattaches, and comms status shows each recipient[39m[32m 11[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 5 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[2m | [22m[33m16 skipped[39m[90m (21)[39m

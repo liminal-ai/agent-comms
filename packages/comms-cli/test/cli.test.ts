@@ -48,6 +48,7 @@ describe("comms CLI against the stub", () => {
   it("sends a DM request and reports the delivery", async () => {
     const r = await comms(["send", "--as", "cedar", "@hazel", "please", "review", "M0"]);
     assert.equal(r.code, EXIT.ok, r.stderr);
+    assert.match(r.stderr, /^comms send: this connector can't wait for answers \(unsupported\); sent without waiting\.\n$/);
     assert.match(r.stdout, /^sent m_\d+ \(#1 in c_\d+\)\n  → @hazel: delivery d_\d+ pending\n$/);
   });
 

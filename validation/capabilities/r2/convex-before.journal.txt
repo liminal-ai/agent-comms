@@ -1,0 +1,16 @@
+[31m     [31m×[31m registers one open result per addressed agent, lists people as in their inbox, and nobody-to-wait-for without agents[39m[32m 76[2mms[22m[39m
+[31m     [31m×[31m doesn't wait on an agent that is itself busy waiting, but still sends[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m a wait past its until isn't busy waiting[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m takes the collected answer into the wait in the collecting mutation; the answer's delivery never reaches the dispatcher[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m in a group wait, the first answer closes only its own result[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m an ambiguous delivery keeps its result open, and the comms reply that completes it answers the wait[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m a failed, uncertain or retired recipient's result ends[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m an answer after the bound, or while no CLI is awaiting, goes into the thread as normal[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m refuses await and ack on a message the caller isn't waiting on[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m an ack counts while the waiter's turn that ran the CLI is still running[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m an ack is ignored if the waiter is idle, in a later turn, or its presence is stale[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m an answer not acknowledged in time falls back into the thread exactly once, marked as possibly seen[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m deactivates waits past their until and deletes them after the retention period[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m shows each recipient's delivery and answer, people's read state, and the caller's wait[39m[32m 5[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 14 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m14 failed[39m[22m[90m (14)[39m

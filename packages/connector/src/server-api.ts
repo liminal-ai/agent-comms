@@ -71,6 +71,12 @@ export interface ServerApiShape {
   readonly read: (req: Requests["read"]) => Effect.Effect<Responses["read"], ApiError>;
   readonly list: (req: Requests["list"]) => Effect.Effect<Responses["list"], ApiError>;
   readonly agents: (req: Requests["agents"]) => Effect.Effect<Responses["agents"], ApiError>;
+  /** `await`'s write: records that the CLI is still waiting, expires the wait if due, returns it. */
+  readonly awaitWait: (req: Pick<Requests["await"], "as" | "messageId">) => Effect.Effect<Responses["await"], ApiError>;
+  /** Watches a wait; returns a function that stops watching. */
+  readonly watchWait: (req: Pick<Requests["await"], "as" | "messageId">, onValue: (value: Responses["await"]) => void) => () => void;
+  readonly ack: (req: Requests["ack"]) => Effect.Effect<Responses["ack"], ApiError>;
+  readonly messageStatus: (req: Requests["message-status"]) => Effect.Effect<Responses["message-status"], ApiError>;
   readonly agentsSet: (req: Requests["agents-set"]) => Effect.Effect<Responses["agents-set"], ApiError>;
 }
 
@@ -174,6 +180,8 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
           ...(req.conversationId !== undefined ? { conversationId: req.conversationId } : {}),
           ...(req.attachments ? { attachments: req.attachments } : {}),
           ...(req.key !== undefined ? { key: req.key } : {}),
+          ...(req.wait ? { wait: true } : {}),
+          ...(req.waitMs !== undefined ? { waitMs: req.waitMs } : {}),
         }),
       ),
     reply: (req) =>
@@ -208,6 +216,25 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
           ...(req.long !== undefined ? { long: req.long } : {}),
         }),
       ),
+    awaitWait: (req) => call("await", () => transport.mutation(api.connector.awaitWait, { machine, as: req.as, messageId: req.messageId })),
+    watchWait: (req, onValue) =>
+      transport.watch(
+        api.connector.waitView,
+        { machine, as: req.as, messageId: req.messageId },
+        onValue,
+        // The held `await` ends at its bound and reads the wait again; a watch error just stops early news.
+        () => {},
+      ),
+    ack: (req) =>
+      call("ack", () =>
+        transport.mutation(api.connector.ack, {
+          machine,
+          as: req.as,
+          messageId: req.messageId,
+          ...(req.recipients !== undefined ? { recipients: req.recipients } : {}),
+        }),
+      ),
+    messageStatus: (req) => call("message-status", () => transport.query(api.connector.messageStatus, { machine, as: req.as, messageId: req.messageId })),
     agentsSet: (req) =>
       call("agents-set", () =>
         transport.mutation(api.connector.agentsSet, {

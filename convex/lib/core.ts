@@ -200,6 +200,7 @@ export async function fullDelivery(ctx: QueryCtx, d: Doc<"deliveries">): Promise
       ...(d.turnId !== undefined ? { turnId: d.turnId } : {}),
       ...(d.cursor !== undefined ? { cursor: d.cursor } : {}),
     },
+    ...(d.fallback ? { fallback: true } : {}),
   };
 }
 

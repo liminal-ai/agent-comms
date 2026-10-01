@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { fail, participantByName, ref, requireAdmin, sha256Hex } from "./lib/core";
 import { profilePatch } from "./lib/registry";
+import { endResult } from "./lib/waits";
 import { home, promotableKind } from "./validators";
 
 /** Create or rotate a machine's connector credential. Only the hash is stored. */
@@ -101,7 +102,10 @@ export const setState = mutation({
         .query("deliveries")
         .withIndex("by_recipient_state", (q) => q.eq("recipientId", p._id).eq("state", "pending"))
         .collect();
-      for (const d of pending) await ctx.db.patch(d._id, { state: "failed", at: Date.now(), detail: "recipient retired" });
+      for (const d of pending) {
+        await ctx.db.patch(d._id, { state: "failed", at: Date.now(), detail: "recipient retired" });
+        await endResult(ctx, d._id, Date.now());
+      }
     }
     return { participant: ref(p), state: args.state };
   },

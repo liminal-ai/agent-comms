@@ -1,7 +1,7 @@
 // Wiring: one connector per machine. The server API, the Claude Code sessions,
 // the loopback server and the dispatcher, for as long as the scope lives.
 
-import { PROTOCOL_VERSION } from "@agent-comms/protocol";
+import { MAX_POLL_WAIT_MS, PROTOCOL_VERSION, type Requests, type Responses } from "@agent-comms/protocol";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
@@ -60,6 +60,57 @@ export const runConnector = (options: ConnectorOptions) =>
       poke,
     });
 
+    const lastPresence = new Map<string, string>();
+    /**
+     * Writes a participant's presence now, for harnesses the connector can read (T3);
+     * the poll below runs every 20 s, too coarse for the ack rule. Claude Code
+     * sessions report their own presence as it changes. Best effort.
+     */
+    const refreshPresence = async (name: string): Promise<void> => {
+      try {
+        const { participants } = await run(api.homed);
+        const p = participants.find((x) => x.participant.name === name);
+        const adapter = p && options.adapters?.find((a) => a.harness === p.home.harness);
+        if (!p || !adapter?.presence) return;
+        const status = await Effect.runPromise(adapter.presence({ participant: name, locator: p.home.locator }));
+        await run(api.presence(name, status));
+        lastPresence.set(name, status);
+      } catch (error) {
+        log(`presence for @${name}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+
+    /**
+     * `await`: answered at once if no result is open; otherwise held until one
+     * leaves `open`, the wait's `until`, the requested hold (≤ 25 s), or the
+     * client goes away; then the wait is read (and expired if due) again.
+     */
+    const holdAwait = async (req: Requests["await"], aborted: AbortSignal): Promise<Responses["await"]> => {
+      const first = await run(api.awaitWait(req));
+      const openAt = first.wait.results.filter((r) => r.state === "open").length;
+      if (openAt === 0 || !first.wait.active) return first;
+      const holdMs = Math.min(req.waitMs ?? MAX_POLL_WAIT_MS, MAX_POLL_WAIT_MS, Math.max(0, first.wait.until - Date.now()) + 250);
+      await new Promise<void>((resolve) => {
+        let stop: (() => void) | undefined;
+        let finished = false;
+        const done = () => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          stop?.();
+          aborted.removeEventListener("abort", done);
+          resolve();
+        };
+        const timer = setTimeout(done, holdMs);
+        aborted.addEventListener("abort", done);
+        stop = api.watchWait(req, ({ wait }) => {
+          if (!wait.active || wait.results.filter((r) => r.state === "open").length < openAt) done();
+        });
+        if (finished) stop();
+      });
+      return run(api.awaitWait(req));
+    };
+
     const handlers: Handlers = {
       status: async () => ({
         protocol: PROTOCOL_VERSION,
@@ -74,17 +125,20 @@ export const runConnector = (options: ConnectorOptions) =>
       outcome: (req) => sessions.outcome(req),
       "check-result": (req) => sessions.checkResult(req),
       presence: (req) => sessions.presence(req),
-      send: (req) => {
-        // Never send a waiting send unwaited: the caller would read silence as no answer.
-        if (req.wait) throw notYet("send --wait");
+      send: async (req) => {
+        // The ack rule compares the waiter's busySince with the wait's start: make it current first.
+        if (req.wait) await refreshPresence(req.as);
         return run(api.send(req));
       },
       reply: (req) => run(api.reply(req)),
       read: (req) => run(api.read(req)),
       list: (req) => run(api.list(req)),
-      await: () => Promise.reject(notYet("await")),
-      ack: () => Promise.reject(notYet("ack")),
-      "message-status": () => Promise.reject(notYet("message-status")),
+      await: (req, aborted) => holdAwait(req, aborted),
+      ack: async (req) => {
+        await refreshPresence(req.as);
+        return run(api.ack(req));
+      },
+      "message-status": (req) => run(api.messageStatus(req)),
       agents: (req) => run(api.agents(req)),
       "agents-set": (req) => run(api.agentsSet(req)),
       remind: () => Promise.reject(notYet("remind")),
@@ -122,7 +176,6 @@ export const runConnector = (options: ConnectorOptions) =>
     );
 
     // Presence for harnesses the connector can read (T3): polled, written only on change.
-    const lastPresence = new Map<string, string>();
     yield* api.homed.pipe(
       Effect.flatMap(({ participants }) =>
         Effect.forEach(

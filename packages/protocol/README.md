@@ -164,10 +164,12 @@ Participant `kind` gains `system`. `reminders` and `alerts` are created at deplo
 | From | To | When |
 |---|---|---|
 | `open` | `answered` | the recipient's answer (collected, or a `comms reply` completing the delivery) is returned to the wait; its message is stored on the result |
-| `open` | `expired` | the wait's bound passed first; a later answer goes into the thread as normal |
+| `open` | `expired` | the wait's `until` passed first, or the answer came while no CLI was awaiting (no `await` for `WAIT_HELD_MS`, 60 s): the answer goes into the thread as normal |
 | `open` | `ended` | the delivery ended `failed` or `uncertain`, or the recipient was retired: no answer is coming. *Not in the brief's list;* it's what "failed or uncertain: the wait ends for that recipient" needs as a state |
 | `answered` | `acknowledged` | the CLI printed it and called `ack` **while the waiter's turn that ran the CLI is still running**: the waiter is `busy`, its presence isn't stale, and its `busySince` is no later than the wait's creation. Otherwise the ack is ignored and the result stays `answered` (printed isn't seen: Claude Code moves a command past its timeout to the background, and a Codex agent that stops polling never reads the output; Hazel's H0) |
 | `answered` | `fell-back` | not acknowledged within `ACK_WINDOW_MS` (2 min): delivered **once** into the requester's thread, as a delivery with `fallback: true` that renders "may already have been returned to your waiting `comms send`" |
+
+**Where an answer is taken (R2).** In the same Convex mutation that collects it (or that completes an `ambiguous` delivery with `comms reply`): if the wait holds an open result for that delivery and its CLI is awaiting, the result goes `open` → `answered` and the answer's delivery to the waiter is created and finished (`delivered`, detail "returned to the waiting send") in that one transaction. It's never pending, never claimed, never seen by the dispatcher, so the waiter's busy state and serial order don't matter. A connector restart loses nothing: the CLI keeps calling `await`, which reads the stored results. Before a waiting send and an `ack`, the connector refreshes the waiter's presence from T3 (its poll is every 20 s), so `busySince` is current. A minute cron (`waits.sweep`) does the fallbacks, expires waits past `until`, and deletes ended ones after the retention period.
 
 `ambiguous` keeps a result `open` (the agent will finish it with `comms reply`). An `ack` and the fallback race on the same compare-and-set, so a result ends `acknowledged` or `fell-back`, and the fallback is sent at most once. `await` reads answers from the stored results, so a restarted connector serves them. A wait stops counting as busy waiting once no result is `open` (answered ones included) or at `until`; it and its results are kept `WAIT_RETENTION_MS` (7 days) after that for `await` and `comms status`. A waiting send to an agent that is itself in an active wait doesn't wait (`noWait.reason: "busy-waiting"`, naming them); with no agent to wait for it's `"nobody-to-wait-for"`.
 
@@ -188,7 +190,7 @@ Participant `kind` gains `system`. `reminders` and `alerts` are created at deplo
 
 With `--json` each command prints exactly one JSON object on stdout, the connector's response (`{"ok": true, ...}`):
 
-- `comms send` (waiting, the default from R2): the `send` result with `wait` replaced by the wait as it stood when the CLI stopped (after its last `await` and `ack`). With `--continue`, the `send` result as today.
+- `comms send` (waiting, the default from R2): the `send` result with `wait` replaced by the wait as it stood when the CLI stopped; answers are acknowledged after the object is printed. With `--continue`, the `send` result as before. A connector that answers a waiting send `unsupported` (older, or the stub) gets it again without waiting, and the CLI says so on stderr.
 - `comms await <message-id> [--wait <duration>]`: reattach to a wait (after exit 4, or from another shell); prints the final `await` result.
 - `comms status <message-id>`: the `message-status` result. `comms status` with no id is unchanged.
 

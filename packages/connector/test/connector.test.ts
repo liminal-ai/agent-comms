@@ -1,3 +1,4 @@
+import { EXIT, run as comms } from "@agent-comms/comms-cli";
 import { call } from "@agent-comms/comms-cli/client";
 import { parseDeliveryHeader, renderDelivery } from "@agent-comms/protocol";
 import { afterEach, describe, expect, it } from "vitest";
@@ -270,18 +271,14 @@ describe("fix pass 3.1", () => {
 });
 
 describe("capabilities R0", () => {
-  it("answers the capabilities operations unsupported (501) until they're built; a waiting send isn't sent unwaited", async () => {
+  it("answers the capabilities operations unsupported (501) until they're built", async () => {
     const w = await world();
     await start(w.api, w.socket);
     const cases: [string, unknown][] = [
-      ["await", { as: "a", messageId: "m_1" }],
-      ["ack", { as: "a", messageId: "m_1" }],
-      ["message-status", { as: "a", messageId: "m_1" }],
       ["remind", { as: "a", target: "b", text: "x", everyMs: 60_000 }],
       ["reminders", { as: "a" }],
       ["reminder", { as: "a", id: "r_1" }],
       ["reminder-update", { as: "a", id: "r_1", action: "pause" }],
-      ["send", { as: "a", to: ["b"], text: "x", wait: true }],
     ];
     for (const [name, body] of cases) {
       const r = await call(w.socket, name as never, body as never);
@@ -304,5 +301,116 @@ describe("capabilities R1", () => {
     expect(one.ok && one.agents[0]!.home).toEqual({ machine: "box", harness: "t3", locator: "thread-1" });
     const other = await call(w.socket, "agents-set", { as: "a", name: "b", description: "x" });
     expect(!other.ok && other.error.code).toBe("conflict");
+  });
+});
+
+describe("capabilities R2: send-and-wait through the connector and the CLI", () => {
+  async function cli(socket: string, args: string[]) {
+    let stdout = "";
+    let stderr = "";
+    const code = await comms(["--socket", socket, ...args], {
+      env: {},
+      stdout: (t) => (stdout += t),
+      stderr: (t) => (stderr += t),
+      readStdin: async () => "",
+    });
+    return { code, stdout, stderr };
+  }
+  const presenceIs = (w: Awaited<ReturnType<typeof world>>, name: string, status: string) =>
+    until(`@${name} ${status}`, async () => {
+      const { participants } = await w.t.query(api.directory.list, { adminToken: ADMIN });
+      return participants.find((p) => p.name === name)?.presence.status === status;
+    });
+
+  /** b's mod answers its next delivery with `text`. */
+  async function answers(b: Mod, text: string) {
+    const d = await b.nextDelivery();
+    await b.ok("delivered", { deliveryId: d.id, turnId: `t-${d.id}` } as never);
+    await b.ok("outcome", { deliveryId: d.id, turnId: `t-${d.id}`, outcome: "replied", answer: text } as never);
+    return d;
+  }
+
+  it("comms send waits, prints the answer, and acks it in the turn that ran it; the answer never arrives as a turn", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const a = new Mod(w.socket, "a");
+    const b = new Mod(w.socket, "b");
+    await a.register();
+    await b.register();
+    await a.ok("presence", { status: "busy" } as never);
+    await presenceIs(w, "a", "busy");
+
+    const [r] = await Promise.all([cli(w.socket, ["send", "--as", "a", "@b", "what's", "2+2?"]), answers(b, "4")]);
+    expect(r.code, r.stderr).toBe(EXIT.ok);
+    expect(r.stdout).toMatch(/^sent \S+ \(#1 in \S+\), waiting up to 100s for @b$/m);
+    expect(r.stdout).toMatch(/^@b answered \(\S+\):\n  4$/m);
+    const id = /^sent (\S+)/m.exec(r.stdout)![1]!;
+    const status = await call(w.socket, "message-status", { as: "a", messageId: id });
+    expect(status.ok && status.wait?.results[0]!.state).toBe("acknowledged");
+    expect(status.ok && status.recipients[0]!.answer?.text).toBe("4");
+    expect(await a.poll(300)).toEqual([]);
+  });
+
+  it("--continue returns at once; a send to a person returns at once with the inbox; --json prints one object", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const go = await cli(w.socket, ["send", "--as", "a", "--continue", "@b", "fire and forget"]);
+    expect(go.code).toBe(EXIT.ok);
+    expect(go.stdout).toMatch(/→ @b: delivery \S+ pending/);
+    const person = await cli(w.socket, ["send", "--as", "a", "@owner", "a decision please"]);
+    expect(person.code).toBe(EXIT.ok);
+    expect(person.stdout).toMatch(/→ @lee: in their inbox/);
+    const json = await cli(w.socket, ["send", "--as", "a", "--json", "@owner", "again"]);
+    expect(JSON.parse(json.stdout)).toMatchObject({ ok: true, noWait: { reason: "nobody-to-wait-for" } });
+  });
+
+  it("exits 4 at the bound with the answer still to come, and 5 when a recipient's delivery ends without one", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const b = new Mod(w.socket, "b");
+    await b.register();
+    const pending = await cli(w.socket, ["send", "--as", "a", "--wait", "2s", "@b", "slow one"]);
+    expect(pending.code).toBe(EXIT.pending);
+    expect(pending.stdout).toMatch(/^no answer from @b within 2s; it will arrive in your thread\. Check with `comms status \S+ --as a`\.$/m);
+
+    const d = await b.nextDelivery();
+    await b.ok("delivered", { deliveryId: d.id, turnId: "t1" } as never);
+    await b.ok("outcome", { deliveryId: d.id, turnId: "t1", outcome: "replied", answer: "late" } as never);
+    const [ended] = await Promise.all([
+      cli(w.socket, ["send", "--as", "a", "@b", "this one fails"]),
+      (async () => {
+        const d2 = await b.nextDelivery();
+        await b.ok("delivered", { deliveryId: d2.id, turnId: "t2" } as never);
+        await b.ok("outcome", { deliveryId: d2.id, turnId: "t2", outcome: "failed", reason: "error", detail: "boom" } as never);
+      })(),
+    ]);
+    expect(ended.code).toBe(EXIT.endedWithoutAnswer);
+    expect(ended.stdout).toMatch(/^@b: no answer \(delivery failed: error: boom\)$/m);
+  });
+
+  it("doesn't wait on an agent that is itself waiting, and says so", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const first = call(w.socket, "send", { as: "b", to: ["tee"], text: "b waits on tee", wait: true });
+    expect((await first).ok).toBe(true);
+    const r = await cli(w.socket, ["send", "--as", "a", "@b", "are you free?"]);
+    expect(r.code).toBe(EXIT.ok);
+    expect(r.stdout).toMatch(/@b is waiting on another request, so this send didn't wait\. Your message is queued; check with `comms status \S+ --as a`\./);
+  });
+
+  it("comms await reattaches, and comms status shows each recipient", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const b = new Mod(w.socket, "b");
+    await b.register();
+    const sent = await call(w.socket, "send", { as: "a", to: ["b"], text: "reattach", wait: true, waitMs: 60_000 });
+    if (!sent.ok) throw new Error(sent.error.message);
+    const [r] = await Promise.all([cli(w.socket, ["await", "--as", "a", sent.message.id]), answers(b, "here")]);
+    expect(r.code, r.stderr).toBe(EXIT.ok);
+    expect(r.stdout).toMatch(/^@b answered \(\S+\):\n  here$/m);
+    const s = await cli(w.socket, ["status", "--as", "a", sent.message.id]);
+    expect(s.code).toBe(EXIT.ok);
+    expect(s.stdout).toMatch(/^@b: replied · answered: here$/m);
+    expect(s.stdout).toMatch(/^wait: answered 1 of 1/m);
   });
 });

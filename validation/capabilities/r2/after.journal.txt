@@ -1,0 +1,7 @@
+ [32m✓[39m [30m[42m convex [49m[39m convex/waits.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 309[2mms[22m[39m
+[2m      Tests [22m [1m[32m14 passed[39m[22m[90m (14)[39m
+ [32m✓[39m [30m[45m connector [49m[39m packages/connector/test/connector.test.ts [2m([22m[2m19 tests[22m[2m | [22m[33m14 skipped[39m[2m)[22m[33m 2626[2mms[22m[39m
+   [32m✓[39m capabilities R2: send-and-wait through the connector and the CLI [2m(5)[22m
+     [33m[2m✓[22m[39m comms send waits, prints the answer, and acks it in the turn that ran it; the answer never arrives as a turn[33m 444[2mms[22m[39m
+     [33m[2m✓[22m[39m exits 4 at the bound with the answer still to come, and 5 when a recipient's delivery ends without one[33m 2085[2mms[22m[39m
+[2m      Tests [22m [1m[32m5 passed[39m[22m[2m | [22m[33m16 skipped[39m[90m (21)[39m

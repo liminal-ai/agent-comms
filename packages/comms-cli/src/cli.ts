@@ -6,11 +6,17 @@ import { parseArgs } from "node:util";
 import {
   CLI_EXIT,
   type ConversationSummary,
+  DEFAULT_WAIT_MS,
   formatDuration,
+  MAX_POLL_WAIT_MS,
+  MAX_WAIT_MS,
   type MessageEnvelope,
+  type MessageStatus,
+  parseDuration,
   type Op,
   PARTICIPANT_ENV,
   type RegistryEntry,
+  type Wait,
   type Requests,
   type Responses,
   type SendResult,
@@ -21,8 +27,11 @@ import { call, ConnectorUnreachable, resolveSocketPath } from "./client.ts";
 export const EXIT = CLI_EXIT;
 
 export const USAGE = `usage:
-  comms send  --as <me> @name "text"                         request to one participant (their DM)
-  comms send  --as <me> --conversation <id> [@name…] "text"  request in a conversation; only @named members are woken
+  comms send  --as <me> @name "text"                         ask one participant (their DM) and wait for the answer
+  comms send  --as <me> --conversation <id> [@name…] "text"  ask in a conversation; only @named members are woken
+      --wait <duration>  how long to wait (default ${formatDuration(DEFAULT_WAIT_MS)}, at most ${formatDuration(MAX_WAIT_MS)}); --continue: don't wait
+  comms await --as <me> <message-id>                         go back to waiting on a send (after exit 4, or from another shell)
+  comms status --as <me> <message-id>                        each recipient's delivery and answer
   comms reply --as <me> <message-id> "text"                  answer a message (sets inReplyTo)
   comms read  --as <me> <conversation-id> [--before <seq>] [--limit <n>]
   comms list  --as <me>                                      my conversations
@@ -30,6 +39,16 @@ export const USAGE = `usage:
   comms agents set --as <me> @me [--description "…"] [--duty "…"]…   set your registry entry
                                                              ("" clears the description; any --duty replaces the list)
   comms status                                               the connector and who is homed here
+
+  Waiting: answers are printed as they arrive. Short asks: the default. People never
+  answer like agents: a send to a person returns at once (it's in their inbox).
+  - Claude Code: the Bash tool stops waiting after 120 s by default and moves the command
+    to the background. For --wait over 100s, raise the Bash timeout above it (at most 600 s
+    in the foreground). For long asks use --continue, or run comms send in the background.
+  - Codex: a command has no time limit but hands back control after 10 s. Keep polling
+    the shell session until comms exits, or the answer is printed where nobody reads it.
+  An answer printed after your turn ended isn't counted as seen: it's delivered into your
+  thread too, marked as possibly already shown.
 
   @owner addresses your owner (the person who owns you); @reminders and @alerts can't be addressed.
   --as defaults to $${PARTICIPANT_ENV}. It names you; the connector accepts any
@@ -41,7 +60,9 @@ export const USAGE = `usage:
   answers unavailable, comms retries with the same key, then prints it; rerunning with
   that --key can't post twice.
 
-exit codes: 0 ok, 1 the connector refused, 2 usage, 3 connector unreachable`;
+exit codes: 0 ok (every awaited answer arrived), 1 the connector refused, 2 usage,
+  3 connector unreachable, 4 the wait ended with answers still to come (they'll arrive in
+  your thread), 5 a recipient's delivery ended without an answer (failed, uncertain, retired)`;
 
 export interface Io {
   env: Record<string, string | undefined>;
@@ -59,6 +80,8 @@ const OPTIONS = {
   limit: { type: "string" },
   key: { type: "string" },
   json: { type: "boolean" },
+  wait: { type: "string" },
+  continue: { type: "boolean" },
   long: { type: "boolean" },
   description: { type: "string" },
   duty: { type: "string", multiple: true },
@@ -117,7 +140,11 @@ export async function run(argv: string[], io: Io): Promise<number> {
       if (!me) throw new UsageError(`say who you are with --as <name> (or set ${PARTICIPANT_ENV})`);
       return me;
     };
-    const request = async <K extends Op>(op: K, body: Requests[K]): Promise<Responses[K] | null> => {
+    const request = async <K extends Op>(
+      op: K,
+      body: Requests[K],
+      options: { print?: boolean; onUnsupported?: () => void } = {},
+    ): Promise<Responses[K] | null> => {
       let response = await call(socket, op, body);
       // A send or reply carries an idempotency key, so retrying after `unavailable` can't post twice (3.1).
       const keyed = (body as { key?: string }).key;
@@ -130,11 +157,15 @@ export async function run(argv: string[], io: Io): Promise<number> {
         io.stderr(`comms ${command}: unavailable: ${response.error.message}\nIt may or may not have been posted. Retry with the same key, which can't post twice: --key ${keyed}\n`);
         return null;
       }
+      if (!response.ok && response.error.code === "unsupported" && options.onUnsupported) {
+        options.onUnsupported();
+        return null;
+      }
       if (!response.ok) {
         io.stderr(`comms ${command}: ${response.error.code}: ${response.error.message}\n`);
         return null;
       }
-      if (values.json) io.stdout(JSON.stringify(response, null, 2) + "\n");
+      if (values.json && options.print !== false) io.stdout(JSON.stringify(response, null, 2) + "\n");
       return response;
     };
     const text = async (words: string[]) => {
@@ -142,6 +173,68 @@ export async function run(argv: string[], io: Io): Promise<number> {
       const joined = words.join(" ");
       if (!joined.trim()) throw new UsageError("no message text");
       return joined;
+    };
+
+    /**
+     * Calls `await` until no result is open, printing each answer as it arrives and
+     * acknowledging what was printed. Retries while the connector is restarting.
+     */
+    const awaitAnswers = async (me: string, initial: Wait): Promise<Wait> => {
+      let wait = initial;
+      const printed = new Set<string>();
+      const graceUntil = () => wait.until + 30_000;
+      const show = async () => {
+        const fresh = wait.results.filter((x) => x.answer && !printed.has(x.recipient.name) && (x.state === "answered" || x.state === "acknowledged" || x.state === "fell-back"));
+        if (fresh.length === 0) return;
+        for (const x of fresh) {
+          printed.add(x.recipient.name);
+          if (!values.json) io.stdout(`@${x.recipient.name} answered (${x.answer!.id}):\n${x.answer!.text.split("\n").map((l) => `  ${l}`).join("\n")}\n`);
+        }
+        if (values.json) return;
+        const acked = await call(socket, "ack", { as: me, messageId: wait.messageId, recipients: fresh.map((x) => x.recipient.name) }).catch(() => null);
+        if (acked?.ok) wait = acked.wait;
+      };
+      await show();
+      while (wait.results.some((x) => x.state === "open") && Date.now() < graceUntil()) {
+        let response;
+        try {
+          response = await call(socket, "await", { as: me, messageId: wait.messageId, waitMs: MAX_POLL_WAIT_MS });
+        } catch (error) {
+          if (!(error instanceof ConnectorUnreachable)) throw error;
+          await new Promise((r) => setTimeout(r, 1_000));
+          continue;
+        }
+        if (!response.ok) {
+          if (response.error.code !== "unavailable") {
+            io.stderr(`comms await: ${response.error.code}: ${response.error.message}\n`);
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 1_000));
+          continue;
+        }
+        wait = response.wait;
+        await show();
+      }
+      return wait;
+    };
+
+    /** With --json the answers are printed in the one object at the end; acknowledge them after printing. */
+    const ackPrinted = async (me: string, wait: Wait): Promise<void> => {
+      if (wait.results.some((x) => x.state === "answered")) await call(socket, "ack", { as: me, messageId: wait.messageId }).catch(() => null);
+    };
+
+    /** Reports what didn't come back, and picks the exit code. */
+    const finish = (me: string, wait: Wait, waitMs: number): number => {
+      const waiting = wait.results.filter((x) => x.state === "open" || x.state === "expired");
+      const ended = wait.results.filter((x) => x.state === "ended");
+      if (!values.json) {
+        for (const x of ended) io.stdout(`@${x.recipient.name}: no answer (delivery ${x.delivery.state}${x.delivery.detail ? `: ${x.delivery.detail}` : ""})\n`);
+        if (waiting.length > 0) {
+          const who = waiting.map((x) => `@${x.recipient.name}`).join(", ");
+          io.stdout(`no answer from ${who} within ${formatDuration(waitMs)}; it will arrive in your thread. Check with \`comms status ${wait.messageId} --as ${me}\`.\n`);
+        }
+      }
+      return waiting.length > 0 ? EXIT.pending : ended.length > 0 ? EXIT.endedWithoutAnswer : EXIT.ok;
     };
 
     switch (command) {
@@ -152,17 +245,58 @@ export async function run(argv: string[], io: Io): Promise<number> {
         if (!values.conversation && to.length !== 1) {
           throw new UsageError("address exactly one @name, or give --conversation <id>");
         }
+        if (values.continue && values.wait) throw new UsageError("--continue and --wait don't go together");
+        const waitMs = values.wait === undefined ? DEFAULT_WAIT_MS : parseDuration(values.wait);
+        if (waitMs === null || waitMs < 1_000 || waitMs > MAX_WAIT_MS) {
+          throw new UsageError(`--wait takes a duration like 90s, 9m or 1h, from 1s to ${formatDuration(MAX_WAIT_MS)}`);
+        }
+        const me = as();
         const body: Requests["send"] = {
-          as: as(),
+          as: me,
           to,
           key: values.key ?? randomUUID(),
           text: await text(rest.slice(i)),
           ...(values.conversation ? { conversationId: values.conversation } : {}),
+          ...(values.continue ? {} : { wait: true, waitMs }),
         };
-        const r = await request("send", body);
+        let unsupported = false;
+        let r = await request("send", body, { print: !body.wait, onUnsupported: () => (unsupported = true) });
+        if (unsupported) {
+          // A connector that can't wait yet (an older one, or the stub) refuses before posting: send unwaited.
+          const { wait: _wait, waitMs: _waitMs, ...unwaited } = body;
+          r = await request("send", unwaited);
+          if (!r) return EXIT.refused;
+          io.stderr("comms send: this connector can't wait for answers (unsupported); sent without waiting.\n");
+          if (!values.json) io.stdout(describeSend("sent", r));
+          return EXIT.ok;
+        }
         if (!r) return EXIT.refused;
-        if (!values.json) io.stdout(describeSend("sent", r));
-        return EXIT.ok;
+        if (values.continue) {
+          if (!values.json) io.stdout(describeSend("sent", r));
+          return EXIT.ok;
+        }
+        if (!r.wait) {
+          if (values.json) io.stdout(JSON.stringify({ ok: true, ...r }, null, 2) + "\n");
+          else {
+            io.stdout(describeSend("sent", r));
+            if (r.noWait?.reason === "busy-waiting") {
+              const who = (r.noWait.busy ?? []).map((n) => `@${n}`).join(", ");
+              io.stdout(`${who} ${r.noWait.busy?.length === 1 ? "is" : "are"} waiting on another request, so this send didn't wait. Your message is queued; check with \`comms status ${r.message.id} --as ${me}\`.\n`);
+            }
+          }
+          return EXIT.ok;
+        }
+        const m = r.message;
+        if (!values.json) {
+          io.stdout(`sent ${m.id} (#${m.seq} in ${m.conversationId}), waiting up to ${formatDuration(waitMs)} for ${r.wait.results.map((x) => `@${x.recipient.name}`).join(", ")}\n`);
+          for (const p of r.wait.inInbox) io.stdout(`  → @${p.name}: in their inbox (people read in the web view)\n`);
+        }
+        const wait = await awaitAnswers(me, r.wait);
+        if (values.json) {
+          io.stdout(JSON.stringify({ ok: true, ...r, wait }, null, 2) + "\n");
+          await ackPrinted(me, wait);
+        }
+        return finish(me, wait, waitMs);
       }
       case "reply": {
         const [messageId, ...words] = rest;
@@ -197,6 +331,19 @@ export async function run(argv: string[], io: Io): Promise<number> {
         if (!values.json) io.stdout(describeList(me, r.conversations));
         return EXIT.ok;
       }
+      case "await": {
+        const [messageId, extra] = rest;
+        if (!messageId || extra) throw new UsageError("comms await needs exactly one message id");
+        const me = as();
+        const first = await request("await", { as: me, messageId, waitMs: 0 }, { print: false });
+        if (!first) return EXIT.refused;
+        const wait = await awaitAnswers(me, first.wait);
+        if (values.json) {
+          io.stdout(JSON.stringify({ ok: true, wait }, null, 2) + "\n");
+          await ackPrinted(me, wait);
+        }
+        return finish(me, wait, Math.max(0, wait.until - wait.createdAt));
+      }
       case "agents": {
         if (rest[0] === "set") {
           const [, target, extra] = rest;
@@ -224,6 +371,13 @@ export async function run(argv: string[], io: Io): Promise<number> {
         return EXIT.ok;
       }
       case "status": {
+        if (rest.length > 1) throw new UsageError("comms status takes at most one message id");
+        if (rest[0]) {
+          const s = await request("message-status", { as: as(), messageId: rest[0] });
+          if (!s) return EXIT.refused;
+          if (!values.json) io.stdout(describeStatus(s));
+          return EXIT.ok;
+        }
         const r = await request("status", {});
         if (!r) return EXIT.refused;
         if (!values.json) {
@@ -248,6 +402,22 @@ export async function run(argv: string[], io: Io): Promise<number> {
     }
     throw error;
   }
+}
+
+function describeStatus(s: MessageStatus): string {
+  const m = s.message;
+  const lines = [`${m.id} (#${m.seq} in ${s.conversation.id}) from @${m.sender.name}: ${m.text.split("\n")[0]!.slice(0, 120)}`];
+  for (const r of s.recipients) {
+    const state = r.delivery ? r.delivery.state : r.inbox ? (r.inbox.readAt ? "read" : "unread, in their inbox") : "not delivered";
+    const answer = r.answer ? ` · answered: ${r.answer.text.split("\n")[0]!.slice(0, 200)}` : "";
+    const more = r.followUps.length > 0 ? ` (+${r.followUps.length} follow-up${r.followUps.length === 1 ? "" : "s"})` : "";
+    lines.push(`@${r.participant.name}: ${state}${r.delivery?.detail ? ` (${r.delivery.detail})` : ""}${answer}${more}`);
+  }
+  if (s.wait) {
+    const answered = s.wait.results.filter((x) => x.state !== "open" && x.state !== "expired" && x.state !== "ended").length;
+    lines.push(`wait: answered ${answered} of ${s.wait.results.length}, ${s.wait.active ? `until ${new Date(s.wait.until).toISOString().slice(11, 19)} UTC` : "ended"}`);
+  }
+  return lines.join("\n") + "\n";
 }
 
 /** One registry line; with `full`, the owner, duties and home below it. */

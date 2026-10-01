@@ -87,13 +87,20 @@ export const DEFAULT_WAIT_MS = 100_000;
 export const MAX_WAIT_MS = 60 * 60_000;
 /** An answered result not acknowledged within this long gets its one fallback into the requester's thread. */
 export const ACK_WINDOW_MS = 2 * 60_000;
+/**
+ * A wait is held while its CLI keeps calling `await` (each call holds ≤ 25 s). An
+ * answer arriving when no `await` came for this long goes into the thread as
+ * normal, and its result is `expired`: nobody is there to print it.
+ */
+export const WAIT_HELD_MS = 60_000;
 /** How long a wait and its results are kept (for `await` and `comms status`) after the wait ends. */
 export const WAIT_RETENTION_MS = 7 * 24 * 60 * 60_000;
 
 /**
  * One addressed agent's result in a wait. Every transition is a compare-and-set:
  * - `open` → `answered` (the answer was returned to the wait; its message is stored)
- * - `open` → `expired` (the wait's bound or `until` passed first; a later answer goes to the thread)
+ * - `open` → `expired` (the wait's `until` passed first, or the answer came while no CLI was
+ *   awaiting (WAIT_HELD_MS); the answer goes to the thread as normal)
  * - `open` → `ended` (the delivery ended `failed` or `uncertain`, or the agent was retired: no answer is coming)
  * - `answered` → `acknowledged` (the CLI printed it and said so, while the waiter's turn that ran
  *   the CLI is still running: the waiter is `busy`, not stale, and `busySince` is no later than the

@@ -7,13 +7,14 @@
 // over only through `claim`, which says `takeover: true` so the new holder
 // checks the harness before running anything.
 
-import { clipAnswer, DEFAULT_READ_LIMIT, OWNER_ALIAS, type Responses } from "@agent-comms/protocol";
+import { clipAnswer, DEFAULT_READ_LIMIT, DEFAULT_WAIT_MS, MAX_WAIT_MS, OWNER_ALIAS, type Responses } from "@agent-comms/protocol";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query, type QueryCtx } from "./_generated/server";
 import {
   actingAs,
   advanceRead,
+  conversationRef,
   envelope,
   fail,
   fullDelivery,
@@ -26,6 +27,7 @@ import {
   summary,
 } from "./lib/core";
 import { machineSeen, nextPresence, profilePatch, registryEntry } from "./lib/registry";
+import { acknowledge, endResult, registerWait, requireWait, takeAnswer, touch, waitOn, waitShape } from "./lib/waits";
 import { openDm, post, replayed } from "./lib/post";
 import { attachment, enteredInput, failureReason, machineAuth, via } from "./validators";
 
@@ -310,6 +312,7 @@ export const collect = mutation({
       answerMessageId: result.message.id as Id<"messages">,
       claim: undefined,
     });
+    await takeAnswer(ctx, d, result.message.id as Id<"messages">, Date.now());
     return { delivery: await stateRef(ctx, (await ctx.db.get(d._id))!), answerMessageId: result.message.id, duplicate: false };
   },
 });
@@ -377,6 +380,7 @@ export const ambiguous = mutation({
       .first();
     if (d.state === "ambiguous" && earlier) {
       await ctx.db.patch(d._id, { state: "replied", at: Date.now(), detail: `${d.detail}; completed by comms reply ${earlier._id}, sent during the turn` });
+      await takeAnswer(ctx, d, earlier._id, Date.now());
       return { delivery: await stateRef(ctx, (await ctx.db.get(d._id))!) };
     }
     return result;
@@ -392,13 +396,21 @@ export const failed = mutation({
     reason: failureReason,
     detail: v.optional(v.string()),
   },
-  handler: async (ctx, args) => finish(ctx, args, "failed", args.detail ? `${args.reason}: ${args.detail}` : args.reason),
+  handler: async (ctx, args) => {
+    const result = await finish(ctx, args, "failed", args.detail ? `${args.reason}: ${args.detail}` : args.reason);
+    await endResult(ctx, result.delivery.id as Id<"deliveries">, Date.now());
+    return result;
+  },
 });
 
 /** After a restart or takeover the harness couldn't say whether it ran. Never re-run; Lee sees it. */
 export const uncertain = mutation({
   args: { machine: machineAuth, deliveryId: v.string(), claimId: v.string(), detail: v.string() },
-  handler: async (ctx, args) => finish(ctx, args, "uncertain", args.detail),
+  handler: async (ctx, args) => {
+    const result = await finish(ctx, args, "uncertain", args.detail);
+    await endResult(ctx, result.delivery.id as Id<"deliveries">, Date.now());
+    return result;
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -414,12 +426,22 @@ export const send = mutation({
     attachments: v.optional(v.array(attachment)),
     via: v.optional(via),
     key: v.optional(v.string()),
+    /** Register a wait on the addressed agents' answers (send-and-wait). */
+    wait: v.optional(v.boolean()),
+    waitMs: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<Responses["send"]> => {
     const machine = await requireMachine(ctx, args.machine);
     const sender = await actingAs(ctx, machine, args.as);
     const earlier = await replayed(ctx, sender, args.key);
-    if (earlier) return earlier;
+    if (earlier) {
+      const wait = args.wait ? await waitOn(ctx, sender, earlier.message.id as Id<"messages">) : null;
+      return wait ? { ...earlier, wait: await waitShape(ctx, wait) } : earlier;
+    }
+    const waitMs = args.waitMs ?? DEFAULT_WAIT_MS;
+    if (args.wait && (!Number.isInteger(waitMs) || waitMs < 1_000 || waitMs > MAX_WAIT_MS)) {
+      fail("bad_request", `the wait is between 1 s and ${MAX_WAIT_MS / 60_000} minutes`);
+    }
     const recipients = [];
     for (const name of args.to) {
       if (name === OWNER_ALIAS) {
@@ -443,7 +465,7 @@ export const send = mutation({
       if (!other || rest.length > 0) fail("bad_request", "without a conversation id, address exactly one participant (a DM)");
       conversation = await openDm(ctx, sender, other);
     }
-    return post(ctx, {
+    const result = await post(ctx, {
       sender,
       conversation,
       recipients,
@@ -453,6 +475,9 @@ export const send = mutation({
       ...(args.key !== undefined ? { idempotencyKey: args.key } : {}),
       origin: { via: args.via ?? "cli" },
     });
+    if (!args.wait) return result;
+    const registered = await registerWait(ctx, sender, result.message.id as Id<"messages">, waitMs, Date.now());
+    return "wait" in registered ? { ...result, wait: await waitShape(ctx, registered.wait) } : { ...result, noWait: registered.noWait };
   },
 });
 
@@ -501,6 +526,7 @@ export const reply = mutation({
       if (open) {
         await ctx.db.patch(open._id, { state: "replied", at: Date.now(), detail: `completed by comms reply ${result.message.id}` });
         result.completed = open._id;
+        await takeAnswer(ctx, open, result.message.id as Id<"messages">, Date.now());
         break;
       }
     }
@@ -604,5 +630,98 @@ export const agentsSet = mutation({
     await ctx.db.patch(target._id, profilePatch(args));
     const updated = (await ctx.db.get(target._id))!;
     return { agent: await registryEntry(ctx, updated, await machineSeen(ctx), Date.now(), { long: true }) };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Send-and-wait (capabilities pass §3)
+
+/** The CLI is still waiting: records it, expires the wait if its `until` passed, and returns it. */
+export const awaitWait = mutation({
+  args: { machine: machineAuth, as: v.string(), messageId: v.string() },
+  handler: async (ctx, args): Promise<Responses["await"]> => {
+    const machine = await requireMachine(ctx, args.machine);
+    const me = await actingAs(ctx, machine, args.as);
+    const wait = await touch(ctx, await requireWait(ctx, me, args.messageId), Date.now());
+    return { wait: await waitShape(ctx, wait) };
+  },
+});
+
+/** The wait as it stands, for the connector to watch while it holds an `await`. */
+export const waitView = query({
+  args: { machine: machineAuth, as: v.string(), messageId: v.string() },
+  handler: async (ctx, args): Promise<Responses["await"]> => {
+    const machine = await requireMachine(ctx, args.machine);
+    const me = await actingAs(ctx, machine, args.as);
+    return { wait: await waitShape(ctx, await requireWait(ctx, me, args.messageId)) };
+  },
+});
+
+export const ack = mutation({
+  args: { machine: machineAuth, as: v.string(), messageId: v.string(), recipients: v.optional(v.array(v.string())) },
+  handler: async (ctx, args): Promise<Responses["ack"]> => {
+    const machine = await requireMachine(ctx, args.machine);
+    const me = await actingAs(ctx, machine, args.as);
+    const wait = await requireWait(ctx, me, args.messageId);
+    await acknowledge(ctx, wait, args.recipients, Date.now());
+    return { wait: await waitShape(ctx, (await ctx.db.get(wait._id))!) };
+  },
+});
+
+/** `comms status <message-id>`: each addressed recipient's delivery and answer, people's read state, the caller's wait. */
+export const messageStatus = query({
+  args: { machine: machineAuth, as: v.string(), messageId: v.string() },
+  handler: async (ctx, args): Promise<Responses["message-status"]> => {
+    const machine = await requireMachine(ctx, args.machine);
+    const me = await actingAs(ctx, machine, args.as);
+    const message = await getOr(ctx, "messages", args.messageId);
+    const conversation = (await ctx.db.get(message.conversationId))!;
+    await membership(ctx, conversation._id, me);
+    const deliveries = await ctx.db
+      .query("deliveries")
+      .withIndex("by_message", (q) => q.eq("messageId", message._id))
+      .collect();
+    const answers = await ctx.db
+      .query("messages")
+      .withIndex("by_inReplyTo", (q) => q.eq("inReplyTo", message._id))
+      .collect();
+    const wait = await waitOn(ctx, me, message._id);
+    const waitResults = wait
+      ? await ctx.db
+          .query("waitResults")
+          .withIndex("by_wait", (q) => q.eq("waitId", wait._id))
+          .collect()
+      : [];
+    const recipients = [];
+    for (const id of message.recipientIds) {
+      const p = (await ctx.db.get(id))!;
+      const d = deliveries.find((x) => x.recipientId === id && !x.fallback);
+      const theirs = answers.filter((a) => a.senderId === id).sort((a, b) => a.seq - b.seq);
+      const chosenId =
+        waitResults.find((r) => r.recipientId === id)?.answerMessageId ??
+        theirs.find((a) => d && a.collectedFrom === d._id)?._id ??
+        (d?.state === "replied" ? theirs[0]?._id : undefined);
+      const chosen = theirs.find((a) => a._id === chosenId);
+      const inbox =
+        p.kind === "human"
+          ? await ctx.db
+              .query("inbox")
+              .withIndex("by_human_message", (q) => q.eq("humanId", id).eq("messageId", message._id))
+              .unique()
+          : null;
+      recipients.push({
+        participant: ref(p),
+        ...(d ? { delivery: { id: d._id, state: d.state, ...(d.detail !== undefined ? { detail: d.detail } : {}) } } : {}),
+        ...(chosen ? { answer: await envelope(ctx, chosen) } : {}),
+        followUps: await Promise.all(theirs.filter((a) => a._id !== chosenId).map((a) => envelope(ctx, a))),
+        ...(inbox ? { inbox: { readAt: inbox.readAt ?? null } } : {}),
+      });
+    }
+    return {
+      message: await envelope(ctx, message),
+      conversation: conversationRef(conversation),
+      recipients,
+      ...(wait ? { wait: await waitShape(ctx, wait) } : {}),
+    };
   },
 });
