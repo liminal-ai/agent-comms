@@ -141,6 +141,30 @@ describe("connector with a mod session", () => {
   });
 });
 
+describe("acceptance 7: a session that dies mid-turn", () => {
+  it("a turn reported delivered by a superseded session is asked about in the new session, not assumed still running", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const old = new Mod(w.socket, "b", "old");
+    await old.register();
+    const sent = await send(w.socket, "a", "b", "the session dies mid-turn");
+    const d = await old.nextDelivery();
+    await old.ok("delivered", { deliveryId: d.id, turnId: "t-old" } as never);
+    await until("delivered", async () => (await deliveryState(w.t, sent.message.conversationId, sent.message.id, "b"))?.state === "delivered");
+    // The old session's process is gone; a new session for b registers.
+    const fresh = new Mod(w.socket, "b", "new");
+    await fresh.register();
+    const check = await fresh.nextCheck();
+    expect(check).toMatchObject({ deliveryId: d.id, state: "delivered", turnId: "t-old" });
+    await fresh.ok("check-result", { deliveryId: d.id, found: "unknown", detail: "not this session's turn" } as never);
+    await until("uncertain", async () => (await deliveryState(w.t, sent.message.conversationId, sent.message.id, "b"))?.state === "uncertain");
+    // b's queue isn't blocked behind it.
+    const next = await send(w.socket, "a", "b", "after it");
+    const d2 = await fresh.nextDelivery();
+    expect(d2.message.id).toBe(next.message.id);
+  });
+});
+
 describe("connector restart", () => {
   it("recovers a delivered turn by asking the session, and never runs it twice", async () => {
     const w = await world();

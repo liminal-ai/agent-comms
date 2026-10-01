@@ -32,6 +32,8 @@ interface Waiting<T> {
 interface Report {
   turnId?: string;
   outcome?: OutcomeBody;
+  /** The session that reported the turn: only it can say the turn is still running. */
+  sessionId?: string;
   at: number;
 }
 
@@ -150,6 +152,7 @@ export class ClaudeCodeSessions {
       throw new LoopbackError("conflict", `delivery ${req.deliveryId} already went into turn ${report.turnId}`);
     }
     report.turnId = req.turnId;
+    report.sessionId = s.id;
     this.settle(this.handOffs, req.deliveryId, { _tag: "accepted", turnId: req.turnId });
     return { delivery: { id: req.deliveryId, recipient: s.participant, state: "delivered" } };
   }
@@ -160,6 +163,7 @@ export class ClaudeCodeSessions {
     const duplicate = report.outcome !== undefined;
     if (!duplicate) {
       report.turnId ??= req.turnId;
+      report.sessionId = s.id;
       report.outcome = outcomeBody(req);
       if (req.turnId === undefined && req.outcome === "failed") {
         // Dropped before any turn ran it: the handoff itself failed.
@@ -321,13 +325,15 @@ export class ClaudeCodeSessions {
     check: (target, delivery, turnId) =>
       Effect.promise(async (): Promise<Check> => {
         const report = this.reports.get(delivery.id);
-        if (report?.turnId !== undefined) {
-          return report.outcome
-            ? { _tag: "completed", turnId: report.turnId, outcome: toOutcome(report.outcome) as Exclude<Outcome, { _tag: "lost" }> }
-            : { _tag: "running", turnId: report.turnId };
+        if (report?.turnId !== undefined && report.outcome) {
+          return { _tag: "completed", turnId: report.turnId, outcome: toOutcome(report.outcome) as Exclude<Outcome, { _tag: "lost" }> };
         }
         const s = this.session(target);
+        // Only the session that reported the turn can say it's still running. If that
+        // session is gone (superseded, ended), ask the current one, as after a restart.
+        if (report?.turnId !== undefined && s && report.sessionId === s.id) return { _tag: "running", turnId: report.turnId };
         if (!s) return { _tag: "later", detail: `no session for @${target.participant}` };
+        turnId ??= report?.turnId;
         const answer = this.wait(this.checks, delivery.id, s.id, this.options.checkDeadlineMs ?? 2 * 60_000, {
           _tag: "later",
           detail: "the session didn't answer the restart question in time",
