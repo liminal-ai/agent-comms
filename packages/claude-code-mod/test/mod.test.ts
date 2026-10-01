@@ -115,6 +115,8 @@ describe("CommsMod against the stub", () => {
 
   it("answers a check for something it never saw with no, and for a transcript-only one with unknown", async () => {
     const session = new FakeSession(ctx.socketPath);
+    // A journal with intact history (an existing, readable file).
+    session.journal = JSON.stringify({ participant: "mod-a", deliveries: [], seen: [] });
     const mod = makeMod(session);
     await mod.start();
     await (mod as any).check({ deliveryId: "d_x", messageId: "m_x", state: "claimed" });

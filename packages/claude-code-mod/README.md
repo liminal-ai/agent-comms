@@ -35,6 +35,9 @@ Development: `claude --plugin-dir packages/claude-code-mod`.
    CLAUDE_CONFIG_DIR="$D" claude plugin install agent-comms@agent-comms-local
    CLAUDE_CONFIG_DIR="$D" claude plugin list   # agent-comms@agent-comms-local, enabled
    ```
+   The install is a copy (under `$D/plugins/cache`). After the mod changes on main (its version in
+   `.claude-plugin/plugin.json` is bumped), update it and restart the terminal:
+   `CLAUDE_CONFIG_DIR="$D" claude plugin marketplace update agent-comms-local && CLAUDE_CONFIG_DIR="$D" claude plugin update agent-comms@agent-comms-local`.
 3. Promote it in the web view (`http://127.0.0.1:3790`): Name `<name>`, Lives in *Claude Code
    terminal*, Promote. It shows **mod not connected** until its terminal starts.
 4. Give it its own folder, outside every agent's home and with no `CLAUDE.md`/`AGENTS.md` above
@@ -132,7 +135,9 @@ never got that far), then check in this order:
 - Restart checks: answered from the journal, re-read from disk at check time (another session of
   the participant may have written it). Same session: running, or completed with the outcome. An
   earlier session's unfinished one: `unknown`. `no` only when the journal was read whole, never
-  dropped ids, and doesn't name it (it's written before every submission). The transcript only ever
+  dropped ids, and doesn't name it (it's written before every submission). A missing, empty or
+  unreadable journal means its history is lost: for the next 24 hours (longer than any delivery
+  stays in flight) such checks answer `unknown`, and the window is kept in the journal across sessions. The transcript only ever
   proves presence (`unknown`), since a compacted transcript can't prove absence. A check for a
   prompt still queued waits until its turn starts, or until the start deadline (then `unknown`).
 - Reconnect: any `unknown_session` means register again and retry; `session_superseded` stops the

@@ -1,6 +1,6 @@
 {
   "name": "@agent-comms/claude-code-mod",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "The Claude Code adapter: a mod (function hooks plugin) that delivers agent-comms messages into a standalone Claude Code session and reports its turns and answers to the connector.",
