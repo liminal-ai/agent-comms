@@ -1,0 +1,19 @@
+[Unit]
+Description=agent-comms: this machine's connector (from main in /srv/work/agent-comms)
+After=agent-comms-convex.service
+Wants=agent-comms-convex.service
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/work/agent-comms
+Environment=PATH=%h/.local/share/fnm/node-versions/v24.18.0/installation/bin:/usr/bin:/bin
+Environment=XDG_RUNTIME_DIR=%t
+UnsetEnvironment=SSH_AUTH_SOCK GIT_SSH_COMMAND
+ExecStart=%h/.local/share/fnm/node-versions/v24.18.0/installation/bin/node packages/connector/src/main.ts --config %h/.config/agent-comms/connector.json
+Restart=on-failure
+RestartSec=5
+MemoryMax=1G
+MemorySwapMax=0
+
+[Install]
+WantedBy=default.target

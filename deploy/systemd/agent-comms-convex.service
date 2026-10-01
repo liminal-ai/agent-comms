@@ -1,0 +1,17 @@
+[Unit]
+Description=agent-comms: local Convex backend (127.0.0.1 only)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/work/agent-comms
+Environment=PATH=%h/.local/share/fnm/node-versions/v24.18.0/installation/bin:/usr/bin:/bin
+UnsetEnvironment=SSH_AUTH_SOCK GIT_SSH_COMMAND
+ExecStart=/srv/work/agent-comms/scripts/local-convex.sh %h/.local/share/agent-comms/convex
+Restart=on-failure
+RestartSec=5
+MemoryMax=2G
+MemorySwapMax=0
+
+[Install]
+WantedBy=default.target
