@@ -1,0 +1,1 @@
+Run exactly this one shell command, then tell me what it printed and its exit code. Run nothing else: comms send --as term-a @t3-native "Acceptance item 2 (Hazel): what is 6 times 7? Reply with just the number."
