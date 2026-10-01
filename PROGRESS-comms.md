@@ -97,3 +97,4 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - The connector refreshes a T3 waiter's presence before a waiting send and before an ack (its poll is every 20 s, too coarse for busySince).
 - A connector that answers a waiting send `unsupported` gets it again unwaited, and the CLI says so (stub, older connectors).
 - The overview's definition of `delivered` needs its one exception ("returned to the waiting send"); that's Reed's document.
+- [x] Live acceptance 2-12 with Hazel: all pass (`validation/capabilities/acceptance/README.md`); three connector/CLI bugs found and fixed (02a8343, 77474ff, 8fb9b85)
