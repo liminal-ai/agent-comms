@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { writeFileSync, existsSync, readFileSync } from "node:fs";
 import { adminToken, convex, now, OUT, t3, thread } from "./lib.mjs";
 const PROJECT = "proj-bacff64b-618b-40a7-87c1-8b89205d3d9e";
-const from = { native: "thr-2b9246c9-4806-4d5d-bff5-3dca6ede7d49", codex: "thr-abad70c6-298e-445d-9570-aae607cea3fb" };
+const from = { native: "thr-2b9246c9-4806-4d5d-bff5-3dca6ede7d49", codex: "thr-abad70c6-298e-445d-9570-aae607cea3fb", lhc: "thr-36b7d422-6756-4668-b4fa-96e40d3679b6" };
 const file = `${OUT}run.json`;
 const run = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : { threads: {} };
 for (const [kind, fixture] of Object.entries(from)) {
@@ -19,6 +19,7 @@ for (const [kind, fixture] of Object.entries(from)) {
 const participants = [
   ["fp1-native", { machine: "lim-builder", harness: "t3", locator: run.threads.native }],
   ["fp1-codex", { machine: "lim-builder", harness: "t3", locator: run.threads.codex }],
+  ["fp1-lhc", { machine: "lim-builder", harness: "t3", locator: run.threads.lhc }],
   ["fp1-req", { machine: "lim-builder", harness: "claude-code", locator: "fp1-req" }],
 ];
 for (const [name, home] of participants) {

@@ -193,6 +193,20 @@ describe("fix pass 3.1", () => {
   });
 });
 
+describe("fix pass section 5 finding", () => {
+  it("5 an ambiguous turn whose agent already answered with comms reply during the turn ends replied", async () => {
+    const t = await setup();
+    const { sent, id, claimId } = await claimed(t);
+    await t.mutation(api.connector.delivered, { machine: m1, deliveryId: id, claimId, turnId: "t1" });
+    const reply = await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: sent.message.id, text: "4" });
+    expect(reply.completed).toBeUndefined(); // still running: a follow-up, not a completion
+    const amb = await t.mutation(api.connector.ambiguous, { machine: m1, deliveryId: id, claimId, turnId: "t1", entered: [{ origin: "t3-user-message" }] });
+    expect(amb.delivery.state).toBe("replied");
+    const view = await t.query(api.conversations.view, { adminToken: ADMIN, conversationId: sent.message.conversationId });
+    expect(view.messages.find((m) => m.message.id === sent.message.id)!.deliveries[0]!.detail).toMatch(new RegExp(reply.message.id));
+  });
+});
+
 describe("fix pass 1.10", () => {
   it("1.10 send, reply, web post and group titles over the caps are rejected with a clear error", async () => {
     const t = await setup();
