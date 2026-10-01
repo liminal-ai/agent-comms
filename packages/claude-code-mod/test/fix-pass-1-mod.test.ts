@@ -29,6 +29,26 @@ describe("1.8 journal safety", () => {
     assert.equal(session.ops("check-result")[0].found, "unknown");
   });
 
+  it("1.8 (Alder): with no journal file, a check for an unknown delivery is unknown, never no", async () => {
+    const session = new FakeSession(ctx.socketPath);
+    session.journal = null; // missing
+    const mod = makeMod(session);
+    await mod.start();
+    await (mod as any).check({ deliveryId: "d_missing", messageId: "m_missing", state: "claimed" });
+    await until(() => session.ops("check-result").length === 1, "the check result");
+    assert.equal(session.ops("check-result")[0].found, "unknown");
+  });
+
+  it("1.8 (Alder): with an empty journal file, a check for an unknown delivery is unknown, never no", async () => {
+    const session = new FakeSession(ctx.socketPath);
+    session.journal = ""; // created but never written (or truncated)
+    const mod = makeMod(session);
+    await mod.start();
+    await (mod as any).check({ deliveryId: "d_empty", messageId: "m_empty", state: "claimed" });
+    await until(() => session.ops("check-result").length === 1, "the check result");
+    assert.equal(session.ops("check-result")[0].found, "unknown");
+  });
+
   it("1.8: a delivery another session of this participant journaled after we loaded is seen at check time", async () => {
     const shared = { journal: null as string | null };
     const a = new FakeSession(ctx.socketPath);
