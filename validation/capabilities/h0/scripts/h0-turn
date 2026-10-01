@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# h0-turn <case> <threadId> <prompt>  — one T3 turn on 3780, raw events and result saved under validation/capabilities/h0/<case>/
+set -u
+c="$1"; th="$2"; prompt="$3"
+E=/srv/agents/hazel/agent-comms/validation/capabilities/h0/$c; mkdir -p "$E"; rm -f "$E/events.jsonl"
+export PATH=/home/leemoore/.local/share/fnm/node-versions/v24.18.0/installation/bin:$PATH
+cd /srv/agents/hazel/t3code-v044/validation/probe
+printf '%s\n' "$prompt" > "$E/prompt.txt"
+{ echo "case: $c"; echo "thread: $th"; echo "started: $(date -u +%FT%TZ) ($(date +%s))"; } > "$E/run.txt"
+node --no-warnings cli.ts turn "$th" "$prompt" --record "$E/events.jsonl" --timeout 1500000 > "$E/result.json" 2>&1
+echo "exit: $?" >> "$E/run.txt"; echo "ended: $(date -u +%FT%TZ) ($(date +%s))" >> "$E/run.txt"
+sleep 5; ls -l --time-style=+%s /tmp/hazel-h0/marks/ | grep -- "$c" > "$E/marks.txt"; for f in /tmp/hazel-h0/marks/$c-*; do echo "$f: $(cat $f)"; done >> "$E/marks.txt" 2>/dev/null
+pgrep -af "sleep" | grep -v pgrep > "$E/sleep-procs-after.txt"

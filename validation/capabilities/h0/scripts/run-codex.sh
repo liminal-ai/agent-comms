@@ -1,0 +1,2 @@
+/srv/agents/hazel/bin/h0-turn T3X-1 thr-a812a74d-420c-4d26-bf88-162d82ad3022 "$(/srv/agents/hazel/bin/h0-prompt T3X-1 150 "with default settings: don't set any timeout or yield time and don't run it in the background")"
+/srv/agents/hazel/bin/h0-turn T3X-2 thr-a812a74d-420c-4d26-bf88-162d82ad3022 "$(/srv/agents/hazel/bin/h0-prompt T3X-2 660 "with default settings: don't set any timeout or yield time and don't run it in the background")"

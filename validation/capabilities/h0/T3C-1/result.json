@@ -1,0 +1,19 @@
+{
+  "receipt": {
+    "sequence": 2209
+  },
+  "messageId": "msg-909a5020-67e8-4f8b-81b3-409617ae67b5",
+  "turnId": "f791cc73-d645-42b0-8ae4-b3459ee61416",
+  "settled": true,
+  "assistantMessages": [
+    {
+      "messageId": "assistant:52592760-1e42-4285-a583-e685c1d1fa3d",
+      "text": "1. **Tool and parameters:** `mcp__tray_movie__suspect_Bash` with\n   - `command`: `date +%s > /tmp/hazel-h0/marks/T3C-1-start; sleep 150; date +%s > /tmp/hazel-h0/marks/T3C-1-end; echo FINISHED`\n   - `description`: `Record timestamps around a 150s sleep`\n   - No `timeout` and no `run_in_background`.\n\n2. **Returned text, verbatim:** \"Command did not complete within its 120s timeout and was moved to the background (ID: bjpz4mqc5). Output is being written to: /tmp/claude-1000/-tmp-hazel-h0-t3/0dfdc8c2-43a7-470e-b846-9da2aeca3d54/tasks/bjpz4mqc5.output. You will be notified when it completed. If it is still running after 30m in the background, it will be stopped and you will be notified. To check interim output, use Read on that file path.\"\n\n   Correction: the last sentence of the first part should read \"You will be notified when it completes.\"\n\n3. **Outcome:** The command did not finish in the foreground. It hit the 120s default timeout and was moved to the background. I haven't seen it finish yet, so `FINISHED` hasn't been output."
+    }
+  ],
+  "eventTypes": [
+    "thread.message-sent",
+    "thread.session-set",
+    "thread.activity-appended"
+  ]
+}

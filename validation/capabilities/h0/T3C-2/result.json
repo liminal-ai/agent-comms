@@ -1,0 +1,19 @@
+{
+  "receipt": {
+    "sequence": 2291
+  },
+  "messageId": "msg-8acfed38-6184-456f-b200-9ce3e2c88bda",
+  "turnId": "a3f30d5e-e4c0-4a76-8e81-433fea8b4b17",
+  "settled": true,
+  "assistantMessages": [
+    {
+      "messageId": "assistant:8b6d7181-4f84-4a54-8eae-103c3f821dd9",
+      "text": "1. **Tool and parameters:** `mcp__tray_movie__suspect_Bash` with\n   - `command`: `date +%s > /tmp/hazel-h0/marks/T3C-2-start; sleep 150; date +%s > /tmp/hazel-h0/marks/T3C-2-end; echo FINISHED`\n   - `description`: `Record timestamps around a 150s sleep`\n   - `timeout`: `300000`\n   - No `run_in_background`.\n\n2. **Returned text, verbatim:** \"FINISHED\"\n\n3. **Outcome:** The command finished in the foreground. It ran past the 120s default and completed under the 300000 ms timeout, with no timeout or backgrounding.\n\nThe earlier background task from the first run (`bjpz4mqc5`) also reported completion with exit code 0."
+    }
+  ],
+  "eventTypes": [
+    "thread.message-sent",
+    "thread.session-set",
+    "thread.activity-appended"
+  ]
+}

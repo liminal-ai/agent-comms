@@ -1,0 +1,31 @@
+{
+  "receipt": {
+    "sequence": 2274
+  },
+  "messageId": "msg-33e1f57d-bb95-4896-8244-91e633325a62",
+  "turnId": "01a0f880-0d91-7d42-b76d-747389a4ee55",
+  "settled": true,
+  "assistantMessages": [
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe9793f0a087d18ddc233398285799",
+      "text": "I’ll run the command once with default settings, then wait on the same session until it finishes and report each call and return verbatim.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe97dd694887d18f768db8b0a7fe1a",
+      "text": "The command is still running. I’m waiting on the original session.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe981d51d887d184397ec048aabafb",
+      "text": "There is no output yet. I’m continuing to wait on the same session.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe982eb66c87d1a6b7efb26bce683d",
+      "text": "The command **finished successfully**, with exit code `0` and output `FINISHED`. It initially continued in session `68742`; all subsequent waits used that same session. No other shell command was run.\n\nEvery tool call and return follows, in order.\n\n1. `functions.exec`, exact input:\n\n```javascript\nconst result = await tools.exec_command({cmd:\"date +%s > /tmp/hazel-h0/marks/T3X-4-start; sleep 150; date +%s > /tmp/hazel-h0/marks/T3X-4-end; echo FINISHED\"}); text(result);\n```\n\nReturn:\n\n```text\nScript completed\nWall time 10.2 seconds\nOutput:\n{\"chunk_id\":\"c98f9c\",\"wall_time_seconds\":10.000563859,\"session_id\":68742,\"original_token_count\":0,\"output\":\"\"}\n```\n\n2. `functions.exec`, exact input:\n\n```javascript\nconst result = await tools.write_stdin({session_id:68742,chars:\"\",yield_time_ms:60000}); text(result);\n```\n\nReturn:\n\n```text\nScript running with cell ID 5\nWall time 31.0 seconds\nOutput:\n```\n\n3. `functions.wait`, exact parameters:\n\n```json\n{\"cell_id\":\"5\",\"yield_time_ms\":20000}\n```\n\nReturn:\n\n```text\nScript running with cell ID 5\nWall time 21.0 seconds\nOutput:\n```\n\n4. `functions.wait`, exact parameters:\n\n```json\n{\"cell_id\":\"5\",\"yield_time_ms\":10000}\n```\n\nReturn:\n\n```text\nScript completed\nWall time 1.6 seconds\nOutput:\n{\"chunk_id\":\"f3ee81\",\"wall_time_seconds\":60.001074965,\"session_id\":68742,\"original_token_count\":0,\"output\":\"\"}\n```\n\n5. `functions.exec`, exact input:\n\n```javascript\nconst result = await tools.write_stdin({session_id:68742,chars:\"\",yield_time_ms:60000}); text(result);\n```\n\nReturn:\n\n```text\nScript running with cell ID 6\nWall time 31.0 seconds\nOutput:\n```\n\n6. `functions.wait`, exact parameters:\n\n```json\n{\"cell_id\":\"6\",\"yield_time_ms\":20000}\n```\n\nReturn:\n\n```text\nScript running with cell ID 6\nWall time 21.0 seconds\nOutput:\n```\n\n7. `functions.wait`, exact parameters:\n\n```json\n{\"cell_id\":\"6\",\"yield_time_ms\":10000}\n```\n\nReturn:\n\n```text\nScript completed\nWall time 0.2 seconds\nOutput:\n{\"chunk_id\":\"ad9608\",\"wall_time_seconds\":60.000479771,\"session_id\":68742,\"original_token_count\":0,\"output\":\"\"}\n```\n\n8. `functions.exec`, exact input:\n\n```javascript\nconst result = await tools.write_stdin({session_id:68742,chars:\"\",yield_time_ms:60000}); text(result);\n```\n\nReturn:\n\n```text\nScript completed\nWall time 11.5 seconds\nOutput:\n{\"chunk_id\":\"fc6300\",\"wall_time_seconds\":11.53027281,\"exit_code\":0,\"original_token_count\":3,\"output\":\"FINISHED\\n\"}\n```"
+    }
+  ],
+  "eventTypes": [
+    "thread.message-sent",
+    "thread.session-set",
+    "thread.activity-appended"
+  ]
+}

@@ -1,0 +1,225 @@
+{
+  "session": {
+    "threadId": "thr-a812a74d-420c-4d26-bf88-162d82ad3022",
+    "status": "ready",
+    "providerName": "codex",
+    "providerInstanceId": "codex",
+    "runtimeMode": "full-access",
+    "activeTurnId": null,
+    "lastError": null,
+    "updatedAt": "2026-10-01T17:40:35.881Z"
+  },
+  "latestTurn": {
+    "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+    "state": "completed",
+    "requestedAt": "2026-10-01T17:28:41.062Z",
+    "startedAt": "2026-10-01T17:28:41.062Z",
+    "completedAt": "2026-10-01T17:40:35.881Z",
+    "assistantMessageId": "assistant:msg_09981cc639205f53016abe9af1bc5087d1aaf8d253bc7afd06"
+  },
+  "messages": [
+    {
+      "id": "msg-12cd8258-f8ed-4d5f-a7b7-08fd0edb0d21",
+      "role": "user",
+      "turnId": null,
+      "streaming": false,
+      "text": "This is a measurement of your shell tool's time limits. Run exactly one shell command, once, with your shell tool, with default settings: don't set any timeout or yield time and don't run it in the ba"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe971b78d087d18746d40574644132",
+      "role": "assistant",
+      "turnId": "01a0f87e-3468-7231-bd2a-5c879b4d35e0",
+      "streaming": false,
+      "text": "I’ll run the command once with the shell tool’s default settings and report its return exactly.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe972ecd9087d19181a4e531ebfed7",
+      "role": "assistant",
+      "turnId": "01a0f87e-3468-7231-bd2a-5c879b4d35e0",
+      "streaming": false,
+      "text": "1. Tool: `exec_command` (through `functions.exec`). Exact parameters:\n\n```json\n{\"cmd\":\"date +%s > /tmp/hazel-h0/marks/T3X-1-start; sleep 150; date +%s > /tmp/hazel-h0/marks/T3X-1-end; echo FINISHED\"}\n"
+    },
+    {
+      "id": "msg-982d6a1e-2660-4ff5-a12a-0600b74acc22",
+      "role": "user",
+      "turnId": null,
+      "streaming": false,
+      "text": "This is a measurement of your shell tool's time limits. Run exactly one shell command, once, with your shell tool, with default settings: don't set any timeout or yield time and don't run it in the ba"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe973c99d487d1ba674c179611e2bc",
+      "role": "assistant",
+      "turnId": "01a0f87e-b9c2-7a13-bd19-2b75a14d01be",
+      "streaming": false,
+      "text": "I’ll run the command once with default settings and report the tool’s return exactly.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe974ae5dc87d18576c724f40d37a9",
+      "role": "assistant",
+      "turnId": "01a0f87e-b9c2-7a13-bd19-2b75a14d01be",
+      "streaming": false,
+      "text": "1. Tool: `exec_command` (through `functions.exec`). Exact parameters:\n\n```json\n{\"cmd\":\"date +%s > /tmp/hazel-h0/marks/T3X-2-start; sleep 660; date +%s > /tmp/hazel-h0/marks/T3X-2-end; echo FINISHED\"}\n"
+    },
+    {
+      "id": "msg-6e404155-7e5b-4d36-91a2-330d28a103ee",
+      "role": "user",
+      "turnId": null,
+      "streaming": false,
+      "text": "This is a measurement of your shell tool's time limits. Run exactly one shell command, once, with your shell tool, with the yield time (yield_time_ms) set to 600000 and no other changes to the default"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9762e61087d1837fbedc8a59f8de",
+      "role": "assistant",
+      "turnId": "01a0f87f-52f0-7a41-9834-7e94c93c90ab",
+      "streaming": false,
+      "text": "I’ll run the command once with `yield_time_ms` set to `600000` and all other settings left at their defaults.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe97858ff887d191a5b2ec20240ddf",
+      "role": "assistant",
+      "turnId": "01a0f87f-52f0-7a41-9834-7e94c93c90ab",
+      "streaming": false,
+      "text": "1. Tool: `exec_command` (through `functions.exec`). Exact parameters:\n\n```json\n{\"cmd\":\"date +%s > /tmp/hazel-h0/marks/T3X-3-start; sleep 150; date +%s > /tmp/hazel-h0/marks/T3X-3-end; echo FINISHED\",\""
+    },
+    {
+      "id": "msg-33e1f57d-bb95-4896-8244-91e633325a62",
+      "role": "user",
+      "turnId": null,
+      "streaming": false,
+      "text": "This is a measurement of your shell tool's time limits. Run exactly one shell command, once, with your shell tool, with default settings; if it is still running when the tool returns, keep waiting for"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9793f0a087d18ddc233398285799",
+      "role": "assistant",
+      "turnId": "01a0f880-0d91-7d42-b76d-747389a4ee55",
+      "streaming": false,
+      "text": "I’ll run the command once with default settings, then wait on the same session until it finishes and report each call and return verbatim.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe97dd694887d18f768db8b0a7fe1a",
+      "role": "assistant",
+      "turnId": "01a0f880-0d91-7d42-b76d-747389a4ee55",
+      "streaming": false,
+      "text": "The command is still running. I’m waiting on the original session.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe981d51d887d184397ec048aabafb",
+      "role": "assistant",
+      "turnId": "01a0f880-0d91-7d42-b76d-747389a4ee55",
+      "streaming": false,
+      "text": "There is no output yet. I’m continuing to wait on the same session.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe982eb66c87d1a6b7efb26bce683d",
+      "role": "assistant",
+      "turnId": "01a0f880-0d91-7d42-b76d-747389a4ee55",
+      "streaming": false,
+      "text": "The command **finished successfully**, with exit code `0` and output `FINISHED`. It initially continued in session `68742`; all subsequent waits used that same session. No other shell command was run."
+    },
+    {
+      "id": "msg-10e84a1f-48df-4412-99dc-6de146905231",
+      "role": "user",
+      "turnId": null,
+      "streaming": false,
+      "text": "This is a measurement of your shell tool's time limits. Run exactly one shell command, once, with your shell tool, with default settings; if it is still running when the tool returns, keep waiting for"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9852bd4487d19bf8825d3648471b",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "I’ll run the command once with default shell settings, then wait on that same session until it finishes or stops. I’ll record every call and return.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9896f83487d1819b6a786709d91a",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "The command is still running with no output. I’m waiting on session `57098`.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe98cd51f887d19079dd870ba8245a",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "Session `57098` is still running; no output or exit status has been reported.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9903a72887d1806336ae1ee1a321",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "The command remains active with no output. I’m continuing to wait on the same session.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9939b75087d1883e4c68d5067c45",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "There is still no output or exit status from session `57098`. I’ll keep waiting.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe996fe74087d1bb5d4d9442a1c543",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "The original command is still running without output.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe99a6930487d1aa1ec1de11deadd2",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "Session `57098` remains active. No completion or timeout has been reported.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe99dc57f487d18eb491b997ca272d",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "The command is still running with no output. I’m continuing to wait.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9a11fb7087d1b00604cddad38514",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "There is no change: session `57098` is still running and has produced no output.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9a47c80087d196b939bbc69066bd",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "The original session remains active. I’m waiting for its exit status.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9a7dca7c87d18b838b91e9af8ca9",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "The command is still running; the latest wait returned no output or exit status.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9ab33f1487d1b40c2257322f55ca",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "Session `57098` is still active with no output. I’ll keep waiting on it.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9aeb628487d1b4a0b636ad5d5b06",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "No completion or timeout has been reported. I’m continuing to wait on the original command.\n"
+    },
+    {
+      "id": "assistant:msg_09981cc639205f53016abe9af1bc5087d1aaf8d253bc7afd06",
+      "role": "assistant",
+      "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+      "streaming": false,
+      "text": "The command **finished successfully**, with exit code `0` and output `FINISHED`. It initially continued in session `57098`; subsequent calls waited on that same session. No timeout was reported, and n"
+    }
+  ]
+}

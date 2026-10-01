@@ -1,0 +1,19 @@
+{
+  "receipt": {
+    "sequence": 2350
+  },
+  "messageId": "msg-fd511efc-aaa4-4795-b313-611e43e89474",
+  "turnId": "6103cafe-6751-42ab-8137-06671ea7fc89",
+  "settled": true,
+  "assistantMessages": [
+    {
+      "messageId": "assistant:d765872b-b73b-456f-8a77-11f900ac46eb",
+      "text": "1. **Tool and parameters:** `mcp__tray_movie__suspect_Bash` with\n   - `command`: `date +%s > /tmp/hazel-h0/marks/T3C-3-start; sleep 660; date +%s > /tmp/hazel-h0/marks/T3C-3-end; echo FINISHED`\n   - `description`: `Record timestamps around a 660s sleep`\n   - `timeout`: `900000`\n   - No `run_in_background`.\n\n2. **Returned text, verbatim:** \"Command did not complete within its 600s timeout and was moved to the background (ID: btdzeb84t). Output is being written to: /tmp/claude-1000/-tmp-hazel-h0-t3/0dfdc8c2-43a7-470e-b846-9da2aeca3d54/tasks/btdzeb84t.output. You will be notified when it completes. If it is still running after 30m in the background, it will be stopped and you will be notified. To check interim output, use Read on that file path.\"\n\n3. **Outcome:** The command did not finish in the foreground. The requested 900000 ms timeout was capped at 600s, and the command was moved to the background. I haven't seen it finish yet, so `FINISHED` hasn't been output."
+    }
+  ],
+  "eventTypes": [
+    "thread.message-sent",
+    "thread.session-set",
+    "thread.activity-appended"
+  ]
+}

@@ -1,0 +1,5 @@
+This is a measurement of your shell tool's time limits. Run exactly one shell command, once, with your shell tool, with default settings; if it is still running when the tool returns, keep waiting for that same session with your tools (no new command) until it finishes or is stopped, then report every tool call and its return verbatim:
+
+date +%s > /tmp/hazel-h0/marks/T3X-5-start; sleep 660; date +%s > /tmp/hazel-h0/marks/T3X-5-end; echo FINISHED
+
+Don't run any other command, before or after, and don't retry. When the tool returns, reply with: (1) the name of the tool you used and the exact parameters you passed, (2) the full text the tool returned to you, quoted verbatim, (3) whether the command finished, timed out, or was moved to the background, as far as you can tell.

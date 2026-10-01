@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# h0-term <case> <wait-seconds> <prompt>  — one prompt in the H0 Claude Code terminal (tmux -L h0, session h0),
+# approving permission prompts (screens saved), then the scrollback is saved.
+set -u
+c="$1"; w="$2"; prompt="$3"
+E=/srv/agents/hazel/agent-comms/validation/capabilities/h0/$c; mkdir -p "$E"; rm -f "$E"/permission-prompt-*.txt
+TM=(tmux -L h0)
+printf '%s\n' "$prompt" > "$E/prompt.txt"
+{ echo "case: $c"; echo "terminal: tmux -L h0, Claude Code $(claude --version 2>/dev/null)"; echo "started: $(date -u +%FT%TZ) ($(date +%s))"; } > "$E/run.txt"
+"${TM[@]}" clear-history -t h0
+( n=0; end=$(( $(date +%s) + w )); while [ "$(date +%s)" -lt "$end" ]; do if "${TM[@]}" capture-pane -p -t h0 | grep -q -E "Do you want to|❯ 1\. Yes"; then n=$((n+1)); "${TM[@]}" capture-pane -p -t h0 > "$E/permission-prompt-$n.txt"; "${TM[@]}" send-keys -t h0 Enter; sleep 3; fi; sleep 1; done ) &
+ap=$!
+"${TM[@]}" send-keys -t h0 -l "$prompt"; sleep 1; "${TM[@]}" send-keys -t h0 Enter
+wait $ap
+echo "ended: $(date -u +%FT%TZ) ($(date +%s))" >> "$E/run.txt"
+"${TM[@]}" capture-pane -p -t h0 -S -3000 > "$E/terminal.txt"
+for f in /tmp/hazel-h0/marks/$c-*; do echo "$f: $(cat $f)"; done > "$E/marks.txt" 2>/dev/null
+pgrep -af "sleep" | grep -v pgrep > "$E/sleep-procs-after.txt"

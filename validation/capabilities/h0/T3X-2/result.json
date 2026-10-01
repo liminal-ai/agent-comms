@@ -1,0 +1,23 @@
+{
+  "receipt": {
+    "sequence": 2242
+  },
+  "messageId": "msg-982d6a1e-2660-4ff5-a12a-0600b74acc22",
+  "turnId": "01a0f87e-b9c2-7a13-bd19-2b75a14d01be",
+  "settled": true,
+  "assistantMessages": [
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe973c99d487d1ba674c179611e2bc",
+      "text": "I’ll run the command once with default settings and report the tool’s return exactly.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe974ae5dc87d18576c724f40d37a9",
+      "text": "1. Tool: `exec_command` (through `functions.exec`). Exact parameters:\n\n```json\n{\"cmd\":\"date +%s > /tmp/hazel-h0/marks/T3X-2-start; sleep 660; date +%s > /tmp/hazel-h0/marks/T3X-2-end; echo FINISHED\"}\n```\n\n2. Full tool return, verbatim:\n\n```text\nScript completed\nWall time 10.2 seconds\nOutput:\n{\"chunk_id\":\"979470\",\"wall_time_seconds\":10.0011173,\"session_id\":64602,\"original_token_count\":0,\"output\":\"\"}\n```\n\n3. The command was still running in session `64602` when the tool returned after about 10 seconds—effectively moved to the background. No completion or timeout was reported."
+    }
+  ],
+  "eventTypes": [
+    "thread.message-sent",
+    "thread.session-set",
+    "thread.activity-appended"
+  ]
+}

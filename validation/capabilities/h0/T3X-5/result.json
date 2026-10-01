@@ -1,0 +1,71 @@
+{
+  "receipt": {
+    "sequence": 2375
+  },
+  "messageId": "msg-10e84a1f-48df-4412-99dc-6de146905231",
+  "turnId": "01a0f882-dd8c-7c73-badb-0b1993baac20",
+  "settled": true,
+  "assistantMessages": [
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe9852bd4487d19bf8825d3648471b",
+      "text": "I’ll run the command once with default shell settings, then wait on that same session until it finishes or stops. I’ll record every call and return.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe9896f83487d1819b6a786709d91a",
+      "text": "The command is still running with no output. I’m waiting on session `57098`.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe98cd51f887d19079dd870ba8245a",
+      "text": "Session `57098` is still running; no output or exit status has been reported.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe9903a72887d1806336ae1ee1a321",
+      "text": "The command remains active with no output. I’m continuing to wait on the same session.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe9939b75087d1883e4c68d5067c45",
+      "text": "There is still no output or exit status from session `57098`. I’ll keep waiting.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe996fe74087d1bb5d4d9442a1c543",
+      "text": "The original command is still running without output.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe99a6930487d1aa1ec1de11deadd2",
+      "text": "Session `57098` remains active. No completion or timeout has been reported.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe99dc57f487d18eb491b997ca272d",
+      "text": "The command is still running with no output. I’m continuing to wait.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe9a11fb7087d1b00604cddad38514",
+      "text": "There is no change: session `57098` is still running and has produced no output.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe9a47c80087d196b939bbc69066bd",
+      "text": "The original session remains active. I’m waiting for its exit status.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe9a7dca7c87d18b838b91e9af8ca9",
+      "text": "The command is still running; the latest wait returned no output or exit status.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe9ab33f1487d1b40c2257322f55ca",
+      "text": "Session `57098` is still active with no output. I’ll keep waiting on it.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe9aeb628487d1b4a0b636ad5d5b06",
+      "text": "No completion or timeout has been reported. I’m continuing to wait on the original command.\n"
+    },
+    {
+      "messageId": "assistant:msg_09981cc639205f53016abe9af1bc5087d1aaf8d253bc7afd06",
+      "text": "The command **finished successfully**, with exit code `0` and output `FINISHED`. It initially continued in session `57098`; subsequent calls waited on that same session. No timeout was reported, and no other command was run.\n\n1. Tool: `functions.exec`, invoking `exec_command`. Exact input:\n\n```javascript\nconst result = await tools.exec_command({cmd:\"date +%s > /tmp/hazel-h0/marks/T3X-5-start; sleep 660; date +%s > /tmp/hazel-h0/marks/T3X-5-end; echo FINISHED\"}); text(result);\n```\n\nFull return, verbatim:\n\n```text\nScript completed\nWall time 10.2 seconds\nOutput:\n{\"chunk_id\":\"33d5d1\",\"wall_time_seconds\":10.00050724,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\nCalls **2–14** each used `functions.exec`, invoking `write_stdin`, with this identical exact input:\n\n```javascript\n// @exec: {\"yield_time_ms\": 60000}\nconst result = await tools.write_stdin({session_id:57098,chars:\"\",yield_time_ms:50000}); text(result);\n```\n\nEach full return follows verbatim.\n\n2. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"4c9be9\",\"wall_time_seconds\":50.001115194,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n3. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"c90391\",\"wall_time_seconds\":50.00172508,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n4. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"7c1b29\",\"wall_time_seconds\":50.000838586,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n5. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"a9dcaa\",\"wall_time_seconds\":50.001999207,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n6. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"ecb1cc\",\"wall_time_seconds\":50.001195828,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n7. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"b91b72\",\"wall_time_seconds\":50.001284005,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n8. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"ba0c1c\",\"wall_time_seconds\":50.001168036,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n9. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"007221\",\"wall_time_seconds\":50.001457967,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n10. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"a47157\",\"wall_time_seconds\":50.00060217,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n11. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"e87373\",\"wall_time_seconds\":50.000821209,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n12. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"44d437\",\"wall_time_seconds\":50.001288223,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n13. Return:\n\n```text\nScript completed\nWall time 50.0 seconds\nOutput:\n{\"chunk_id\":\"e2e02a\",\"wall_time_seconds\":50.000616876,\"session_id\":57098,\"original_token_count\":0,\"output\":\"\"}\n```\n\n14. Return:\n\n```text\nScript completed\nWall time 0.0 seconds\nOutput:\n{\"chunk_id\":\"3fc3e2\",\"wall_time_seconds\":0.000004304,\"exit_code\":0,\"original_token_count\":3,\"output\":\"FINISHED\\n\"}\n```"
+    }
+  ],
+  "eventTypes": [
+    "thread.message-sent",
+    "thread.session-set",
+    "thread.activity-appended"
+  ]
+}
