@@ -1,8 +1,17 @@
 # web
 
-Lee's view onto the comms server: the directory with presence (promote a T3 thread or a Claude Code terminal; pause, resume, retire), conversations and groups (create, add and remove members), each conversation with the delivery state of every addressed agent (`uncertain` in solid red, `ambiguous` and `failed` outlined), and posting as a person with @mentions (only @named members are woken).
+Lee's view onto the comms server. A side pane with four tabs:
 
-Live Convex subscriptions throughout. Auth is the development admin token (`COMMS_ADMIN_TOKEN` on the deployment), entered once and kept in the browser's localStorage. Presence: green idle, amber busy, hollow offline (including any agent whose machine's connector hasn't been heard from in 90 s).
+- **Agents**, the agent registry: every participant with presence, owner, description and duties (Edit sets them through `registry.setProfile`), pause, resume, retire, and promotion. People, system participants and retired agents are grouped below.
+- **Inbox**: messages addressed to the person you're posting as, newest first, with the unread count on the tab, in the header and in the page title. Opening a conversation marks what's in it read; so does clicking an item.
+- **Reminders**: live reminders with their schedule, state, fires and next fire; pause, resume, blocked (with a reason), done, cancel; each one's history of fires and skips; a form to set one as the person you're posting as.
+- **Alerts**: open incidents first, then resolved ones, and the alert thresholds.
+
+Then conversations and groups (create, add and remove members), each conversation with the delivery state of every addressed agent (`uncertain` in solid red, `ambiguous` and `failed` outlined), and posting as a person with @mentions (only @named members are woken).
+
+The logic (presence, profile and reminder forms, labels) is in `src/lib/view.ts`, tested with `pnpm test` (`test/view.test.ts`); the Convex functions it calls are listed in `packages/protocol/README.md`.
+
+Live Convex subscriptions throughout. Auth is the development admin token (`COMMS_ADMIN_TOKEN` on the deployment), entered once and kept in the browser's localStorage. Presence: green idle (with how long), amber busy, hollow offline, dotted red when the agent's machine hasn't been heard from in 90 s (never shown as idle).
 
 ```sh
 # dev, on lim-builder (127.0.0.1:3790), token pre-filled from a file so it's never typed:

@@ -17,6 +17,8 @@ import {
   REMINDER_MIN_INTERVAL_MS,
   type Reminder,
   type ReminderAction,
+  type MessageEnvelope,
+  PRESENCE_STALE_MS,
   type ReminderState,
   type RegistryEntry,
 } from "@agent-comms/protocol";
@@ -70,6 +72,17 @@ export function presenceView(e: RegistryEntry, now: number): { status: PresenceS
   }
   if (p.status === "busy") return { status: "busy", label: "busy" };
   return { status: "idle", label: p.idleSince !== undefined ? `idle for ${span(now - p.idleSince)}` : "idle" };
+}
+
+/**
+ * A Convex query's clock stops between writes, so `presence.stale` from
+ * `registry.list` can be out of date. The view re-derives it from the machine's
+ * last heartbeat (`directory.list`) on its own clock.
+ */
+export function liveStale(e: RegistryEntry, machineSeen: number | null, now: number): RegistryEntry {
+  if (!e.presence) return e;
+  const stale = e.presence.stale || machineSeen === null || now - machineSeen >= PRESENCE_STALE_MS;
+  return stale === e.presence.stale ? e : { ...e, presence: { ...e.presence, stale } };
 }
 
 /** The profile editor: one description line, one duty per line (blank lines dropped). Empty clears. */
@@ -225,6 +238,22 @@ export function parseReminderForm(f: ReminderForm, now: number): Parsed<Reminder
 
 export function inboxBadge(unread: number): string {
   return unread > 0 ? `Inbox (${unread})` : "Inbox";
+}
+
+/** What a system participant's message is, for the inbox list; null for anyone else's. */
+export function inboxKind(m: Pick<MessageEnvelope, "meta">): string | null {
+  const meta = m.meta;
+  if (!meta) return null;
+  switch (meta.type) {
+    case "alert":
+      return "Alert";
+    case "reminder":
+      return `Reminder: ${meta.name}`;
+    case "reminder-report":
+      return `Reminder report: ${meta.name}`;
+    case "reminder-ended":
+      return `Reminder ended: ${meta.name}`;
+  }
 }
 
 export function titleWithUnread(title: string, unread: number): string {

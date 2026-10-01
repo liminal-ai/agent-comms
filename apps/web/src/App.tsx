@@ -1,11 +1,14 @@
-// Lee's view onto the comms server. Plain on purpose: directory, conversations,
-// one conversation with its delivery states, and a composer. Everything is a
-// live Convex subscription; the dev admin token is kept in localStorage.
+// Lee's view onto the comms server. Plain on purpose: a side pane (the agent
+// registry, the inbox, reminders, alerts), conversations, one conversation with
+// its delivery states, and a composer. Everything is a live Convex subscription;
+// the dev admin token is kept in localStorage.
 
 import { NAME_PATTERN } from "@agent-comms/protocol";
 import { useMutation, useQuery } from "convex/react";
 import { Component, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
+import { Alerts, Inbox, Registry, Reminders } from "./Capabilities.tsx";
+import { alertsBadge, inboxBadge, titleWithUnread } from "./lib/view.ts";
 
 const TOKEN_KEY = "agent-comms.adminToken";
 const AS_KEY = "agent-comms.as";
@@ -50,31 +53,61 @@ class Boundary extends Component<{ children: ReactNode; onReset: () => void }, {
   }
 }
 
-type Tab = "directory" | "conversations" | "conversation";
+type Side = "agents" | "inbox" | "reminders" | "alerts";
+type Tab = "side" | "conversations" | "conversation";
 
 function Main({ token }: { token: string }) {
   const directory = useQuery(api.directory.list, { adminToken: token });
   const conversations = useQuery(api.conversations.list, { adminToken: token });
+  const alerts = useQuery(api.alerts.list, { adminToken: token, limit: 100 });
   const [selected, setSelected] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("conversations");
+  const [side, setSide] = useState<Side>("agents");
   const people = directory?.participants.filter((p) => p.kind === "human") ?? [];
   const [as, setAs] = useState(() => localStorage.getItem(AS_KEY) ?? "lee");
   useEffect(() => localStorage.setItem(AS_KEY, as), [as]);
+  const isPerson = people.some((p) => p.name === as);
+  const unread = useQuery(api.inbox.list, isPerson ? { adminToken: token, human: as, unreadOnly: true, limit: 200 } : "skip");
+  const unreadCount = unread?.unread ?? 0;
+  const unreadConversations = useMemo(() => new Set(unread?.items.map((i) => i.conversation.id) ?? []), [unread]);
+  const now = useNow(15_000);
+  useEffect(() => {
+    document.title = titleWithUnread("agent comms", unreadCount);
+  }, [unreadCount]);
 
   const open = (id: string) => {
     setSelected(id);
     setTab("conversation");
   };
+  const showSide = (s: Side) => {
+    setSide(s);
+    setTab("side");
+  };
+  const sideTabs: [Side, string][] = [
+    ["agents", "Agents"],
+    ["inbox", inboxBadge(unreadCount)],
+    ["reminders", "Reminders"],
+    ["alerts", alertsBadge(alerts?.alerts ?? [])],
+  ];
 
   return (
     <div className="app" data-tab={tab}>
       <header>
         <strong>agent comms</strong>
         <nav>
-          <button className={tab === "directory" ? "on" : ""} onClick={() => setTab("directory")}>Directory</button>
+          {sideTabs.map(([s, label]) => (
+            <button key={s} className={tab === "side" && side === s ? "on" : ""} onClick={() => showSide(s)}>
+              {label}
+            </button>
+          ))}
           <button className={tab === "conversations" ? "on" : ""} onClick={() => setTab("conversations")}>Conversations</button>
           {selected && <button className={tab === "conversation" ? "on" : ""} onClick={() => setTab("conversation")}>Open</button>}
         </nav>
+        {unreadCount > 0 && (
+          <button className="unread-pill" onClick={() => showSide("inbox")} title={`@${as} has ${unreadCount} unread`}>
+            {unreadCount} unread
+          </button>
+        )}
         <label className="as">
           posting as
           <select value={as} onChange={(e) => setAs(e.target.value)}>
@@ -83,8 +116,19 @@ function Main({ token }: { token: string }) {
           </select>
         </label>
       </header>
-      <section className="pane directory">
-        {directory ? <Directory token={token} data={directory} /> : <p className="muted">Loading…</p>}
+      <section className="pane side" data-side={side}>
+        <div className="side-tabs">
+          {sideTabs.map(([s, label]) => (
+            <button key={s} className={side === s ? "on" : ""} onClick={() => setSide(s)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {side === "agents" &&
+          (directory ? <Registry token={token} directory={directory} now={now} promote={<Promote token={token} machines={directory.machines.map((m) => m.machineId)} />} /> : <p className="muted">Loading…</p>)}
+        {side === "inbox" && (isPerson ? <Inbox token={token} human={as} onOpen={open} /> : <p className="muted">Pick a person to post as; the inbox is theirs.</p>)}
+        {side === "reminders" && <Reminders token={token} as={as} now={now} />}
+        {side === "alerts" && <Alerts token={token} alerts={alerts?.alerts} now={now} />}
       </section>
       <section className="pane conversations">
         {conversations && directory ? (
@@ -94,90 +138,25 @@ function Main({ token }: { token: string }) {
         )}
       </section>
       <section className="pane conversation">
-        {selected ? <ConversationView key={selected} token={token} id={selected} as={as} names={directory?.participants.map((p) => p.name) ?? []} /> : <p className="muted">Pick a conversation.</p>}
+        {selected ? (
+          <ConversationView
+            key={selected}
+            token={token}
+            id={selected}
+            as={as}
+            names={directory?.participants.map((p) => p.name) ?? []}
+            unread={isPerson && unreadConversations.has(selected)}
+          />
+        ) : (
+          <p className="muted">Pick a conversation.</p>
+        )}
       </section>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Directory
-
-type DirectoryData = NonNullable<ReturnType<typeof useQuery<typeof api.directory.list>>>;
-
-const ONLINE_MS = 90_000;
-
-/**
- * What the directory shows for a participant (3.4):
- * - stale: its machine's connector hasn't been heard from (it heartbeats every 30 s),
- *   so whatever presence was last written can't be trusted;
- * - unconnected: a Claude Code terminal with no mod session registered with a live
- *   connector. Not proof the mod failed to load: the terminal may simply not be running;
- * - offline: a T3 participant whose thread or T3 can't be reached;
- * - idle / busy: as reported.
- */
-function presenceOf(
-  p: { kind: string; home?: { harness: string }; presence: { status: string; at: number } },
-  seen: number | null,
-  now: number,
-): { status: "person" | "stale" | "unconnected" | "offline" | "idle" | "busy"; label: string } {
-  if (p.kind === "human") return { status: "person", label: "person" };
-  if (seen === null || now - seen >= ONLINE_MS) {
-    const since = seen === null ? "never" : `since ${new Date(seen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-    return { status: "stale", label: `connector not heard from ${since}` };
-  }
-  if (p.presence.status === "offline") {
-    return p.home?.harness === "claude-code"
-      ? { status: "unconnected", label: "mod not connected" }
-      : { status: "offline", label: "offline (T3 or its thread unreachable)" };
-  }
-  return p.presence.status === "busy" ? { status: "busy", label: "busy" } : { status: "idle", label: "idle" };
-}
-
-function Directory({ token, data }: { token: string; data: DirectoryData }) {
-  const setState = useMutation(api.directory.setState);
-  const [error, setError] = useState<string | null>(null);
-  const now = useNow(15_000);
-  const machineSeen = new Map(data.machines.map((m) => [m.machineId, m.lastSeenAt]));
-
-  const act = (name: string, state: "active" | "paused" | "retired") => {
-    if (state === "retired" && !confirm(`Retire @${name}? It gets no more deliveries, and this can't be undone.`)) return;
-    setState({ adminToken: token, name, state }).catch((e: Error) => setError(e.message));
-  };
-
-  return (
-    <>
-      <h2>Directory</h2>
-      {error && <p className="error">{error}</p>}
-      <ul className="people">
-        {data.participants
-          .slice()
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map((p) => {
-            const { status, label } = presenceOf(p, p.home ? machineSeen.get(p.home.machine) ?? null : null, now);
-            return (
-              <li key={p.id} className={`state-${p.state}`}>
-                <span className={`dot ${status}`} title={label} />
-                <span className="name">@{p.name}</span>
-                <span className="muted small">
-                  {p.home ? `${p.home.harness} · ${p.home.machine}` : "web"}
-                  {p.state !== "active" && ` · ${p.state}`}
-                  {p.kind === "agent" && (status === "stale" || status === "unconnected" || status === "offline") && ` · ${label}`}
-                </span>
-                {p.kind === "agent" && p.state !== "retired" && (
-                  <span className="actions">
-                    {p.state === "active" ? <button onClick={() => act(p.name, "paused")}>Pause</button> : <button onClick={() => act(p.name, "active")}>Resume</button>}
-                    <button className="danger" onClick={() => act(p.name, "retired")}>Retire</button>
-                  </span>
-                )}
-              </li>
-            );
-          })}
-      </ul>
-      <Promote token={token} machines={data.machines.map((m) => m.machineId)} />
-    </>
-  );
-}
+// Promotion (shown under the agent registry)
 
 function Promote({ token, machines }: { token: string; machines: string[] }) {
   const promote = useMutation(api.directory.promote);
@@ -295,8 +274,14 @@ function Conversations(props: { token: string; list: ConversationList; names: st
 // ---------------------------------------------------------------------------
 // One conversation
 
-function ConversationView({ token, id, as, names }: { token: string; id: string; as: string; names: string[] }) {
+function ConversationView({ token, id, as, names, unread }: { token: string; id: string; as: string; names: string[]; unread: boolean }) {
   const view = useQuery(api.conversations.view, { adminToken: token, conversationId: id });
+  const markRead = useMutation(api.inbox.markRead);
+  // Open is read: whatever in this conversation is in @as's inbox is marked read,
+  // including messages that arrive while it's open.
+  useEffect(() => {
+    if (unread && view) markRead({ adminToken: token, human: as, conversationId: id }).catch(() => {});
+  }, [unread, view, token, as, id, markRead]);
   const post = useMutation(api.conversations.postAs);
   const addMember = useMutation(api.conversations.addMember);
   const removeMember = useMutation(api.conversations.removeMember);

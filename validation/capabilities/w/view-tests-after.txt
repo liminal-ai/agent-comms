@@ -1,0 +1,52 @@
+$ node --test 'test/**/*.test.ts'
+▶ W registry
+  ✔ W registry: an idle agent shows how long it has been idle (1.110776ms)
+  ✔ W registry: a stale machine is never shown as idle, whatever was last written (12.236351ms)
+  ✔ W registry: busy, offline, people and system participants (0.192736ms)
+  ✔ W registry: a profile edit is one description line and one duty per line, blanks dropped (0.314327ms)
+  ✔ W registry: a profile edit over the protocol's limits is refused before it's sent (0.179359ms)
+✔ W registry (14.942315ms)
+▶ W registry, live
+  ✔ W registry: a machine that stops heartbeating turns stale on the clock, not only when Convex next writes (0.182792ms)
+✔ W registry, live (0.283591ms)
+▶ W reminders
+  ✔ W reminders: the controls offered follow the state; ended reminders have none (0.229896ms)
+  ✔ W reminders: the schedule reads like the rendering (every 30m, once at a time), with its conditions (0.427487ms)
+  ✔ W reminders: the status line says the state, fires, next fire and why it's blocked (0.201516ms)
+  ✔ W reminders: the create form becomes reminders.create arguments (3.736259ms)
+  ✔ W reminders: the create form refuses what Convex would (both or neither schedule, under a minute, past, too long) (0.209842ms)
+✔ W reminders (5.094729ms)
+▶ W inbox
+  ✔ W inbox: the badge and the page title carry the unread count (0.113342ms)
+✔ W inbox (0.190766ms)
+▶ W inbox, kinds
+  ✔ W inbox: messages from system participants are labelled by what they are (0.173433ms)
+✔ W inbox, kinds (0.240744ms)
+▶ W alerts
+  ✔ W alerts: each cause has a plain label, and resolved incidents say so (0.233779ms)
+  ✔ W alerts: the badge counts open incidents only (0.112357ms)
+  ✔ W alerts: thresholds are edited in minutes and checked against Convex's ranges (0.172669ms)
+✔ W alerts (0.632036ms)
+ℹ tests 16
+ℹ suites 6
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 115.064033
+$ tsc -p tsconfig.json
+[36mvite v8.3.1 [32mbuilding client environment for production...[36m[39m
+transforming...
+✓ 99 modules transformed.
+[33m
+[1m(!)[22m outDir [37m[2m/tmp/hazel-web-build[22m[33m is not inside project root and will not be emptied.
+Use --emptyOutDir to override.
+[39m
+rendering chunks...
+computing gzip size...
+../../../../../../tmp/hazel-web-build/index.html                   0.39 kB │ gzip:  0.26 kB
+../../../../../../tmp/hazel-web-build/assets/index-Djrb6vGW.css    6.41 kB │ gzip:  1.90 kB
+../../../../../../tmp/hazel-web-build/assets/index-Cg-A4imu.js   325.13 kB │ gzip: 98.70 kB
+
+[32m✓ built in 246ms[39m
