@@ -5,6 +5,19 @@
 
 import type { Delivery, DeliveryId, MessageEnvelope, MessageId, MessageKind, ParticipantRef } from "./model.ts";
 
+/**
+ * The most characters one rendered delivery (header, framing, history, title,
+ * attachment references and the message together) may have. Whatever the
+ * fields add up to, the rendering is cut down to fit: older history first,
+ * then attachment references, then the message body, each cut said so.
+ */
+export const MAX_RENDERED_CHARS = 48_000;
+/** Conversation titles as rendered (Convex refuses longer ones at creation). */
+export const MAX_TITLE_CHARS = 200;
+
+/** Every line break a harness might honour: CRLF, LF, lone CR, U+2028, U+2029 (fix pass 1.11). */
+const LINE_BREAK = /\r\n|\n|\r|\u2028|\u2029/;
+
 export interface DeliveryHeader {
   deliveryId: DeliveryId;
   messageId: MessageId;
@@ -28,7 +41,7 @@ export function renderHeader(header: DeliveryHeader): string {
  */
 export function findDeliveryHeaders(text: string): DeliveryHeader[] {
   const found: DeliveryHeader[] = [];
-  for (const line of text.split(/\r?\n/)) {
+  for (const line of text.split(LINE_BREAK)) {
     const match = HEADER_LINE.exec(line.trim());
     if (match) found.push({ deliveryId: match[1]!, messageId: match[2]!, kind: match[3] as MessageKind });
   }
@@ -64,8 +77,40 @@ const SOURCE_LINE =
   "Source: agent-comms, the service that carries messages between Lee's agents and people. The user of this session did not type this.";
 
 export function renderDelivery(delivery: Delivery, options: RenderOptions): string {
-  const { message, recipient, conversation, history } = delivery;
+  const full = { history: delivery.history.messages.length, attachments: delivery.message.attachments.length, body: Infinity };
+  let text = build(delivery, options, full);
+  if (text.length <= MAX_RENDERED_CHARS) return text;
+  // Over the cap: drop history (oldest first), then attachment references, then cut the body.
+  const budget = { ...full };
+  while (text.length > MAX_RENDERED_CHARS && budget.history > 0) {
+    budget.history = Math.max(0, budget.history - Math.max(1, Math.ceil(budget.history / 2)));
+    text = build(delivery, options, budget);
+  }
+  while (text.length > MAX_RENDERED_CHARS && budget.attachments > 0) {
+    budget.attachments = Math.floor(budget.attachments / 2);
+    text = build(delivery, options, budget);
+  }
+  if (text.length > MAX_RENDERED_CHARS) {
+    budget.body = Math.max(0, delivery.message.text.length - (text.length - MAX_RENDERED_CHARS) - 200);
+    text = build(delivery, options, budget);
+  }
+  return text.length <= MAX_RENDERED_CHARS ? text : text.slice(0, MAX_RENDERED_CHARS);
+}
+
+interface Budget {
+  /** How many of the newest history messages to show. */
+  history: number;
+  attachments: number;
+  /** Most characters of the message body. */
+  body: number;
+}
+
+function build(delivery: Delivery, options: RenderOptions, budget: Budget): string {
+  const { message, recipient, conversation } = delivery;
   const me = recipient.name;
+  const readCmd = `\`comms read --as ${me} ${conversation.id}\``;
+  const shownHistory = delivery.history.messages.slice(delivery.history.messages.length - budget.history);
+  const omitted = delivery.history.omitted + (delivery.history.messages.length - shownHistory.length);
   const lines: string[] = [];
 
   lines.push(renderHeader({ deliveryId: delivery.id, messageId: message.id, kind: message.kind }));
@@ -75,25 +120,27 @@ export function renderDelivery(delivery: Delivery, options: RenderOptions): stri
   lines.push(`Your comms name is @${me}; pass it as \`--as ${me}\` to the comms CLI.`);
   lines.push(`Conversation: ${describeConversation(delivery)}`);
 
-  if (history.messages.length > 0 || history.omitted > 0) {
+  if (shownHistory.length > 0 || omitted > 0) {
     lines.push("");
-    const shown = history.messages.length;
-    const olderNote =
-      history.omitted > 0
-        ? `; ${history.omitted} older not shown, read them with \`comms read --as ${me} ${conversation.id}\``
-        : "";
-    lines.push(`Earlier in this conversation, since you last read (${shown} shown${olderNote}):`);
-    for (const earlier of history.messages) {
+    const olderNote = omitted > 0 ? `; ${omitted} older not shown, read them with ${readCmd}` : "";
+    lines.push(`Earlier in this conversation, since you last read (${shownHistory.length} shown${olderNote}):`);
+    for (const earlier of shownHistory) {
       lines.push(`#${earlier.seq} ${routeLine(earlier)}:`);
       lines.push(...quote(earlier.text));
     }
   }
 
+  const body =
+    message.text.length <= budget.body
+      ? message.text
+      : `${message.text.slice(0, budget.body)}\n[… ${message.text.length - budget.body} more characters not shown; read the whole message with ${readCmd}]`;
+  const attachments = attachmentLines(message, budget.attachments);
+
   lines.push("");
   if (message.kind === "request") {
     lines.push(`Request #${message.seq} from @${message.sender.name}:`);
-    lines.push(...quote(message.text));
-    lines.push(...attachmentLines(message));
+    lines.push(...quote(body));
+    lines.push(...attachments);
     lines.push("");
     lines.push(
       `An answer is expected. Reply normally: your final message in this turn is sent back to @${message.sender.name} as your answer, so make it complete on its own. Finish the work before your final message; if you must end the turn first, send the result later with \`comms reply\`.`,
@@ -111,8 +158,8 @@ export function renderDelivery(delivery: Delivery, options: RenderOptions): stri
       lines.push(`This answers message ${message.inReplyTo}.`);
     }
     lines.push(`Answer #${message.seq} from @${message.sender.name}:`);
-    lines.push(...quote(message.text));
-    lines.push(...attachmentLines(message));
+    lines.push(...quote(body));
+    lines.push(...attachments);
     lines.push("");
     lines.push(
       `No reply is expected, and nothing you write now is sent anywhere automatically. To follow up, use \`comms send --as ${me}\` or \`comms reply --as ${me} ${message.id}\`.`,
@@ -139,7 +186,7 @@ function describeConversation(delivery: Delivery): string {
     const other = message.sender.id === recipient.id ? message.recipients[0] : message.sender;
     return `direct messages with @${other?.name ?? "unknown"} (id ${conversation.id})`;
   }
-  const title = conversation.title ? ` "${oneLine(conversation.title)}"` : "";
+  const title = conversation.title ? ` "${clip(oneLine(conversation.title), MAX_TITLE_CHARS)}"` : "";
   return `group${title} (id ${conversation.id}). Only the addressed members are woken; the others see this later.`;
 }
 
@@ -149,24 +196,27 @@ function routeLine(message: MessageEnvelope): string {
   return to ? `@${message.sender.name} → ${to}${kind}` : `@${message.sender.name}${kind}`;
 }
 
-function attachmentLines(message: MessageEnvelope): string[] {
+function attachmentLines(message: MessageEnvelope, show: number): string[] {
   if (message.attachments.length === 0) return [];
+  const shown = message.attachments.slice(0, show);
+  const more = message.attachments.length - shown.length;
   return [
     "Attachments:",
-    ...message.attachments.map((a) => {
-      const type = a.mimeType ? ` (${oneLine(a.mimeType)})` : "";
-      return `- ${oneLine(a.name)}${type}: ${oneLine(a.url)}`;
+    ...shown.map((a) => {
+      const type = a.mimeType ? ` (${clip(oneLine(a.mimeType), 100)})` : "";
+      return `- ${clip(oneLine(a.name), 200)}${type}: ${clip(oneLine(a.url), 1000)}`;
     }),
+    ...(more > 0 ? [`- … ${more} more attachment${more === 1 ? "" : "s"}, listed in the message (\`comms read\`)`] : []),
   ];
 }
 
 /** Quoted body lines. The "> " prefix is what keeps a pasted header from ever being a whole line. */
 function quote(text: string): string[] {
-  return text.split(/\r?\n/).map((line) => (line.length > 0 ? `> ${line}` : ">"));
+  return text.split(LINE_BREAK).map((line) => (line.length > 0 ? `> ${line}` : ">"));
 }
 
 function oneLine(text: string): string {
-  return text.replace(/[\r\n]+/g, " ");
+  return text.replace(/[\r\n\u2028\u2029]+/g, " ");
 }
 
 function clip(text: string, max: number): string {
@@ -206,7 +256,7 @@ export function renderUnmatchedNotice(delivery: Delivery, options: Pick<RenderOp
 
 /** Finds the notice header as a complete line, like `parseDeliveryHeader`. */
 export function parseNoticeHeader(text: string): NoticeHeader | null {
-  for (const line of text.split(/\r?\n/)) {
+  for (const line of text.split(LINE_BREAK)) {
     const match = NOTICE_LINE.exec(line.trim());
     if (match) return { notice: "unmatched", deliveryId: match[1]!, messageId: match[2]! };
   }

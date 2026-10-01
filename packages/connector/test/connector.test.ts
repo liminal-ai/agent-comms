@@ -220,3 +220,51 @@ describe("connector restart", () => {
     await until("replied after the outage", async () => (await deliveryState(w.t, sent.message.conversationId, sent.message.id, "b"))?.state === "replied");
   });
 });
+
+describe("fix pass 3.6", () => {
+  it("3.6 an unclassified server error never carries its text (which may echo the secret)", async () => {
+    const { classify } = await import("../src/server-api.ts");
+    const e = classify("send", new Error('ArgumentValidationError: Value does not match validator. Path: .machine Value: {"secret":"box-secret-0123456789"}'));
+    expect(e._tag).toBe("Unavailable");
+    expect(e.message).not.toContain("box-secret");
+    expect(classify("send", new TypeError("fetch failed")).message).toContain("fetch failed");
+  });
+});
+
+describe("fix pass 3.3", () => {
+  it("3.3 a superseded session is freed once its last poll is answered", async () => {
+    const w = await world();
+    const r = await startConnector(w.api, w.socket);
+    running.push(r);
+    const old = new Mod(w.socket, "b", "old");
+    await old.register();
+    await new Mod(w.socket, "b", "new").register();
+    await old.op("poll", { waitMs: 10 } as never);
+    await until("freed", async () => (r.sessions?.sessionCount() ?? -1) === 1, 8_000);
+  });
+});
+
+describe("fix pass 3.1", () => {
+  it("3.1 a Claude Code handoff and a restart question each have a deadline", async () => {
+    const { ClaudeCodeSessions } = await import("../src/claude-code.ts");
+    const { makePoke } = await import("../src/adapter.ts");
+    const Effect = await import("effect/Effect");
+    const sessions = new ClaudeCodeSessions({
+      pollWaitMs: 50,
+      handOffDeadlineMs: 200,
+      checkDeadlineMs: 200,
+      homed: async () => [{ participant: { id: "p", name: "b", kind: "agent" }, home: { machine: "box", harness: "claude-code", locator: "b" }, state: "active" }],
+      presence: () => {},
+      poke: makePoke(),
+    });
+    await sessions.register({ participant: "b", harness: "claude-code", sessionId: "s", cwd: "/", status: "idle" });
+    const d = { id: "d1", message: { id: "m1", kind: "request" }, status: { state: "claimed", at: 0 } } as never;
+    const target = { participant: "b", locator: "b" };
+    const started = Date.now();
+    const h = await Effect.runPromise(sessions.adapter.handOff(target, d, { confirm: async () => true }));
+    expect(h._tag).toBe("lost");
+    const c = await Effect.runPromise(sessions.adapter.check(target, d, undefined));
+    expect(c._tag).toBe("later");
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+});

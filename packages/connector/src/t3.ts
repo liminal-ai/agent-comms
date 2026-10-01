@@ -8,7 +8,8 @@ export function t3HarnessAdapter(adapter: T3Adapter): HarnessAdapter {
   return {
     harness: "t3",
     ready: (target) => Effect.promise(() => adapter.ready(target)),
-    handOff: (target, delivery) => Effect.promise(() => adapter.handOff(target, delivery)),
+    // The signal aborts a handoff still waiting (claim lost, connector stopping); the adapter re-checks the claim before sending (2.2).
+    handOff: (target, delivery, gate) => Effect.promise((signal) => adapter.handOff(target, delivery, { confirm: gate.confirm, signal })),
     awaitOutcome: (target, delivery, turnId) => Effect.promise(() => adapter.awaitOutcome(target, delivery, turnId)),
     check: (target, delivery, turnId) => Effect.promise(() => adapter.check(target, delivery, turnId)),
     notifyUnmatched: (target, delivery) => Effect.promise(() => adapter.notifyUnmatched(target, delivery)),

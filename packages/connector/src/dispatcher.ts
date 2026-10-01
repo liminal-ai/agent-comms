@@ -8,14 +8,14 @@
 //   aren't working on is recovered through the adapter's check.
 // - Writes retry while the server is unreachable; nothing here blocks a harness.
 
-import { type Claim, clipAnswer, type Delivery } from "@agent-comms/protocol";
+import { type Claim, clipAnswer, type Delivery, type DeliveryState } from "@agent-comms/protocol";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
-import { Adapters, type Check, type HarnessAdapter, type Outcome, Poke, type Target } from "./adapter.ts";
+import { Adapters, type Check, type Gate, type HarnessAdapter, type Outcome, Poke, type Target } from "./adapter.ts";
 import { type ApiError, ServerApi, type WorkItem } from "./server-api.ts";
 
 export interface DispatcherOptions {
@@ -24,10 +24,20 @@ export interface DispatcherOptions {
   tickMs?: number;
   /** How long to leave a delivery alone after a check said "later". */
   laterMs?: number;
+  /** After this long of "later" answers, the delivery is recorded uncertain (3.2). */
+  laterLimitMs?: number;
+  /** A readiness check that takes longer than this counts as not ready (3.1). */
+  readyTimeoutMs?: number;
   /** Backoff for writes while the server is unreachable. */
   retryBaseMs?: number;
   retryMaxMs?: number;
   log?: (line: string) => void;
+  /**
+   * Test-only fault injection (fix pass section 5): "crash-after-accept" kills
+   * this process right after the harness accepted a delivery and before
+   * `delivered` is recorded: the crash window recovery has to handle.
+   */
+  fault?: "crash-after-accept";
 }
 
 class ClaimLost extends Data.TaggedError("ClaimLost")<{ deliveryId: string }> {}
@@ -47,6 +57,15 @@ export const runDispatcher = (options: DispatcherOptions) =>
     const log = options.log ?? ((line: string) => console.error(`agent-comms connector: ${line}`));
     const tickMs = options.tickMs ?? 1_000;
     const laterMs = options.laterMs ?? 5_000;
+    /** One line per decision, for the evidence of what the connector did and why. */
+    const decide = (id: string, what: string, detail?: string) => log(`decision ${id} ${what}${detail ? ` ${detail}` : ""}`);
+    const laterLimitMs = options.laterLimitMs ?? 10 * 60_000;
+    const readyTimeoutMs = options.readyTimeoutMs ?? 5_000;
+    /** Delivery id → when checks first started saying "later". */
+    const laterSince = new Map<string, number>();
+    /** Participant → last known readiness; refreshed in the background so a wedged harness can't stall this loop (3.1). */
+    const readiness = new Map<string, boolean>();
+    const checkingReady = new Set<string>();
 
     let latest: WorkItem[] = [];
     /** Participant → the delivery we're working on for it. */
@@ -115,8 +134,10 @@ export const runDispatcher = (options: DispatcherOptions) =>
       const claimId = h.claim.claimId;
       switch (outcome._tag) {
         case "replied":
+          decide(id, "outcome", `replied turn=${turnId}`);
           return write("collect", id, api.collect(id, claimId, turnId, clipAnswer(outcome.answer)));
         case "ambiguous":
+          decide(id, "outcome", `ambiguous turn=${turnId} entered=${outcome.entered.map((e) => e.origin).join(",")}`);
           return write("ambiguous", id, api.ambiguous(id, claimId, turnId, outcome.entered)).pipe(
             Effect.tap((ok) => {
               const notify = adapters.get(h.harness)?.notifyUnmatched;
@@ -129,7 +150,11 @@ export const runDispatcher = (options: DispatcherOptions) =>
             }),
           );
         case "failed":
+          decide(id, "outcome", `failed turn=${turnId} ${outcome.reason}: ${outcome.detail ?? ""}`);
           return write("failed", id, api.failed(id, claimId, turnId, outcome.reason, outcome.detail));
+        case "uncertain":
+          decide(id, "outcome", `uncertain turn=${turnId} ${outcome.detail}`);
+          return write("uncertain", id, api.uncertain(id, claimId, outcome.detail));
       }
     };
 
@@ -144,8 +169,34 @@ export const runDispatcher = (options: DispatcherOptions) =>
         yield* release(h);
       });
 
+    /** Records `delivered`, and keeps our copy of the delivery current: recovery decides from it (2.1). */
     const markDelivered = (h: Held, turnId: string, cursor?: string) =>
-      write("delivered", h.delivery.id, api.delivered(h.delivery.id, h.claim.claimId, turnId, cursor));
+      write("delivered", h.delivery.id, api.delivered(h.delivery.id, h.claim.claimId, turnId, cursor)).pipe(
+        Effect.tap((ok) =>
+          Effect.sync(() => {
+            if (!ok) return;
+            const status = { ...h.delivery.status, state: "delivered" as const, turnId, ...(cursor !== undefined ? { cursor } : {}) };
+            h.delivery = { ...h.delivery, status };
+          }),
+        ),
+      );
+
+    /** Right before the adapter sends: the claim compare-and-set, recording home and cursor (2.2, 2.5). */
+    const gateFor = (h: Held): Gate => ({
+      confirm: (cursor) =>
+        Effect.runPromise(
+          api.prepare(h.delivery.id, h.claim.claimId, cursor).pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                decide(h.delivery.id, "gate", `claim confirmed; sending (cursor=${cursor ?? "none"})`);
+                if (cursor !== undefined) h.delivery = { ...h.delivery, status: { ...h.delivery.status, cursor } };
+              }),
+            ),
+            Effect.as(true),
+            Effect.catch((e) => Effect.sync(() => (log(`${h.delivery.id}: not sending (${e.message})`), false))),
+          ),
+        ),
+    });
 
     const handOffAndFollow = (adapter: HarnessAdapter, h: Held) =>
       Effect.gen(function* () {
@@ -159,14 +210,23 @@ export const runDispatcher = (options: DispatcherOptions) =>
           return log(`${h.delivery.id}: can't confirm the claim (${cas.failure.message}); will retry`);
         }
         h.claim = cas.success.claim;
-        const result = yield* withLease(h, adapter.handOff(h.target, h.delivery));
+        decide(h.delivery.id, "handoff", `to ${h.harness}:${h.target.locator}`);
+        const result = yield* withLease(h, adapter.handOff(h.target, h.delivery, gateFor(h)));
+        decide(h.delivery.id, `handoff-${result._tag}`, result._tag === "accepted" ? `turn=${result.turnId}` : result.detail);
         switch (result._tag) {
+          case "aborted":
+            log(`${h.delivery.id}: not sent (${result.detail})`);
+            return yield* release(h);
           case "rejected":
             yield* write("failed", h.delivery.id, api.failed(h.delivery.id, h.claim.claimId, undefined, "rejected", result.detail));
             return yield* release(h);
           case "lost":
             return log(`${h.delivery.id}: lost during handoff (${result.detail}); will check later`);
           case "accepted": {
+            if (options.fault === "crash-after-accept") {
+              decide(h.delivery.id, "fault", "crash-after-accept: killing the connector before recording delivered");
+              process.kill(process.pid, "SIGKILL");
+            }
             if (!(yield* markDelivered(h, result.turnId, result.cursor))) return yield* release(h);
             if (h.delivery.message.kind !== "request") return yield* release(h);
             return yield* follow(adapter, h, result.turnId);
@@ -178,12 +238,22 @@ export const runDispatcher = (options: DispatcherOptions) =>
       Effect.gen(function* () {
         const check: Check = yield* withLease(h, adapter.check(h.target, h.delivery, knownTurnId));
         const id = h.delivery.id;
+        decide(id, `check-${check._tag}`, `recorded=${h.delivery.status.state}${"turnId" in check ? ` turn=${check.turnId}` : ""}${"detail" in check ? ` ${check.detail}` : ""}`);
+        if (check._tag !== "later") laterSince.delete(id);
         const wasDelivered = h.delivery.status.state === "delivered";
         const collect = h.delivery.message.kind === "request";
         switch (check._tag) {
-          case "later":
+          case "later": {
+            const since = laterSince.get(id) ?? Date.now();
+            laterSince.set(id, since);
+            if (Date.now() - since >= laterLimitMs) {
+              laterSince.delete(id);
+              yield* write("uncertain", id, api.uncertain(id, h.claim.claimId, `couldn't establish what happened after ${Math.round((Date.now() - since) / 1000)} s (${check.detail})`));
+              return yield* release(h);
+            }
             notBefore.set(id, Date.now() + laterMs);
             return;
+          }
           case "unknown":
             yield* write("uncertain", id, api.uncertain(id, h.claim.claimId, check.detail));
             return yield* release(h);
@@ -217,7 +287,16 @@ export const runDispatcher = (options: DispatcherOptions) =>
             if (r.failure._tag === "ProtocolFailure") held.delete(item.id);
             return;
           }
-          h = { ...mine, claim: r.success.claim };
+          // Our copy may be behind what's recorded (or the other way round): take the further state (2.1).
+          const recorded: DeliveryState =
+            item.state === "delivered" || mine.delivery.status.state === "delivered" ? "delivered" : mine.delivery.status.state;
+          const status = {
+            ...mine.delivery.status,
+            state: recorded,
+            ...((item.turnId ?? mine.delivery.status.turnId) !== undefined ? { turnId: item.turnId ?? mine.delivery.status.turnId } : {}),
+            ...((mine.delivery.status.cursor ?? item.cursor) !== undefined ? { cursor: mine.delivery.status.cursor ?? item.cursor } : {}),
+          };
+          h = { ...mine, claim: r.success.claim, delivery: { ...mine.delivery, status } };
           takeover = true;
         } else {
           const r = yield* Effect.result(api.claim(item.id, options.leaseMs));
@@ -229,6 +308,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
           takeover = r.success.takeover;
         }
         held.set(item.id, h);
+        decide(item.id, takeover ? "recover" : "claimed", `state=${h.delivery.status.state} participant=${h.target.participant}`);
         if (takeover) yield* recover(adapter, h, item.turnId ?? h.delivery.status.turnId);
         else yield* handOffAndFollow(adapter, h);
       }).pipe(
@@ -270,7 +350,24 @@ export const runDispatcher = (options: DispatcherOptions) =>
           const expired = !inFlight.claim || inFlight.claim.leaseExpiresAt <= now;
           if (!ours && !expired) continue;
         }
-        if (!(yield* adapter.ready(target))) continue;
+        const key = `${first.harness}/${participant}`;
+        if (!checkingReady.has(key)) {
+          checkingReady.add(key);
+          yield* adapter.ready(target).pipe(
+            Effect.timeoutOption(Duration.millis(readyTimeoutMs)),
+            Effect.map((r) => r._tag === "Some" && r.value),
+            Effect.tap((ok) =>
+              Effect.sync(() => {
+                const changed = readiness.get(key) !== ok;
+                readiness.set(key, ok);
+                if (changed && ok) wake();
+              }),
+            ),
+            Effect.ensuring(Effect.sync(() => checkingReady.delete(key))),
+            Effect.forkScoped,
+          );
+        }
+        if (!readiness.get(key)) continue;
         busy.set(participant, next.id);
         yield* work(adapter, next, target).pipe(
           Effect.ensuring(

@@ -1,10 +1,12 @@
-// The real T3Client: T3 v0.0.44's own client runtime (linked from a T3
-// checkout by ../../link-deps.sh), the same code path its web client uses.
-// Auth is a bearer read from a file; this module never prints it.
+// The real T3Client, against T3 v0.0.44's wire contract (vendored in wire.ts):
 //
 //   GET  /api/orchestration/threads/<id>[?turnLimit=N]   thread snapshot (bearer)
-//   WS   orchestration.subscribeThread                    change trigger
-//   WS   orchestration.dispatchCommand thread.turn.start  our message
+//   POST /api/orchestration/dispatch                      thread.turn.start (bearer)
+//   POST /api/auth/websocket-ticket                       a ticket for the WebSocket (bearer)
+//   WS   /ws?wsTicket=…  orchestration.subscribeThread    the thread's events (Effect RPC, JSON)
+//
+// Uses this repo's own effect (the same 4.0.0-rc.115 T3 pins); nothing from a
+// T3 checkout. The bearer is read from a file and never printed.
 
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -16,12 +18,11 @@ import * as Schedule from "effect/Schedule";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
+import type * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as Socket from "effect/unstable/socket/Socket";
-import { resolveRemoteWebSocketConnectionUrl } from "@t3tools/client-runtime/authorization";
-import { makeWsRpcProtocolClient, remoteHttpClientLayer, type WsRpcProtocolClient } from "@t3tools/client-runtime/rpc";
-import { ORCHESTRATION_WS_METHODS, type OrchestrationEvent, type OrchestrationThread } from "@t3tools/contracts";
 import { T3Rejected, type T3Client, type T3Event, type T3StreamItem, type T3Thread } from "../model.ts";
+import { AdapterRpcs, SUBSCRIBE_THREAD, type WireEvent, type WireStreamItem, type WireThread, type WireTurnStart } from "./wire.ts";
 
 export interface T3ClientOptions {
   /** e.g. http://127.0.0.1:3780 */
@@ -31,8 +32,10 @@ export interface T3ClientOptions {
   log: (line: string) => void;
 }
 
+type AdapterClient = RpcClient.RpcClient<RpcGroup.Rpcs<typeof AdapterRpcs>>;
+
 interface Session {
-  client: WsRpcProtocolClient;
+  client: AdapterClient;
   scope: Scope.Closeable;
   disconnected: boolean;
 }
@@ -40,22 +43,28 @@ interface Session {
 export function makeT3Client(options: T3ClientOptions): T3Client {
   const baseUrl = options.baseUrl.replace(/\/$/, "");
   const bearer = () => readFileSync(options.authFile, "utf8").trim();
+  const authHeaders = () => ({ authorization: `Bearer ${bearer()}` });
   let session: Session | null = null;
   let connecting: Promise<Session> | null = null;
+
+  const socketUrl = async (): Promise<string> => {
+    const response = await fetch(`${baseUrl}/api/auth/websocket-ticket`, {
+      method: "POST",
+      headers: authHeaders(),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) throw new Error(`T3 websocket ticket: HTTP ${response.status}`);
+    const { ticket } = (await response.json()) as { ticket: string };
+    const url = new URL(`${baseUrl.replace(/^http/, "ws")}/ws`);
+    url.searchParams.set("wsTicket", ticket);
+    return url.toString();
+  };
 
   const connect = async (): Promise<Session> => {
     if (session && !session.disconnected) return session;
     connecting ??= (async () => {
       try {
-        const httpLayer = remoteHttpClientLayer(globalThis.fetch.bind(globalThis));
-        const socketUrl = await Effect.runPromise(
-          resolveRemoteWebSocketConnectionUrl({
-            wsBaseUrl: baseUrl.replace(/^http/, "ws"),
-            httpBaseUrl: baseUrl,
-            bearerToken: bearer(),
-            clientMetadata: { surface: "cli", label: "agent-comms", deviceType: "bot", os: process.platform } as never,
-          }).pipe(Effect.provide(httpLayer)) as Effect.Effect<string, unknown, never>,
-        );
+        const url = await socketUrl();
         const scope = await Effect.runPromise(Scope.make());
         const created: Session = { client: undefined as never, scope, disconnected: false };
         const hooks = RpcClient.ConnectionHooks.of({
@@ -70,16 +79,17 @@ export function makeT3Client(options: T3ClientOptions): T3Client {
         ).pipe(
           Layer.provide(
             Layer.mergeAll(
-              Socket.layerWebSocket(socketUrl, { openTimeout: "15 seconds" }).pipe(Layer.provide(Socket.layerWebSocketConstructorGlobal)),
+              Socket.layerWebSocket(url, { openTimeout: "15 seconds" }).pipe(Layer.provide(Socket.layerWebSocketConstructorGlobal)),
               RpcSerialization.layerJson,
               Layer.succeed(RpcClient.ConnectionHooks, hooks),
             ),
           ),
         );
-        const context = await Effect.runPromise(Layer.build(protocol).pipe(Scope.provide(scope)) as Effect.Effect<never, never, never>);
-        created.client = (await Effect.runPromise(
-          makeWsRpcProtocolClient.pipe(Effect.provide(context), Scope.provide(scope)) as Effect.Effect<WsRpcProtocolClient, never, never>,
-        )) as WsRpcProtocolClient;
+        // Build the socket into the session's scope: Effect.provide(layer) would close it when make() returns.
+        const context = await Effect.runPromise(Layer.build(protocol).pipe(Scope.provide(scope)));
+        created.client = await Effect.runPromise(
+          RpcClient.make(AdapterRpcs).pipe(Effect.provide(context), Scope.provide(scope)) as unknown as Effect.Effect<AdapterClient, unknown, never>,
+        );
         session = created;
         return created;
       } finally {
@@ -89,15 +99,15 @@ export function makeT3Client(options: T3ClientOptions): T3Client {
     return connecting;
   };
 
-  const rpc = <A>(effect: unknown): Promise<A> => Effect.runPromise(effect as Effect.Effect<A, unknown, never>);
-
   return {
     connected: async () => {
       try {
         await connect();
         return true;
       } catch (error) {
-        options.log(`T3 at ${baseUrl}: can't connect (${error instanceof Error ? error.message : String(error)})`);
+        // Never log the ticketed WebSocket URL (3.6).
+        const message = (error instanceof Error ? error.message : String(error)).replace(/wsTicket=[^&\s"']+/g, "wsTicket=<redacted>");
+        options.log(`T3 at ${baseUrl}: can't connect (${message})`);
         return false;
       }
     },
@@ -105,42 +115,52 @@ export function makeT3Client(options: T3ClientOptions): T3Client {
     getThread: async (threadId, turnLimit) => {
       const query = turnLimit ? `?turnLimit=${turnLimit}` : "";
       const response = await fetch(`${baseUrl}/api/orchestration/threads/${encodeURIComponent(threadId)}${query}`, {
-        headers: { authorization: `Bearer ${bearer()}` },
+        headers: authHeaders(),
         signal: AbortSignal.timeout(15_000),
       });
       if (response.status === 404) return null;
       if (!response.ok) throw new Error(`T3 thread snapshot: HTTP ${response.status}`);
-      const body = (await response.json()) as { snapshotSequence: number; thread: OrchestrationThread };
+      const body = (await response.json()) as { snapshotSequence: number; thread: WireThread };
       return slice(body.thread, body.snapshotSequence);
     },
 
     startTurn: async (threadId, turn) => {
-      const s = await connect();
-      try {
-        await rpc(
-          (s.client[ORCHESTRATION_WS_METHODS.dispatchCommand] as (c: unknown) => unknown)({
-            type: "thread.turn.start",
-            commandId: randomUUID(),
-            threadId,
-            message: { messageId: turn.messageId, role: "user", text: turn.text, attachments: [] },
-            runtimeMode: turn.runtimeMode,
-            interactionMode: turn.interactionMode,
-            createdAt: new Date().toISOString(),
-          }),
-        );
-      } catch (error) {
-        throw new T3Rejected(`thread.turn.start refused: ${error instanceof Error ? error.message : String(error)}`);
+      const command: WireTurnStart = {
+        type: "thread.turn.start",
+        commandId: randomUUID(),
+        threadId,
+        message: { messageId: turn.messageId, role: "user", text: turn.text, attachments: [] },
+        runtimeMode: turn.runtimeMode,
+        interactionMode: turn.interactionMode,
+        createdAt: new Date().toISOString(),
+      };
+      // Only an HTTP 4xx is a refusal (the command was rejected and never ran). A 5xx, a dropped
+      // connection or a timeout may follow acceptance: thrown as a plain error, never T3Rejected (2.3).
+      const response = await fetch(`${baseUrl}/api/orchestration/dispatch`, {
+        method: "POST",
+        headers: { ...authHeaders(), "content-type": "application/json" },
+        body: JSON.stringify(command),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (response.status >= 400 && response.status < 500) {
+        const reason = await response.text().then((t) => t.slice(0, 300), () => "");
+        throw new T3Rejected(`thread.turn.start refused: HTTP ${response.status} ${reason}`);
       }
+      if (!response.ok) throw new Error(`thread.turn.start: HTTP ${response.status}; it may or may not have been accepted`);
     },
 
     subscribe: async (threadId, options, onItem) => {
       const s = await connect();
-      const input = { threadId, ...(options.afterSequence !== undefined ? { afterSequence: options.afterSequence } : {}) };
-      const stream = (s.client[ORCHESTRATION_WS_METHODS.subscribeThread] as (i: unknown) => Stream.Stream<unknown, unknown, never>)(input);
+      const input = {
+        threadId,
+        requestCompletionMarker: true,
+        ...(options.afterSequence !== undefined ? { afterSequence: options.afterSequence } : {}),
+      };
+      const stream = (s.client as unknown as Record<string, (i: unknown) => Stream.Stream<unknown, unknown, never>>)[SUBSCRIBE_THREAD]!(input);
       const fiber = Effect.runFork(
         Stream.runForEach(stream, (raw) =>
           Effect.sync(() => {
-            const item = toItem(raw);
+            const item = toItem(raw as WireStreamItem);
             if (item) onItem(item);
           }),
         ).pipe(
@@ -159,8 +179,7 @@ export function makeT3Client(options: T3ClientOptions): T3Client {
   };
 }
 
-function toItem(raw: unknown): T3StreamItem | undefined {
-  const item = raw as { kind: string; snapshot?: { snapshotSequence: number; thread: OrchestrationThread }; event?: OrchestrationEvent };
+export function toItem(item: WireStreamItem): T3StreamItem | undefined {
   if (item.kind === "synchronized") return { kind: "synchronized" };
   if (item.kind === "snapshot" && item.snapshot) return { kind: "snapshot", thread: slice(item.snapshot.thread, item.snapshot.snapshotSequence) };
   if (item.kind === "event" && item.event) return { kind: "event", event: toEvent(item.event) };
@@ -168,9 +187,9 @@ function toItem(raw: unknown): T3StreamItem | undefined {
 }
 
 /** Only the fields the tracker reads; user message text never leaves here. */
-function toEvent(event: OrchestrationEvent): T3Event {
+export function toEvent(event: WireEvent): T3Event {
   const sequence = event.sequence;
-  const payload = event.payload as Record<string, unknown>;
+  const payload = (event.payload ?? {}) as Record<string, unknown>;
   switch (event.type) {
     case "thread.message-sent":
       return payload.role === "user"
@@ -193,7 +212,7 @@ function toEvent(event: OrchestrationEvent): T3Event {
 }
 
 /** Keep only what the adapter reads. User message text is dropped here. */
-function slice(thread: OrchestrationThread, snapshotSequence: number): T3Thread {
+export function slice(thread: WireThread, snapshotSequence: number): T3Thread {
   return {
     id: thread.id,
     snapshotSequence,

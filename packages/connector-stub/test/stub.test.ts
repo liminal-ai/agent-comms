@@ -348,3 +348,15 @@ describe("socket directory", () => {
     other.close();
   });
 });
+
+describe("fix pass 3.7", () => {
+  afterEach(() => server.close());
+  it("3.7 a delivery is handed out with its attachments", async () => {
+    await start();
+    await register("mod-b");
+    const waiting = ok("poll", { sessionId: "s-mod-b", waitMs: 3000 });
+    await ok("send", { as: "mod-a", to: ["mod-b"], text: "see file", attachments: [{ name: "a.txt", url: "file:///tmp/a.txt" }] });
+    const items = (await waiting).items;
+    assert.deepEqual(onlyDelivery(items).message.attachments, [{ name: "a.txt", url: "file:///tmp/a.txt" }]);
+  });
+});

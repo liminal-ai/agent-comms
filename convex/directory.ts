@@ -10,7 +10,7 @@ import { home, participantKind } from "./validators";
 export const registerMachine = mutation({
   args: { adminToken: v.string(), machineId: v.string(), secret: v.string() },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     if (args.secret.length < 16) fail("bad_request", "the connector secret must be at least 16 characters");
     const secretHash = await sha256Hex(args.secret);
     const existing = await ctx.db
@@ -33,7 +33,7 @@ export const promote = mutation({
     owner: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     if (!NAME_PATTERN.test(args.name)) fail("bad_request", `@${args.name} isn't a valid name (lowercase [a-z0-9_-], 1-48)`);
     if (args.kind === "agent" && !args.home) fail("bad_request", "an agent needs a home");
     const taken = await ctx.db
@@ -59,7 +59,7 @@ export const promote = mutation({
 export const rebind = mutation({
   args: { adminToken: v.string(), name: v.string(), home },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     const p = await participantByName(ctx, args.name);
     if (p.kind !== "agent") fail("bad_request", `@${p.name} is a person; people have no home`);
     await ctx.db.patch(p._id, { home: args.home, presence: { status: "offline", at: Date.now() } });
@@ -69,12 +69,14 @@ export const rebind = mutation({
 
 /**
  * Pause, resume or retire. Paused: deliveries are created and wait as pending.
- * Retired: no new deliveries, and pending ones fail. In-flight ones finish.
+ * Retired: no new deliveries, and pending ones fail. In-flight ones (claimed or
+ * delivered) finish on the machine they were handed to, and a request's
+ * answer is still collected (fix pass 2.4).
  */
 export const setState = mutation({
   args: { adminToken: v.string(), name: v.string(), state: v.union(v.literal("active"), v.literal("paused"), v.literal("retired")) },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     const p = await participantByName(ctx, args.name);
     if (p.state === "retired" && args.state !== "retired") fail("conflict", `@${p.name} is retired`);
     await ctx.db.patch(p._id, { state: args.state });
@@ -93,7 +95,7 @@ export const setState = mutation({
 export const list = query({
   args: { adminToken: v.string() },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminToken);
+    await requireAdmin(args.adminToken);
     const rows = await ctx.db.query("participants").collect();
     const machines = await ctx.db.query("machines").collect();
     return {

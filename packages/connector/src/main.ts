@@ -39,7 +39,7 @@ const api = makeServerApi(transport, { machine: { id: config.machine, secret: co
 const adapters: HarnessAdapter[] = [];
 if (config.adapters?.includes("t3")) {
   if (!config.t3) throw new Error(`config: "adapters" includes t3 but there's no "t3" section`);
-  // Loaded only when configured: it needs a T3 checkout linked by packages/adapter-t3/link-deps.sh.
+  // Loaded only when configured.
   const { makeT3Client } = await import("@agent-comms/adapter-t3/client");
   const { makeT3Adapter } = await import("@agent-comms/adapter-t3");
   const { t3HarnessAdapter } = await import("./t3.ts");
@@ -58,6 +58,7 @@ await Effect.runPromise(
       ...(config.pollWaitMs ? { pollWaitMs: config.pollWaitMs } : {}),
       adapters,
       log,
+      ...(process.env.AGENT_COMMS_FAULT === "crash-after-accept" ? { fault: "crash-after-accept" as const } : {}),
     }),
   ),
 );

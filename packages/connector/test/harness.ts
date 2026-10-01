@@ -12,6 +12,8 @@ import * as Exit from "effect/Exit";
 import * as Scope from "effect/Scope";
 import { api } from "../../../convex/_generated/api.js";
 import schema from "../../../convex/schema";
+import type { HarnessAdapter } from "../src/adapter.ts";
+import type { ClaudeCodeSessions } from "../src/claude-code.ts";
 import { runConnector } from "../src/connector.ts";
 import { type ConvexTransport, makeServerApi, type ServerApiShape } from "../src/server-api.ts";
 
@@ -88,17 +90,18 @@ export async function world() {
 export interface Running {
   stop(): Promise<void>;
   logs: string[];
+  sessions?: ClaudeCodeSessions;
 }
 
-export async function startConnector(api: ServerApiShape, socket: string, leaseMs = 1_500): Promise<Running> {
+export async function startConnector(api: ServerApiShape, socket: string, leaseMs = 1_500, adapters: HarnessAdapter[] = []): Promise<Running> {
   const scope = await Effect.runPromise(Scope.make());
   const logs: string[] = [];
-  await Effect.runPromise(
+  const { sessions } = await Effect.runPromise(
     Scope.provide(scope)(
-      runConnector({ machine: machine.id, socketPath: socket, api, leaseMs, pollWaitMs: 2_000, tickMs: 50, log: (l) => logs.push(l) }),
+      runConnector({ machine: machine.id, socketPath: socket, api, leaseMs, pollWaitMs: 2_000, tickMs: 50, adapters, log: (l) => logs.push(l) }),
     ),
   );
-  return { stop: () => Effect.runPromise(Scope.close(scope, Exit.void)), logs };
+  return { stop: () => Effect.runPromise(Scope.close(scope, Exit.void)), logs, sessions };
 }
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

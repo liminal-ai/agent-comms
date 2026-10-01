@@ -18,14 +18,26 @@ export type HandOff =
   | { _tag: "accepted"; turnId: string; cursor?: string }
   /** The harness refused it outright; it never ran. */
   | { _tag: "rejected"; detail: string }
+  /** Not sent: the claim was lost (or the handoff cancelled) before sending. Certain it never reached the harness. */
+  | { _tag: "aborted"; detail: string }
   /** We lost sight of it (session gone mid-handoff): it may or may not have entered. Recovered by a later check. */
   | { _tag: "lost"; detail: string };
+
+/**
+ * The last check before sending: confirms the claim is still ours and records
+ * where the delivery is going and the adapter's resume point (`cursor`).
+ */
+export interface Gate {
+  readonly confirm: (cursor?: string) => Promise<boolean>;
+}
 
 /** How our turn ended. */
 export type Outcome =
   | { _tag: "replied"; answer: string }
   | { _tag: "ambiguous"; entered: EnteredInput[] }
   | { _tag: "failed"; reason: "aborted" | "refusal" | "error"; detail?: string }
+  /** The adapter can't prove what happened in the turn: recorded `uncertain`, never collected or re-run. */
+  | { _tag: "uncertain"; detail: string }
   /** We lost sight of the turn; recovered by a later check. */
   | { _tag: "lost"; detail: string };
 
@@ -43,8 +55,13 @@ export interface HarnessAdapter {
   readonly harness: Harness;
   /** Whether deliveries can be handed to this participant now. The dispatcher claims nothing it can't hand over. */
   readonly ready: (target: Target) => Effect.Effect<boolean>;
-  /** Hand the delivery over. Waits until the harness accepts it or refuses. */
-  readonly handOff: (target: Target, delivery: Delivery) => Effect.Effect<HandOff>;
+  /**
+   * Hand the delivery over. Waits until the harness accepts it or refuses. The
+   * adapter calls `gate.confirm(cursor)` immediately before it sends, and sends
+   * nothing if that returns false (fix pass 2.2); interruption cancels a handoff
+   * that hasn't sent yet.
+   */
+  readonly handOff: (target: Target, delivery: Delivery, gate: Gate) => Effect.Effect<HandOff>;
   /** Wait for our turn to end. Only called for deliveries of a request. */
   readonly awaitOutcome: (target: Target, delivery: Delivery, turnId: string) => Effect.Effect<Outcome>;
   /** Answer the restart question for a claimed (`turnId` unknown) or delivered delivery. */

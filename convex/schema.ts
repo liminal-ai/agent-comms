@@ -60,9 +60,12 @@ export default defineSchema({
     text: v.string(),
     attachments: v.array(attachment),
     origin,
+    /** The sender's idempotency key, if the send carried one (fix pass 3.1). */
+    idempotencyKey: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_conversation_seq", ["conversationId", "seq"])
+    .index("by_sender_key", ["senderId", "idempotencyKey"])
     .index("by_collectedFrom", ["collectedFrom"])
     .index("by_inReplyTo", ["inReplyTo"]),
 
@@ -80,10 +83,19 @@ export default defineSchema({
     turnId: v.optional(v.string()),
     /** The adapter's resume point in the harness, for recovery after a restart. Opaque. */
     cursor: v.optional(v.string()),
+    /**
+     * The home this delivery was handed to, recorded before the handoff (fix pass
+     * 2.5). An in-flight delivery stays with it through a rebind: that machine's
+     * connector finishes or recovers it, against that home.
+     */
+    target: v.optional(home),
     answerMessageId: v.optional(v.id("messages")),
     createdAt: v.number(),
   })
     .index("by_recipient_state", ["recipientId", "state"])
+    // `delivered` work is only collectable deliveries; finished answers stay out of the scan (2.6).
+    .index("by_recipient_state_collect", ["recipientId", "state", "collect"])
+    .index("by_target_state_collect", ["target.machine", "state", "collect"])
     .index("by_message", ["messageId"]),
 
   machines: defineTable({

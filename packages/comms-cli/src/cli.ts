@@ -1,6 +1,7 @@
 // The `comms` CLI: what an agent runs from its shell to send, answer and read.
 // Talks only to the local connector (or the stub) over the loopback socket.
 
+import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 import {
   type ConversationSummary,
@@ -25,8 +26,12 @@ export const USAGE = `usage:
 
   --as defaults to $${PARTICIPANT_ENV}. It names you; the connector accepts any
   participant homed on this machine (a trusted-machine shortcut, not proof of identity).
-  Text may be given as several words, or "-" to read it from stdin.
+  Text may be given as several words, or "-" to read it from stdin. Text may start
+  with "-"; anything after "--" is text, whatever it looks like.
   --json prints the connector's response as JSON. --socket <path> overrides the socket.
+  --key <k>: the idempotency key for send/reply (default: a new one). If the connector
+  answers unavailable, comms retries with the same key, then prints it; rerunning with
+  that --key can't post twice.
 
 exit codes: 0 ok, 1 the connector refused, 2 usage, 3 connector unreachable`;
 
@@ -39,22 +44,47 @@ export interface Io {
 
 class UsageError extends Error {}
 
+const OPTIONS = {
+  as: { type: "string" },
+  conversation: { type: "string" },
+  before: { type: "string" },
+  limit: { type: "string" },
+  key: { type: "string" },
+  json: { type: "boolean" },
+  socket: { type: "string" },
+  help: { type: "boolean", short: "h" },
+} as const;
+
+/**
+ * Our options anywhere; anything else is message text, even if it starts with
+ * "-" (a number, a list item). `--` ends options: everything after it is text (3.7).
+ */
+function parseOptions(argv: string[]): { values: { [K in keyof typeof OPTIONS]?: (typeof OPTIONS)[K]["type"] extends "string" ? string : boolean }; positionals: string[] } {
+  const { tokens } = parseArgs({ args: argv, allowPositionals: true, strict: false, tokens: true, options: OPTIONS });
+  const values: Record<string, string | boolean> = {};
+  const positionals: string[] = [];
+  const unknownAt = new Set<number>();
+  for (const t of tokens) {
+    if (t.kind === "positional") positionals.push(t.value);
+    else if (t.kind === "option") {
+      const spec = (OPTIONS as Record<string, { type: "string" | "boolean" }>)[t.name];
+      if (!spec) {
+        // Not one of ours: the whole argument is text (once, however it was split into short options).
+        if (!unknownAt.has(t.index)) positionals.push(argv[t.index]!);
+        unknownAt.add(t.index);
+      } else if (spec.type === "string") {
+        if (t.value === undefined) throw new Error(`option ${t.rawName} needs a value`);
+        values[t.name] = t.value;
+      } else values[t.name] = true;
+    }
+  }
+  return { values: values as never, positionals };
+}
+
 export async function run(argv: string[], io: Io): Promise<number> {
   let parsed;
   try {
-    parsed = parseArgs({
-      args: argv,
-      allowPositionals: true,
-      options: {
-        as: { type: "string" },
-        conversation: { type: "string" },
-        before: { type: "string" },
-        limit: { type: "string" },
-        json: { type: "boolean" },
-        socket: { type: "string" },
-        help: { type: "boolean", short: "h" },
-      },
-    });
+    parsed = parseOptions(argv);
   } catch (error) {
     io.stderr(`comms: ${(error as Error).message}\n${USAGE}\n`);
     return EXIT.usage;
@@ -74,7 +104,18 @@ export async function run(argv: string[], io: Io): Promise<number> {
       return me;
     };
     const request = async <K extends Op>(op: K, body: Requests[K]): Promise<Responses[K] | null> => {
-      const response = await call(socket, op, body);
+      let response = await call(socket, op, body);
+      // A send or reply carries an idempotency key, so retrying after `unavailable` can't post twice (3.1).
+      const keyed = (body as { key?: string }).key;
+      for (const delayMs of keyed ? [2_000, 5_000] : []) {
+        if (response.ok || response.error.code !== "unavailable") break;
+        await new Promise((r) => setTimeout(r, delayMs));
+        response = await call(socket, op, body);
+      }
+      if (!response.ok && keyed && response.error.code === "unavailable") {
+        io.stderr(`comms ${command}: unavailable: ${response.error.message}\nIt may or may not have been posted. Retry with the same key, which can't post twice: --key ${keyed}\n`);
+        return null;
+      }
       if (!response.ok) {
         io.stderr(`comms ${command}: ${response.error.code}: ${response.error.message}\n`);
         return null;
@@ -100,6 +141,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
         const body: Requests["send"] = {
           as: as(),
           to,
+          key: values.key ?? randomUUID(),
           text: await text(rest.slice(i)),
           ...(values.conversation ? { conversationId: values.conversation } : {}),
         };
@@ -111,7 +153,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
       case "reply": {
         const [messageId, ...words] = rest;
         if (!messageId) throw new UsageError("comms reply needs a message id");
-        const r = await request("reply", { as: as(), messageId, text: await text(words) });
+        const r = await request("reply", { as: as(), messageId, key: values.key ?? randomUUID(), text: await text(words) });
         if (!r) return EXIT.error;
         if (!values.json) {
           io.stdout(describeSend(`answered ${messageId} with`, r));

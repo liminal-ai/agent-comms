@@ -34,6 +34,7 @@ export interface WorkItem {
   collect: boolean;
   claim?: Claim;
   turnId?: string;
+  cursor?: string;
   createdAt: number;
 }
 
@@ -50,6 +51,7 @@ export interface ServerApiShape {
   readonly work: Stream.Stream<WorkItem[], Unavailable>;
   readonly claim: (deliveryId: string, leaseMs: number) => Effect.Effect<ClaimResult, ApiError>;
   readonly renew: (deliveryId: string, claimId: string, leaseMs: number) => Effect.Effect<{ claim: Claim }, ApiError>;
+  readonly prepare: (deliveryId: string, claimId: string, cursor?: string) => Effect.Effect<unknown, ApiError>;
   readonly delivered: (deliveryId: string, claimId: string, turnId: string, cursor?: string) => Effect.Effect<StateResult, ApiError>;
   readonly collect: (deliveryId: string, claimId: string, turnId: string, answer: string) => Effect.Effect<Responses["outcome"], ApiError>;
   readonly ambiguous: (deliveryId: string, claimId: string, turnId: string, entered: EnteredInput[]) => Effect.Effect<StateResult, ApiError>;
@@ -110,7 +112,7 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
             { machine },
             (value) => void Queue.offerUnsafe(queue, value.deliveries as WorkItem[]),
             // A subscription error is reported, not fatal: the client keeps retrying underneath.
-            (error) => console.error(`agent-comms connector: work subscription error: ${error.message}`),
+            (error) => console.error(`agent-comms connector: work subscription error: ${describeFailure(error)}`),
           ),
         ),
         (unsubscribe) => Effect.sync(unsubscribe),
@@ -122,6 +124,10 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
       call("claim", () => transport.mutation(api.connector.claim, { machine, deliveryId, leaseMs })) as Effect.Effect<ClaimResult, ApiError>,
     renew: (deliveryId, claimId, leaseMs) =>
       call("renew", () => transport.mutation(api.connector.renew, { machine, deliveryId, claimId, leaseMs })),
+    prepare: (deliveryId, claimId, cursor) =>
+      call("prepare", () =>
+        transport.mutation(api.connector.prepare, { machine, deliveryId, claimId, ...(cursor !== undefined ? { cursor } : {}) }),
+      ),
     delivered: (deliveryId, claimId, turnId, cursor) =>
       call("delivered", () =>
         transport.mutation(api.connector.delivered, { machine, deliveryId, claimId, turnId, ...(cursor !== undefined ? { cursor } : {}) }),
@@ -165,6 +171,7 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
           via: "cli",
           ...(req.conversationId !== undefined ? { conversationId: req.conversationId } : {}),
           ...(req.attachments ? { attachments: req.attachments } : {}),
+          ...(req.key !== undefined ? { key: req.key } : {}),
         }),
       ),
     reply: (req) =>
@@ -176,6 +183,7 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
           text: req.text,
           via: "cli",
           ...(req.attachments ? { attachments: req.attachments } : {}),
+          ...(req.key !== undefined ? { key: req.key } : {}),
         }),
       ),
     read: (req) =>
@@ -203,5 +211,17 @@ export function classify(what: string, error: unknown): ApiError {
     const { code, message } = data as { code: ErrorCode; message?: string };
     return new ProtocolFailure({ code, message: message ?? code });
   }
-  return new Unavailable({ message: `${what}: ${error instanceof Error ? error.message : String(error)}` });
+  return new Unavailable({ message: `${what}: ${describeFailure(error)}` });
+}
+
+/**
+ * A safe description of a failure we didn't classify. Convex error text can
+ * echo the call's arguments (the machine secret among them), so it's never
+ * logged or passed on: only the error's class and a known transport cause (3.6).
+ */
+export function describeFailure(error: unknown): string {
+  const name = error instanceof Error ? error.name : typeof error;
+  const message = error instanceof Error ? error.message : String(error);
+  const known = /\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE|ENOTFOUND|fetch failed|timed out|WebSocket|connection (?:lost|closed))\b/i.exec(message);
+  return known ? `${name} (${known[1]})` : `${name} (details withheld; they may echo arguments)`;
 }

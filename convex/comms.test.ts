@@ -122,6 +122,101 @@ describe("send", () => {
   });
 });
 
+describe("fix pass 2.4-2.6", () => {
+  it("2.4 an in-flight request's answer is collected even if the agent was retired meanwhile", async () => {
+    const t = await setup();
+    const { sent, id, claimId } = await claimed(t);
+    await t.mutation(api.connector.delivered, { machine: m1, deliveryId: id, claimId, turnId: "t1" });
+    await t.mutation(api.directory.setState, { adminToken: ADMIN, name: "b", state: "retired" });
+    const r = await t.mutation(api.connector.collect, { machine: m1, deliveryId: id, claimId, turnId: "t1", answer: "4" });
+    expect(r.delivery.state).toBe("replied");
+    const view = await t.query(api.conversations.view, { adminToken: ADMIN, conversationId: sent.message.conversationId });
+    expect(view.messages.at(-1)!.message).toMatchObject({ kind: "answer", text: "4" });
+  });
+
+  it("2.4 an in-flight request's answer ends the delivery even if the agent left the group", async () => {
+    const t = await setup();
+    const g = await group(t, ["lee", "a", "b"]);
+    const sent = await t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["b"], text: "q" });
+    const id = sent.deliveries[0]!.id;
+    const { claim } = await t.mutation(api.connector.claim, { machine: m1, deliveryId: id });
+    await t.mutation(api.connector.delivered, { machine: m1, deliveryId: id, claimId: claim.claimId, turnId: "t1" });
+    await t.mutation(api.conversations.removeMember, { adminToken: ADMIN, conversationId: g, name: "b" });
+    const r = await t.mutation(api.connector.collect, { machine: m1, deliveryId: id, claimId: claim.claimId, turnId: "t1", answer: "done" });
+    expect(["replied", "failed"]).toContain(r.delivery.state);
+    expect((await work(t)).map((w) => w.id)).not.toContain(id);
+  });
+
+  it("2.5 a delivery handed to a home stays with that home through a rebind", async () => {
+    const t = await setup();
+    const { id, claimId } = await claimed(t);
+    // Record where it's going before the handoff.
+    await t.mutation(api.connector.prepare, { machine: m1, deliveryId: id, claimId, cursor: "17" });
+    await t.mutation(api.directory.rebind, { adminToken: ADMIN, name: "b", home: { machine: "m2", harness: "t3", locator: "new-thread" } });
+    const mine = await work(t, m1);
+    expect(mine.map((w) => [w.id, w.locator, w.harness])).toEqual([[id, "loc-b", "claude-code"]]);
+    expect((mine[0] as { cursor?: string }).cursor).toBe("17");
+    expect(await work(t, m2)).toEqual([]);
+  });
+
+  it("2.6 finished answer deliveries aren't re-read by the work query", async () => {
+    process.env.COMMS_ADMIN_TOKEN = ADMIN;
+    const t = convexTest({ schema, modules, transactionLimits: { documentsRead: 200 } });
+    await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m1", secret: m1.secret });
+    await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "a", kind: "agent", home: { machine: "m1", harness: "t3", locator: "x" } });
+    await t.run(async (ctx) => {
+      const a = (await ctx.db.query("participants").collect())[0]!;
+      const c = await ctx.db.insert("conversations", { kind: "group", title: "x", lastSeq: 0, lastAt: 0, createdAt: 0 });
+      const m = await ctx.db.insert("messages", {
+        conversationId: c, seq: 1, senderId: a._id, recipientIds: [a._id], kind: "answer", text: "x", attachments: [], origin: { via: "cli" }, createdAt: 0,
+      });
+      for (let i = 0; i < 300; i++) {
+        await ctx.db.insert("deliveries", { messageId: m, conversationId: c, recipientId: a._id, collect: false, state: "delivered", at: 0, createdAt: 0 });
+      }
+    });
+    expect(await work(t, m1)).toEqual([]);
+  });
+});
+
+describe("fix pass 3.1", () => {
+  it("3.1 a send or reply repeated with the same key returns the first result and posts once", async () => {
+    const t = await setup();
+    const one = await t.mutation(api.connector.send, { machine: m1, as: "a", to: ["b"], text: "q", key: "key-00000001" });
+    const two = await t.mutation(api.connector.send, { machine: m1, as: "a", to: ["b"], text: "q", key: "key-00000001" });
+    expect(two.message.id).toBe(one.message.id);
+    expect(two.deliveries).toEqual(one.deliveries);
+    const view = await t.query(api.conversations.view, { adminToken: ADMIN, conversationId: one.message.conversationId });
+    expect(view.messages).toHaveLength(1);
+    const r1 = await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: one.message.id, text: "a", key: "key-00000002" });
+    const r2 = await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: one.message.id, text: "a", key: "key-00000002" });
+    expect(r2.message.id).toBe(r1.message.id);
+  });
+});
+
+describe("fix pass 1.10", () => {
+  it("1.10 send, reply, web post and group titles over the caps are rejected with a clear error", async () => {
+    const t = await setup();
+    const P = await import("@agent-comms/protocol");
+    const long = "x".repeat(P.MAX_TEXT_CHARS + 1);
+    const g = await group(t, ["lee", "a", "b"]);
+    const errorOf = async (p: Promise<unknown>) => {
+      try {
+        await p;
+      } catch (e) {
+        return e instanceof ConvexError ? (e.data as { code: string; message: string }) : { code: "plain", message: String(e) };
+      }
+      return { code: "none", message: "" };
+    };
+    const send = await errorOf(t.mutation(api.connector.send, { machine: m1, as: "a", to: ["b"], text: long }));
+    expect(send.code).toBe("bad_request");
+    expect(send.message).toMatch(new RegExp(String(P.MAX_TEXT_CHARS)));
+    const post = await errorOf(t.mutation(api.conversations.postAs, { adminToken: ADMIN, as: "lee", conversationId: g, to: [], text: long }));
+    expect(post.code).toBe("bad_request");
+    const title = await errorOf(t.mutation(api.conversations.createGroup, { adminToken: ADMIN, title: "t".repeat(1000), members: ["lee", "a"] }));
+    expect(title.code).toBe("bad_request");
+  });
+});
+
 describe("claims", () => {
   it("claims with a lease and returns the full delivery with bounded history", async () => {
     const t = await setup();

@@ -40,6 +40,10 @@ export interface ClaudeCodeOptions {
   pollWaitMs: number;
   /** A session that hasn't polled for this long is gone. */
   staleMs?: number;
+  /** A delivery the session hasn't started within this long counts as lost; recovery asks the session (3.1). */
+  handOffDeadlineMs?: number;
+  /** A restart question the session hasn't answered within this long is asked again later (3.1). */
+  checkDeadlineMs?: number;
   /** Who is homed here: asked on every registration. */
   homed: () => Promise<HomedParticipant[]>;
   /** Presence updates, written in the background. */
@@ -202,12 +206,20 @@ export class ClaudeCodeSessions {
   // -------------------------------------------------------------------------
   // Housekeeping
 
+  /** Sessions held in memory, superseded ones included until freed. */
+  sessionCount(): number {
+    return this.sessions.size;
+  }
+
   /** Drop sessions that stopped polling and reports nobody asked for. */
   sweep(): void {
     const now = this.now();
     for (const s of this.sessions.values()) {
       if (!s.superseded && !s.polling && now - s.lastSeen > this.staleMs) {
         this.lose(s.id, "stopped polling");
+        this.sessions.delete(s.id);
+      } else if (s.superseded && !s.polling) {
+        // Its last poll has been answered (with session_superseded); nothing refers to it now (3.3).
         this.sessions.delete(s.id);
       }
     }
@@ -242,12 +254,25 @@ export class ClaudeCodeSessions {
     w.resolve(value);
   }
 
-  private wait<T>(map: Map<string, Waiting<T>>, deliveryId: string, sessionId: string): Promise<T> {
+  /** Waits for the session's report; after `deadlineMs`, resolves with `onTimeout` instead (3.1). */
+  private wait<T>(map: Map<string, Waiting<T>>, deliveryId: string, sessionId: string, deadlineMs?: number, onTimeout?: T): Promise<T> {
     return new Promise<T>((resolve) => {
-      const previous = map.get(deliveryId);
-      map.set(deliveryId, { sessionId, resolve });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const waiting: Waiting<T> = {
+        sessionId,
+        resolve: (v) => {
+          if (timer) clearTimeout(timer);
+          resolve(v);
+        },
+      };
       // Only one waiter per delivery; an older one (from an interrupted task) is simply dropped.
-      void previous;
+      map.set(deliveryId, waiting);
+      if (deadlineMs !== undefined && onTimeout !== undefined) {
+        timer = setTimeout(() => {
+          if (map.get(deliveryId) === waiting) map.delete(deliveryId);
+          resolve(onTimeout);
+        }, deadlineMs);
+      }
     });
   }
 
@@ -268,13 +293,19 @@ export class ClaudeCodeSessions {
   readonly adapter: HarnessAdapter = {
     harness: "claude-code",
     ready: (target) => Effect.sync(() => this.session(target) !== undefined),
-    handOff: (target, delivery) =>
-      Effect.promise(async (): Promise<HandOff> => {
+    handOff: (target, delivery, gate) =>
+      Effect.promise(async (signal): Promise<HandOff> => {
         const known = this.reports.get(delivery.id)?.turnId;
         if (known !== undefined) return { _tag: "accepted", turnId: known };
         const s = this.session(target);
         if (!s) return { _tag: "lost", detail: `no session for @${target.participant}` };
-        const accepted = this.wait(this.handOffs, delivery.id, s.id);
+        // Last check before the delivery leaves for the session (2.2).
+        if (signal.aborted || !(await gate.confirm())) return { _tag: "aborted", detail: "claim not held" };
+        if (signal.aborted) return { _tag: "aborted", detail: "cancelled" };
+        const accepted = this.wait(this.handOffs, delivery.id, s.id, this.options.handOffDeadlineMs ?? 10 * 60_000, {
+          _tag: "lost",
+          detail: "the session didn't start it in time; asking the session",
+        } as HandOff);
         this.enqueue(s, { type: "deliver", delivery });
         return accepted;
       }),
@@ -297,7 +328,10 @@ export class ClaudeCodeSessions {
         }
         const s = this.session(target);
         if (!s) return { _tag: "later", detail: `no session for @${target.participant}` };
-        const answer = this.wait(this.checks, delivery.id, s.id);
+        const answer = this.wait(this.checks, delivery.id, s.id, this.options.checkDeadlineMs ?? 2 * 60_000, {
+          _tag: "later",
+          detail: "the session didn't answer the restart question in time",
+        } as Check);
         const check: DeliveryCheck = {
           deliveryId: delivery.id,
           messageId: delivery.message.id,

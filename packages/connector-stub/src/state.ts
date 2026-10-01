@@ -6,6 +6,7 @@
 // connector: sessions are gone, deliveries aren't.
 
 import {
+  type AttachmentRef,
   boundHistory,
   clipAnswer,
   type ConversationRef,
@@ -105,6 +106,7 @@ export interface PostInput {
   kind?: MessageKind;
   inReplyTo?: string;
   via?: Via;
+  attachments?: AttachmentRef[];
 }
 
 type Listener = () => void;
@@ -112,6 +114,8 @@ type Listener = () => void;
 export class StubComms {
   readonly record: StubRecord;
   private readonly sessions = new Map<string, Session>();
+  /** Idempotency keys seen, by "<sender>/<key>" (fix pass 3.1). */
+  private readonly keyed = new Map<string, SendResult>();
   private readonly listeners = new Set<Listener>();
   private readonly now: () => number;
   private readonly onChange: (record: StubRecord) => void;
@@ -247,7 +251,7 @@ export class StubComms {
       kind,
       ...(input.inReplyTo ? { inReplyTo: input.inReplyTo } : {}),
       text: input.text,
-      attachments: [],
+      attachments: input.attachments ?? [],
       createdAt: this.now(),
       origin: { via: input.via ?? "cli" },
     };
@@ -558,17 +562,31 @@ export class StubComms {
 
   send(req: Requests["send"]): Responses["send"] {
     this.actingAs(req.as);
-    const result = this.post({
+    return this.once(req.as, req.key, () => this.post({
       sender: req.as,
       to: req.to,
       ...(req.conversationId ? { conversationId: req.conversationId } : {}),
       text: req.text,
-    });
-    if (req.attachments) result.message.attachments = req.attachments;
+      // Set before the message exists, so no delivery is handed out without them (3.7).
+      ...(req.attachments ? { attachments: req.attachments } : {}),
+    }));
+  }
+
+  private once<T extends SendResult>(sender: string, key: string | undefined, run: () => T): T {
+    if (key === undefined) return run();
+    const id = `${sender}/${key}`;
+    const earlier = this.keyed.get(id);
+    if (earlier) return earlier as T;
+    const result = run();
+    this.keyed.set(id, result);
     return result;
   }
 
   reply(req: Requests["reply"]): Responses["reply"] {
+    return this.once(req.as, req.key, () => this.replyOnce(req));
+  }
+
+  private replyOnce(req: Requests["reply"]): Responses["reply"] {
     const me = this.actingAs(req.as);
     const original = this.message(req.messageId);
     this.member(this.conversation(original.conversationId), me);
@@ -579,8 +597,8 @@ export class StubComms {
       text: req.text,
       kind: "answer",
       inReplyTo: original.id,
+      ...(req.attachments ? { attachments: req.attachments } : {}),
     });
-    if (req.attachments) result.message.attachments = req.attachments;
     const open = this.record.deliveries.find(
       (d) =>
         d.messageId === original.id &&

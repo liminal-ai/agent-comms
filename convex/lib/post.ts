@@ -1,7 +1,7 @@
 // Posting a message: the one path every send, reply, collected answer and web
 // post goes through. Creates the addressed deliveries.
 
-import type { AttachmentRef, Origin, SendResult } from "@agent-comms/protocol";
+import { type AttachmentRef, MAX_TEXT_CHARS, type Origin, type SendResult } from "@agent-comms/protocol";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { advanceRead, envelope, fail, membership, stateRef } from "./core";
@@ -13,6 +13,9 @@ export interface PostInput {
   kind: "request" | "answer";
   inReplyTo?: Id<"messages">;
   collectedFrom?: Id<"deliveries">;
+  idempotencyKey?: string;
+  /** A collected answer to a request accepted earlier: posted even if the sender has since been retired or left (2.4). */
+  inFlight?: boolean;
   text: string;
   attachments?: AttachmentRef[];
   origin: Origin;
@@ -20,12 +23,20 @@ export interface PostInput {
 
 export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResult> {
   const { sender, conversation, recipients } = input;
-  if (sender.state === "retired") fail("conflict", `@${sender.name} is retired`);
+  if (sender.state === "retired" && !input.inFlight) fail("conflict", `@${sender.name} is retired`);
+  if (input.text.length > MAX_TEXT_CHARS) {
+    fail("bad_request", `message text is ${input.text.length} characters; the limit is ${MAX_TEXT_CHARS}. Shorten it, or put the long part in a file and send a reference.`);
+  }
+  const attachments = input.attachments ?? [];
+  if (attachments.length > 20) fail("bad_request", `${attachments.length} attachments; the limit is 20`);
+  for (const a of attachments) {
+    if (a.name.length > 512 || a.url.length > 4096) fail("bad_request", "an attachment's name (512) or url (4096) is too long");
+  }
   if (input.kind === "answer" && !input.inReplyTo) fail("bad_request", "an answer needs inReplyTo");
   if (input.kind === "request" && input.inReplyTo) fail("bad_request", "a request can't have inReplyTo");
   if (new Set(recipients.map((r) => r._id)).size !== recipients.length) fail("bad_request", "a recipient is named twice");
   if (recipients.some((r) => r._id === sender._id)) fail("bad_request", "can't address yourself");
-  await membership(ctx, conversation._id, sender);
+  if (!input.inFlight) await membership(ctx, conversation._id, sender);
   for (const r of recipients) await membership(ctx, conversation._id, r);
 
   const now = Date.now();
@@ -41,10 +52,11 @@ export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResu
     text: input.text,
     attachments: input.attachments ?? [],
     origin: input.origin,
+    ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
     createdAt: now,
   });
   await ctx.db.patch(conversation._id, { lastSeq: seq, lastAt: now });
-  await advanceRead(ctx, conversation._id, sender._id, seq);
+  await advanceRead(ctx, conversation._id, sender._id, seq); // no-op for a sender who has left
 
   const result: SendResult = {
     message: await envelope(ctx, (await ctx.db.get(messageId))!),
@@ -71,6 +83,30 @@ export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResu
     result.deliveries.push(await stateRef(ctx, (await ctx.db.get(deliveryId))!));
   }
   return result;
+}
+
+/** The earlier result of a send or reply with this key from this sender, if any (fix pass 3.1). */
+export async function replayed(ctx: MutationCtx, sender: Doc<"participants">, key: string | undefined): Promise<SendResult | null> {
+  if (key === undefined) return null;
+  const m = await ctx.db
+    .query("messages")
+    .withIndex("by_sender_key", (q) => q.eq("senderId", sender._id).eq("idempotencyKey", key))
+    .first();
+  if (!m) return null;
+  const deliveries = await ctx.db
+    .query("deliveries")
+    .withIndex("by_message", (q) => q.eq("messageId", m._id))
+    .collect();
+  const skipped = [];
+  for (const id of m.recipientIds) {
+    const r = await ctx.db.get(id);
+    if (r && r.kind === "agent" && !deliveries.some((d) => d.recipientId === id)) skipped.push({ name: r.name, reason: "retired" as const });
+  }
+  return {
+    message: await envelope(ctx, m),
+    deliveries: await Promise.all(deliveries.map((d) => stateRef(ctx, d))),
+    skipped,
+  };
 }
 
 /** The DM between two participants, opened if new. */

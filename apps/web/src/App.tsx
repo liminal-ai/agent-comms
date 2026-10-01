@@ -107,6 +107,33 @@ type DirectoryData = NonNullable<ReturnType<typeof useQuery<typeof api.directory
 
 const ONLINE_MS = 90_000;
 
+/**
+ * What the directory shows for a participant (3.4):
+ * - stale: its machine's connector hasn't been heard from (it heartbeats every 30 s),
+ *   so whatever presence was last written can't be trusted;
+ * - unconnected: a Claude Code terminal with no mod session registered with a live
+ *   connector. Not proof the mod failed to load: the terminal may simply not be running;
+ * - offline: a T3 participant whose thread or T3 can't be reached;
+ * - idle / busy: as reported.
+ */
+function presenceOf(
+  p: { kind: string; home?: { harness: string }; presence: { status: string; at: number } },
+  seen: number | null,
+  now: number,
+): { status: "person" | "stale" | "unconnected" | "offline" | "idle" | "busy"; label: string } {
+  if (p.kind === "human") return { status: "person", label: "person" };
+  if (seen === null || now - seen >= ONLINE_MS) {
+    const since = seen === null ? "never" : `since ${new Date(seen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    return { status: "stale", label: `connector not heard from ${since}` };
+  }
+  if (p.presence.status === "offline") {
+    return p.home?.harness === "claude-code"
+      ? { status: "unconnected", label: "mod not connected" }
+      : { status: "offline", label: "offline (T3 or its thread unreachable)" };
+  }
+  return p.presence.status === "busy" ? { status: "busy", label: "busy" } : { status: "idle", label: "idle" };
+}
+
 function Directory({ token, data }: { token: string; data: DirectoryData }) {
   const setState = useMutation(api.directory.setState);
   const [error, setError] = useState<string | null>(null);
@@ -127,16 +154,15 @@ function Directory({ token, data }: { token: string; data: DirectoryData }) {
           .slice()
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((p) => {
-            const seen = p.home ? machineSeen.get(p.home.machine) ?? null : null;
-            const connectorUp = seen !== null && now - seen < ONLINE_MS;
-            const status = p.kind === "human" ? "person" : !connectorUp ? "offline" : p.presence.status;
+            const { status, label } = presenceOf(p, p.home ? machineSeen.get(p.home.machine) ?? null : null, now);
             return (
               <li key={p.id} className={`state-${p.state}`}>
-                <span className={`dot ${status}`} title={p.kind === "human" ? "person" : `${status}${connectorUp ? "" : " (connector not seen)"}`} />
+                <span className={`dot ${status}`} title={label} />
                 <span className="name">@{p.name}</span>
                 <span className="muted small">
                   {p.home ? `${p.home.harness} · ${p.home.machine}` : "web"}
                   {p.state !== "active" && ` · ${p.state}`}
+                  {p.kind === "agent" && (status === "stale" || status === "unconnected" || status === "offline") && ` · ${label}`}
                 </span>
                 {p.kind === "agent" && p.state !== "retired" && (
                   <span className="actions">
@@ -279,7 +305,11 @@ function ConversationView({ token, id, as, names }: { token: string; id: string;
   const [adding, setAdding] = useState("");
 
   const memberNames = useMemo(() => view?.members.map((m) => m.name) ?? [], [view]);
-  const addressed = mentions(text, memberNames).filter((n) => n !== as);
+  const [sending, setSending] = useState(false);
+  const mentioned = mentions(text, memberNames).filter((n) => n !== as);
+  // In a DM with no @mention, the message goes to the other member (3.5).
+  const dmOther = view?.conversation.kind === "dm" ? memberNames.filter((n) => n !== as) : [];
+  const addressed = mentioned.length > 0 ? mentioned : dmOther.length === 1 ? dmOther : [];
 
   useEffect(() => {
     document.querySelector(".messages")?.scrollTo({ top: 1e9 });
@@ -291,10 +321,17 @@ function ConversationView({ token, id, as, names }: { token: string; id: string;
 
   const send = (e: FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
-    post({ adminToken: token, as, conversationId: id, to: addressed, text: text.trim() })
-      .then(() => (setText(""), setError(null)))
-      .catch((err: Error) => setError(err.message));
+    if (!text.trim() || sending) return;
+    const sent = text;
+    setSending(true);
+    post({ adminToken: token, as, conversationId: id, to: addressed, text: sent.trim() })
+      .then(() => {
+        // Clear only what was sent; anything typed meanwhile stays (3.5).
+        setText((current) => (current === sent ? "" : current));
+        setError(null);
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setSending(false));
   };
 
   return (
@@ -367,6 +404,7 @@ function ConversationView({ token, id, as, names }: { token: string; id: string;
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
+          readOnly={sending}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(e);
           }}
@@ -374,8 +412,12 @@ function ConversationView({ token, id, as, names }: { token: string; id: string;
           rows={3}
         />
         <div className="send-row small">
-          <span className="muted">{addressed.length > 0 ? `wakes ${addressed.map((n) => `@${n}`).join(", ")}` : "wakes no one"}</span>
-          <button type="submit" disabled={!text.trim()}>Send</button>
+          <span className="muted">
+            {addressed.length > 0
+              ? `wakes ${addressed.map((n) => `@${n}`).join(", ")}${mentioned.length === 0 ? " (the other member of this DM)" : ""}`
+              : "wakes no one: nobody is @mentioned"}
+          </span>
+          <button type="submit" disabled={!text.trim() || sending}>{sending ? "Sending…" : "Send"}</button>
         </div>
         {error && <p className="error">{error}</p>}
       </form>

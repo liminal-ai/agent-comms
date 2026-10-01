@@ -7,7 +7,7 @@
 // over only through `claim`, which says `takeover: true` so the new holder
 // checks the harness before running anything.
 
-import { DEFAULT_READ_LIMIT, type Responses } from "@agent-comms/protocol";
+import { clipAnswer, DEFAULT_READ_LIMIT, type Responses } from "@agent-comms/protocol";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query, type QueryCtx } from "./_generated/server";
@@ -24,7 +24,7 @@ import {
   stateRef,
   summary,
 } from "./lib/core";
-import { openDm, post } from "./lib/post";
+import { openDm, post, replayed } from "./lib/post";
 import { attachment, enteredInput, failureReason, machineAuth, via } from "./validators";
 
 export const DEFAULT_LEASE_MS = 60_000;
@@ -82,41 +82,83 @@ export const work = query({
   args: { machine: machineAuth },
   handler: async (ctx, args) => {
     const machine = await requireMachine(ctx, args.machine);
-    const items = [];
+    const here = machine.machineId;
+    type Row = Doc<"deliveries">;
+    const seen = new Set<string>();
+    const items: {
+      id: string;
+      recipient: string;
+      harness: Doc<"participants">["home"] extends infer H ? (H extends { harness: infer K } ? K : never) : never;
+      locator: string;
+      state: Row["state"];
+      collect: boolean;
+      claim?: NonNullable<Row["claim"]>;
+      turnId?: string;
+      cursor?: string;
+      createdAt: number;
+    }[] = [];
+    const push = (d: Row, p: Doc<"participants">) => {
+      if (seen.has(d._id)) return;
+      seen.add(d._id);
+      // In-flight work goes to the home it was handed to (2.5); new work to the current home.
+      const home = d.target ?? p.home!;
+      items.push({
+        id: d._id,
+        recipient: p.name,
+        harness: home.harness,
+        locator: home.locator,
+        state: d.state,
+        collect: d.collect,
+        ...(d.claim ? { claim: d.claim } : {}),
+        ...(d.turnId !== undefined ? { turnId: d.turnId } : {}),
+        ...(d.cursor !== undefined ? { cursor: d.cursor } : {}),
+        createdAt: d.createdAt,
+      });
+    };
+    const ours = (d: Row) => (d.target ? d.target.machine === here : true);
+
     for (const p of await homedOn(ctx, machine)) {
       if (p.state === "retired") continue;
-      const states = p.state === "active" ? (["pending", "claimed", "delivered"] as const) : (["claimed", "delivered"] as const);
-      for (const state of states) {
-        const rows = await ctx.db
+      if (p.state === "active") {
+        for (const d of await ctx.db
           .query("deliveries")
-          .withIndex("by_recipient_state", (q) => q.eq("recipientId", p._id).eq("state", state))
-          .collect();
-        for (const d of rows) {
-          if (state === "delivered" && !d.collect) continue;
-          items.push({
-            id: d._id,
-            recipient: p.name,
-            harness: p.home!.harness,
-            locator: p.home!.locator,
-            state: d.state,
-            collect: d.collect,
-            ...(d.claim ? { claim: d.claim } : {}),
-            ...(d.turnId !== undefined ? { turnId: d.turnId } : {}),
-            createdAt: d.createdAt,
-          });
-        }
+          .withIndex("by_recipient_state", (q) => q.eq("recipientId", p._id).eq("state", "pending"))
+          .collect()) push(d, p);
       }
+      for (const d of await ctx.db
+        .query("deliveries")
+        .withIndex("by_recipient_state", (q) => q.eq("recipientId", p._id).eq("state", "claimed"))
+        .collect()) if (ours(d)) push(d, p);
+      for (const d of await ctx.db
+        .query("deliveries")
+        .withIndex("by_recipient_state_collect", (q) => q.eq("recipientId", p._id).eq("state", "delivered").eq("collect", true))
+        .collect()) if (ours(d)) push(d, p);
+    }
+    // In-flight work handed to this machine for participants since moved elsewhere (2.5).
+    const moved = [
+      ...(await ctx.db.query("deliveries").withIndex("by_target_state_collect", (q) => q.eq("target.machine", here).eq("state", "claimed")).collect()),
+      ...(await ctx.db
+        .query("deliveries")
+        .withIndex("by_target_state_collect", (q) => q.eq("target.machine", here).eq("state", "delivered").eq("collect", true))
+        .collect()),
+    ];
+    for (const d of moved) {
+      if (seen.has(d._id)) continue;
+      const p = await ctx.db.get(d.recipientId);
+      if (p) push(d, p);
     }
     items.sort((a, b) => a.createdAt - b.createdAt);
     return { deliveries: items };
   },
 });
 
+/** A delivery this machine may act on: handed to a home here, or (not yet handed over) for a participant homed here. */
 async function deliveryForMachine(ctx: QueryCtx, machine: Doc<"machines">, deliveryId: string) {
   const d = await getOr(ctx, "deliveries", deliveryId);
   const recipient = (await ctx.db.get(d.recipientId))!;
-  if (recipient.home?.machine !== machine.machineId) {
-    fail("not_homed_here", `delivery ${d._id} is for @${recipient.name}, not homed on ${machine.machineId}`);
+  const owner = d.target?.machine ?? recipient.home?.machine;
+  if (owner !== machine.machineId) {
+    fail("not_homed_here", `delivery ${d._id} is for @${recipient.name}, handled by ${owner ?? "no machine"}, not ${machine.machineId}`);
   }
   return { d, recipient };
 }
@@ -171,6 +213,28 @@ export const renew = mutation({
     const claim = { ...d.claim!, leaseExpiresAt: Date.now() + leaseMs(args.leaseMs) };
     await ctx.db.patch(d._id, { claim });
     return { claim, state: d.state };
+  },
+});
+
+/**
+ * Right before the handoff: confirm the claim is still ours (compare-and-set)
+ * and record where the delivery is going (its home now) and the adapter's
+ * resume point, so a crash or a rebind after this point is recovered against
+ * that home (2.2, 2.5). A delivery already prepared keeps its recorded home.
+ */
+export const prepare = mutation({
+  args: { machine: machineAuth, deliveryId: v.string(), claimId: v.string(), cursor: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const machine = await requireMachine(ctx, args.machine);
+    const { d, recipient } = await deliveryForMachine(ctx, machine, args.deliveryId);
+    if (d.state !== "claimed") fail("conflict", `delivery ${d._id} is ${d.state}`);
+    holdsClaim(d, machine, args.claimId);
+    if (!recipient.home) fail("conflict", `@${recipient.name} has no home`);
+    await ctx.db.patch(d._id, {
+      target: d.target ?? recipient.home,
+      ...(args.cursor !== undefined ? { cursor: args.cursor } : {}),
+    });
+    return { target: d.target ?? recipient.home };
   },
 });
 
@@ -231,8 +295,10 @@ export const collect = mutation({
       kind: "answer",
       inReplyTo: request._id,
       collectedFrom: d._id,
-      text: args.answer,
-      origin: { via: recipient.home!.harness === "t3" ? "t3" : "claude-code" },
+      // The request was accepted while the agent was active and a member: its answer still lands (2.4).
+      inFlight: true,
+      text: clipAnswer(args.answer),
+      origin: { via: (d.target ?? recipient.home)?.harness === "t3" ? "t3" : "claude-code" },
     });
     await ctx.db.patch(d._id, {
       state: "replied",
@@ -331,10 +397,13 @@ export const send = mutation({
     text: v.string(),
     attachments: v.optional(v.array(attachment)),
     via: v.optional(via),
+    key: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Responses["send"]> => {
     const machine = await requireMachine(ctx, args.machine);
     const sender = await actingAs(ctx, machine, args.as);
+    const earlier = await replayed(ctx, sender, args.key);
+    if (earlier) return earlier;
     const recipients = [];
     for (const name of args.to) {
       const normalized = await ctx.db
@@ -359,6 +428,7 @@ export const send = mutation({
       kind: "request",
       text: args.text,
       ...(args.attachments ? { attachments: args.attachments } : {}),
+      ...(args.key !== undefined ? { idempotencyKey: args.key } : {}),
       origin: { via: args.via ?? "cli" },
     });
   },
@@ -376,10 +446,13 @@ export const reply = mutation({
     text: v.string(),
     attachments: v.optional(v.array(attachment)),
     via: v.optional(via),
+    key: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Responses["reply"]> => {
     const machine = await requireMachine(ctx, args.machine);
     const me = await actingAs(ctx, machine, args.as);
+    const earlier = await replayed(ctx, me, args.key);
+    if (earlier) return earlier;
     const original = await getOr(ctx, "messages", args.messageId);
     const conversation = (await ctx.db.get(original.conversationId))!;
     await membership(ctx, conversation._id, me);
@@ -393,6 +466,7 @@ export const reply = mutation({
       inReplyTo: original._id,
       text: args.text,
       ...(args.attachments ? { attachments: args.attachments } : {}),
+      ...(args.key !== undefined ? { idempotencyKey: args.key } : {}),
       origin: { via: args.via ?? "cli" },
     });
     for (const state of ["ambiguous", "uncertain"] as const) {

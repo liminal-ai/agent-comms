@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Delivery } from "@agent-comms/protocol";
 import {
+  decodeCursor,
   makeT3Adapter,
   messageIdFor,
   noticeIdFor,
@@ -23,12 +24,15 @@ type EventInput = T3Event extends infer E ? (E extends T3Event ? Omit<E, "sequen
 class FakeT3 implements T3Client {
   private thread: T3Thread;
   private log: T3Event[] = [];
-  private listeners = new Set<(i: T3StreamItem) => void>();
+  listeners = new Set<(i: T3StreamItem) => void>();
   private seq = 100;
   private clock = Date.parse("2026-09-30T12:00:00Z");
   private turns = 0;
   refuse = false;
   failStart = false;
+  /** Resubscriptions to fail before one succeeds; and whether a resumed subscription gets a snapshot (events gone). */
+  failResubscribes = 0;
+  eventsGone = false;
 
   readonly id: string;
 
@@ -77,9 +81,19 @@ class FakeT3 implements T3Client {
     }
     void id;
   }
+  /** The WebSocket drops: every subscriber is told its stream closed. */
+  drop() {
+    const subs = [...this.listeners];
+    this.listeners.clear();
+    for (const f of subs) setTimeout(() => (f as (i: unknown) => void)({ kind: "closed" }), 1);
+  }
   async subscribe(id: string, options: { afterSequence?: number }, onItem: (i: T3StreamItem) => void) {
     if (id !== this.id) throw new Error("no such thread");
-    if (options.afterSequence === undefined) {
+    if (options.afterSequence !== undefined && this.failResubscribes > 0) {
+      this.failResubscribes -= 1;
+      throw new Error("ECONNREFUSED");
+    }
+    if (options.afterSequence === undefined || this.eventsGone) {
       const snap = structuredClone(this.thread);
       setTimeout(() => onItem({ kind: "snapshot", thread: snap }), 1);
     } else {
@@ -105,6 +119,20 @@ class FakeT3 implements T3Client {
     if (this.failStart) return "";
     const turnId = `turn-${++this.turns}`;
     this.thread.latestTurn = { turnId, state: "running", requestedAt: createdAt, completedAt: null, assistantMessageId: null };
+    this.setSession("starting", null);
+    this.setSession("running", turnId);
+    return turnId;
+  }
+  /** A user message appended without a turn starting yet (a queued web message flushing, say). */
+  appendOnly(messageId: string): void {
+    this.thread.messages.push({ id: messageId, role: "user", turnId: null, streaming: false, createdAt: this.at() });
+    this.emit({ type: "user-message", messageId });
+  }
+  /** A turn starts for messages already appended; `requestedAt` from the given message. */
+  startFor(messageId: string): string {
+    const turnId = `turn-${++this.turns}`;
+    const requestedAt = this.thread.messages.find((m) => m.id === messageId)!.createdAt;
+    this.thread.latestTurn = { turnId, state: "running", requestedAt, completedAt: null, assistantMessageId: null };
     this.setSession("starting", null);
     this.setSession("running", turnId);
     return turnId;
@@ -179,7 +207,7 @@ describe("T3 adapter: live", () => {
     const { t3, adapter } = setup();
     const h = await accepted(adapter);
     assert.equal(h.turnId, "turn-1");
-    assert.ok(h.cursor !== undefined && Number(h.cursor) > 0);
+    assert.deepEqual(decodeCursor(h.cursor), { sequence: 100, confirmedTurnId: "turn-1" }, "cursor: before our message, turn confirmed ours");
     assert.equal(t3.lastStart!.messageId, messageIdFor("d_1"));
     assert.equal(t3.lastStart!.runtimeMode, "approval-required", "never forces full access");
     assert.match(t3.lastStart!.text, /^\[agent-comms v1\] delivery=d_1 /);
@@ -339,31 +367,189 @@ describe("T3 adapter: restart check", () => {
     assert.deepEqual(c, { _tag: "completed", turnId: h.turnId, outcome: { _tag: "ambiguous", entered: [{ origin: "t3-user-message" }] } });
   });
 
-  it("without a cursor, links only what the snapshot proves", async () => {
-    {
-      const { t3, adapter } = setup();
-      await accepted(adapter);
-      t3.assistant("4");
+  it("without a cursor, never collects from the snapshot alone (1.3)", async () => {
+    const { t3, adapter } = setup();
+    await accepted(adapter);
+    t3.assistant("4");
+    t3.finish();
+    const fresh = makeT3Adapter({ client: t3 });
+    assert.equal((await fresh.check(target, delivery(), undefined))._tag, "unknown");
+  });
+});
+
+describe("fix pass 1: reply ownership", () => {
+  it("1.1 a foreign message landing just before ours, with no turn started in between, makes it ambiguous", async () => {
+    const { t3, adapter } = setup();
+    t3.startTurn = async (_id, turn) => {
+      t3.lastStart = turn;
+      t3.appendOnly("lee-queued"); // Lee's queued web message flushes on the same ready
+      t3.appendOnly(turn.messageId);
+      t3.startFor("lee-queued"); // one turn takes both
+    };
+    const h = await adapter.handOff(target, delivery());
+    const outcome = h._tag === "accepted" ? await (async () => {
+      const o = adapter.awaitOutcome(target, delivery(), h.turnId);
+      t3.assistant("answer to Lee and to us");
       t3.finish();
-      const fresh = makeT3Adapter({ client: t3 });
-      assert.deepEqual(await fresh.check(target, delivery(), undefined), {
-        _tag: "completed",
-        turnId: "turn-1",
-        outcome: { _tag: "replied", answer: "4" },
-      });
-    }
-    {
-      // Our message was dropped, then Claude woke on its own: never ours.
-      const { t3, adapter } = setup();
-      t3.failStart = true;
-      await adapter.handOff(target, delivery());
-      t3.failStart = false;
+      return o;
+    })() : h;
+    assert.equal(outcome._tag, "ambiguous", JSON.stringify(outcome));
+  });
+
+  it("1.2 a background turn starting between our message and our turn isn't taken as ours", async () => {
+    const { t3, adapter } = setup();
+    t3.startTurn = async (_id, turn) => {
+      t3.lastStart = turn;
+      t3.appendOnly(turn.messageId); // ours lands, then Claude wakes for a background task first
       t3.wake();
+    };
+    const h = await adapter.handOff(target, delivery());
+    const outcome = h._tag === "accepted" ? await (async () => {
+      const o = adapter.awaitOutcome(target, delivery(), h.turnId);
       t3.assistant("background task finished");
       t3.finish();
-      const fresh = makeT3Adapter({ client: t3 });
-      const c = await fresh.check(target, delivery(), undefined);
-      assert.equal(c._tag, "unknown");
-    }
+      return o;
+    })() : h;
+    assert.notEqual(outcome._tag, "replied", JSON.stringify(outcome));
+    assert.equal(outcome._tag, "ambiguous");
+  });
+
+  it("1.3 recovery without the turn's full events reports uncertain, never collects", async () => {
+    const { t3, adapter } = setup();
+    await accepted(adapter);
+    t3.assistant("4");
+    t3.finish();
+    const fresh = makeT3Adapter({ client: t3 });
+    const c = await fresh.check(target, delivery(), undefined); // no cursor: events can't be replayed
+    assert.equal(c._tag, "unknown", JSON.stringify(c));
+  });
+
+  it("1.3 the restart check never collects an interrupted turn's partial answer", async () => {
+    const { t3, adapter } = setup();
+    const h = await accepted(adapter);
+    t3.assistant("Once upon a ti");
+    t3.interrupt();
+    await tick(60); // the session's ready -> stopped lands
+    const fresh = makeT3Adapter({ client: t3, replayQuietMs: 100, interruptWindowMs: 150 });
+    const d = delivery("d_1", { state: "delivered", at: 0, turnId: h.turnId, cursor: h.cursor! });
+    const c = await fresh.check(target, d, h.turnId);
+    assert.equal(c._tag, "completed");
+    assert.notEqual((c as { outcome: { _tag: string } }).outcome._tag, "replied", JSON.stringify(c));
+  });
+
+  it("1.4 reads our turn's own end state when a later turn has started", async () => {
+    const { t3, adapter } = setup();
+    const h = await accepted(adapter);
+    const outcome = adapter.awaitOutcome(target, delivery(), h.turnId);
+    t3.assistant("Let me check that.");
+    t3.finish("error", "provider crashed");
+    t3.userMessage("lee-next"); // Lee's next turn is latest before we read the outcome
+    const o = await outcome;
+    assert.notEqual(o._tag, "replied", JSON.stringify(o));
+    assert.equal(o._tag, "failed");
+  });
+
+  it("1.4 can't read our turn's end state: uncertain", async () => {
+    const { t3, adapter } = setup();
+    const h = await accepted(adapter);
+    const outcome = adapter.awaitOutcome(target, delivery(), h.turnId);
+    t3.assistant("partial");
+    t3.wake(); // another turn takes over with no end event for ours
+    const o = await outcome;
+    assert.equal(o._tag, "uncertain", JSON.stringify(o));
+  });
+});
+
+describe("fix pass 2.2 / 2.3", () => {
+  it("2.2 the claim is re-checked right before sending; a lost claim sends nothing", async () => {
+    const { t3, adapter } = setup();
+    const gate = { confirm: async () => false, signal: new AbortController().signal };
+    const h = await (adapter.handOff as (...a: unknown[]) => Promise<{ _tag: string }>)(target, delivery(), gate);
+    assert.notEqual(h._tag, "accepted");
+    assert.deepEqual(t3.userMessages(), [], "nothing was sent");
+  });
+
+  it("2.2 an aborted handoff (claim lost during the courtesy wait) sends nothing", async () => {
+    const { t3, adapter } = setup();
+    t3.userMessage("lee-busy"); // the thread is busy: we wait
+    const abort = new AbortController();
+    let confirmed = 0;
+    const gate = { confirm: async () => (confirmed++, true), signal: abort.signal };
+    const handOff = (adapter.handOff as (...a: unknown[]) => Promise<{ _tag: string }>)(target, delivery(), gate);
+    await tick(80);
+    abort.abort();
+    t3.finish(); // the thread goes idle after the claim was lost
+    const h = await Promise.race([handOff, tick(2000).then(() => ({ _tag: "hung" }))]);
+    assert.notEqual(h._tag, "accepted");
+    assert.equal(confirmed, 0);
+    assert.deepEqual(t3.userMessages(), ["lee-busy"], "ours was never sent");
+  });
+
+  it("2.3 the real client: an HTTP 4xx refusal is rejected; a 5xx or a dropped connection is not", async () => {
+    const { createServer } = await import("node:http");
+    const { mkdtemp, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { makeT3Client } = await import("../src/t3/client.ts");
+    let mode: "400" | "500" | "drop" = "400";
+    const server = createServer((req, res) => {
+      if (mode === "drop") return req.socket.destroy();
+      res.writeHead(Number(mode), { "content-type": "application/json" });
+      res.end('{"_tag":"EnvironmentRequestInvalidError"}');
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+    const port = (server.address() as { port: number }).port;
+    const dir = await mkdtemp(join(tmpdir(), "t3client-"));
+    await writeFile(join(dir, "token"), "dummy-bearer", { mode: 0o600 });
+    const client = makeT3Client({ baseUrl: `http://127.0.0.1:${port}`, authFile: join(dir, "token"), log: () => {} });
+    const turn = { messageId: "comms-d", text: "x", runtimeMode: "auto", interactionMode: "default" };
+    const kind = async () => client.startTurn("th", turn).then(() => "ok", (e) => (e instanceof T3Rejected ? "rejected" : "transport"));
+    mode = "400";
+    assert.equal(await kind(), "rejected");
+    mode = "500";
+    assert.equal(await kind(), "transport");
+    mode = "drop";
+    assert.equal(await kind(), "transport");
+    server.close();
+  });
+});
+
+describe("fix pass 3.3", () => {
+  it("3.3 an answer's delivery leaves no subscription behind", async () => {
+    const { t3, adapter } = setup();
+    const answer = delivery("d_ans");
+    answer.message = { ...answer.message, kind: "answer", inReplyTo: "m_x" };
+    const h = await adapter.handOff(target, answer);
+    assert.equal(h._tag, "accepted");
+    assert.equal(t3.listeners.size, 0);
+  });
+});
+
+describe("fix pass 3.2", () => {
+  it("3.2 a dropped stream is resubscribed with retries, and the turn still resolves", async () => {
+    const { t3, adapter } = setup();
+    const h = await accepted(adapter);
+    const outcome = adapter.awaitOutcome(target, delivery(), h.turnId);
+    t3.failResubscribes = 2;
+    t3.drop();
+    await tick(2_500); // two failed attempts, then a good one
+    t3.assistant("4");
+    t3.finish();
+    assert.deepEqual(await outcome, { _tag: "replied", answer: "4" });
+  });
+
+  it("3.2 a resubscription that gets a snapshot (events missed) makes the outcome uncertain", async () => {
+    const { t3, adapter } = setup();
+    const h = await accepted(adapter);
+    const outcome = adapter.awaitOutcome(target, delivery(), h.turnId);
+    t3.eventsGone = true;
+    t3.drop();
+    t3.userMessage("lee-while-down"); // unseen
+    await tick(100);
+    t3.eventsGone = false;
+    t3.assistant("mixed");
+    t3.finish();
+    const o = await outcome;
+    assert.equal(o._tag, "uncertain", JSON.stringify(o));
   });
 });

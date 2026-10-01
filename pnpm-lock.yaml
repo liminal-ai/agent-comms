@@ -79,6 +79,9 @@ importers:
       '@agent-comms/protocol':
         specifier: workspace:*
         version: link:../protocol
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.0-rc.115
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
