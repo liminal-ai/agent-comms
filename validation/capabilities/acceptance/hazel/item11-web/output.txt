@@ -1,0 +1,19 @@
+2026-10-01T20:01:59.818Z title: (8) agent comms
+2026-10-01T20:01:59.875Z alerts tab label: Alerts (1)
+2026-10-01T20:01:59.879Z open alerts: 1
+2026-10-01T20:01:59.880Z   open: Uncertain delivery · j97bgecyd3hm6f526d91rdn8w98ff0sd · open 1h 17m Alert: delivery j97bgecyd3hm6f526d91rdn8w98ff0sd is uncertain: it can't be told whether it ran, and it won't be re-run (the turn it was delivered into can't be found). to @lee · opened 02:44 PM Open alert Open the delivery's conversation
+2026-10-01T20:01:59.897Z resolved alerts: 4
+2026-10-01T20:01:59.897Z   resolved: Connector silent · lim-builder · resolved after 1m Alert: the connector on lim-builder hasn't been heard from (not heard from for 2 minutes; 18 agents homed there). to @lee · opened 03:59 PM · resolved 04:01 PM Open alert
+2026-10-01T20:01:59.897Z   resolved: Connector silent · lim-builder · resolved after 2m Alert: the connector on lim-builder hasn't been heard from (not heard from for 2 minutes; 18 agents homed there). to @lee · opened 03:55 PM · resolved 03:57 PM Open alert
+2026-10-01T20:01:59.897Z   resolved: Uncertain delivery · j971hbk1k3hrwwg7vpdp5r0bgn8fe6ny · resolved after 2m Alert: delivery j971hbk1k3hrwwg7vpdp5r0bgn8fe6ny is uncertain: it can't be told whether it ran, and it won't be re-run (acceptance 11a: injected). to @lee · opened 03:50 PM · resolved 03:53 PM Open alert Open the delivery's conversation
+2026-10-01T20:01:59.897Z   resolved: Reminder expired · k9714zhpt5xqyt4h9f1bt1a5dn8feemp · resolved after 0s Alert: reminder k9714zhpt5xqyt4h9f1bt1a5dn8feemp expired before it was marked done ("acc10exp", 0 fires). to @lee · opened 03:42 PM · resolved 03:42 PM Open alert
+2026-10-01T20:01:59.897Z PASS 11a: the uncertain-delivery alert is listed, resolved
+2026-10-01T20:01:59.900Z PASS 11b: the connector-silent incidents are listed (stop, start, stop)
+2026-10-01T20:02:00.030Z inbox alert items: 5
+2026-10-01T20:02:00.030Z   UNREAD @alertsAlert · DM · 03:59 PM Alert: the connector on lim-builder hasn't been heard from (not heard from for 2 minutes; 18 agents homed there).
+2026-10-01T20:02:00.030Z   UNREAD @alertsAlert · DM · 03:55 PM Alert: the connector on lim-builder hasn't been heard from (not heard from for 2 minutes; 18 agents homed there).
+2026-10-01T20:02:00.030Z   UNREAD @alertsAlert · DM · 03:50 PM Alert: delivery j971hbk1k3hrwwg7vpdp5r0bgn8fe6ny is uncertain: it can't be told whether it ran, and it won't be re-run (acceptance 11a: injected).
+2026-10-01T20:02:00.030Z   UNREAD @alertsAlert · DM · 03:42 PM Alert: reminder k9714zhpt5xqyt4h9f1bt1a5dn8feemp expired before it was marked done ("acc10exp", 0 fires).
+2026-10-01T20:02:00.030Z   UNREAD @alertsAlert · DM · 02:44 PM Alert: delivery j97bgecyd3hm6f526d91rdn8w98ff0sd is uncertain: it can't be told whether it ran, and it won't be re-run (the turn it was delivered into can't be …
+2026-10-01T20:02:00.030Z PASS the alerts are in Lee's inbox from @alerts, labelled Alert, unread
+2026-10-01T20:02:00.148Z ALL PASS
