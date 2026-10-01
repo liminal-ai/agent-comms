@@ -538,12 +538,11 @@ export class CommsMod {
   /**
    * Whether absence from the journal proves this delivery was never submitted:
    * only if no history was ever lost, or it was created after the last loss.
-   * A check that doesn't say when its delivery was created can't be placed.
+   * A check whose creation time isn't a number (an older connector) can't be placed.
    */
   private journalCovers(check: DeliveryCheck): boolean {
     if (this.historyLostAt === 0) return true;
-    const createdAt = (check as DeliveryCheck & { createdAt?: number }).createdAt;
-    return typeof createdAt === "number" && createdAt > this.historyLostAt + CLOCK_SKEW_MS;
+    return typeof check.createdAt === "number" && check.createdAt > this.historyLostAt + CLOCK_SKEW_MS;
   }
 
   private journalLost(reason: string): void {
