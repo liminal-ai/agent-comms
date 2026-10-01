@@ -7,7 +7,7 @@
 // over only through `claim`, which says `takeover: true` so the new holder
 // checks the harness before running anything.
 
-import { clipAnswer, DEFAULT_READ_LIMIT, type Responses } from "@agent-comms/protocol";
+import { clipAnswer, DEFAULT_READ_LIMIT, OWNER_ALIAS, type Responses } from "@agent-comms/protocol";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query, type QueryCtx } from "./_generated/server";
@@ -19,12 +19,13 @@ import {
   fullDelivery,
   getOr,
   membership,
+  participantByName,
   ref,
   requireMachine,
   stateRef,
   summary,
 } from "./lib/core";
-import { nextPresence } from "./lib/registry";
+import { machineSeen, nextPresence, profilePatch, registryEntry } from "./lib/registry";
 import { openDm, post, replayed } from "./lib/post";
 import { attachment, enteredInput, failureReason, machineAuth, via } from "./validators";
 
@@ -288,11 +289,12 @@ export const collect = mutation({
     const request = (await ctx.db.get(d.messageId))!;
     const conversation = (await ctx.db.get(d.conversationId))!;
     const requester = (await ctx.db.get(request.senderId))!;
-    const requesterStillMember = await isMember(ctx, conversation._id, requester);
+    // A system requester (a reminder fire) is never addressed; its fire records the answer (R3).
+    const addressable = requester.kind !== "system" && (await isMember(ctx, conversation._id, requester));
     const result = await post(ctx, {
       sender: recipient,
       conversation,
-      recipients: requesterStillMember ? [requester] : [],
+      recipients: addressable ? [requester] : [],
       kind: "answer",
       inReplyTo: request._id,
       collectedFrom: d._id,
@@ -420,6 +422,12 @@ export const send = mutation({
     if (earlier) return earlier;
     const recipients = [];
     for (const name of args.to) {
+      if (name === OWNER_ALIAS) {
+        // `@owner`: the sending agent's owner.
+        if (!sender.ownerId) fail("bad_request", `@${sender.name} has no owner to address as @owner`);
+        recipients.push((await ctx.db.get(sender.ownerId))!);
+        continue;
+      }
       const normalized = await ctx.db
         .query("participants")
         .withIndex("by_name", (q) => q.eq("name", name))
@@ -471,7 +479,8 @@ export const reply = mutation({
     const conversation = (await ctx.db.get(original.conversationId))!;
     await membership(ctx, conversation._id, me);
     const originalSender = (await ctx.db.get(original.senderId))!;
-    const addressable = originalSender._id !== me._id && (await isMember(ctx, conversation._id, originalSender));
+    const addressable =
+      originalSender._id !== me._id && originalSender.kind !== "system" && (await isMember(ctx, conversation._id, originalSender));
     const result: Responses["reply"] = await post(ctx, {
       sender: me,
       conversation,
@@ -553,5 +562,47 @@ export const list = query({
     }
     rows.sort((a, b) => b.c.lastAt - a.c.lastAt);
     return { conversations: await Promise.all(rows.map(({ c, readSeq }) => summary(ctx, c, readSeq))) };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// The agent registry (capabilities pass §1)
+
+/** Every participant that isn't retired, or one by name (any state). Homes only with `long`. */
+export const agents = query({
+  args: { machine: machineAuth, as: v.string(), name: v.optional(v.string()), long: v.optional(v.boolean()) },
+  handler: async (ctx, args): Promise<Responses["agents"]> => {
+    const machine = await requireMachine(ctx, args.machine);
+    await actingAs(ctx, machine, args.as);
+    const rows =
+      args.name !== undefined
+        ? [await participantByName(ctx, args.name)]
+        : (await ctx.db.query("participants").collect()).filter((p) => p.state !== "retired");
+    rows.sort((a, b) => a.name.localeCompare(b.name));
+    const seen = await machineSeen(ctx);
+    const now = Date.now();
+    return { agents: await Promise.all(rows.map((p) => registryEntry(ctx, p, seen, now, { long: args.long ?? false }))) };
+  },
+});
+
+/** An agent sets its own description and duties (its owner edits them in the web view). */
+export const agentsSet = mutation({
+  args: {
+    machine: machineAuth,
+    as: v.string(),
+    name: v.string(),
+    description: v.optional(v.string()),
+    duties: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args): Promise<Responses["agents-set"]> => {
+    const machine = await requireMachine(ctx, args.machine);
+    const me = await actingAs(ctx, machine, args.as);
+    const target = await participantByName(ctx, args.name);
+    if (target._id !== me._id && target.ownerId !== me._id) {
+      fail("conflict", `@${me.name} can set only its own registry entry (or one it owns), not @${target.name}'s`);
+    }
+    await ctx.db.patch(target._id, profilePatch(args));
+    const updated = (await ctx.db.get(target._id))!;
+    return { agent: await registryEntry(ctx, updated, await machineSeen(ctx), Date.now(), { long: true }) };
   },
 });

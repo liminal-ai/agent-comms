@@ -8,6 +8,7 @@ import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { post } from "./lib/post";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -23,7 +24,7 @@ async function setup() {
   await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m1", secret: m1.secret });
   await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "lee", kind: "human" });
   for (const name of ["a", "b"]) {
-    await t.mutation(api.directory.promote, { adminToken: ADMIN, name, kind: "agent", home: { machine: "m1", harness: "t3", locator: `loc-${name}` } });
+    await t.mutation(api.directory.promote, { adminToken: ADMIN, name, kind: "agent", owner: "lee", home: { machine: "m1", harness: "t3", locator: `loc-${name}` } });
   }
   return t;
 }
@@ -262,5 +263,167 @@ describe("R0 review (Hazel)", () => {
     });
     const [listed] = (await t.query(api.reminders.list, { adminToken: ADMIN })).reminders;
     expect(listed).toMatchObject({ lastFire: { messageId, deliveryState: "delivered", firedAt: NOW }, lastSkip: { at: NOW + 60_000, reason: "previous-fire-not-final" } });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R1: registry, owner, reserved names, @owner, inbox
+
+const agentHome = (name: string) => ({ machine: "m1", harness: "t3" as const, locator: `loc-${name}` });
+const byName = (t: T, name: string) =>
+  t.run(async (ctx) => (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", name)).unique())!);
+const inboxOf = (t: T, name: string) =>
+  t.run(async (ctx) => {
+    const h = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", name)).unique())!;
+    return ctx.db.query("inbox").withIndex("by_human", (q) => q.eq("humanId", h._id)).collect();
+  });
+
+describe("R1 promotion: owner and reserved names", () => {
+  it("requires a person as an agent's owner, stores it as ownerId, and refuses reserved names", async () => {
+    const t = await setup();
+    const promote = (args: Record<string, unknown>) => t.mutation(api.directory.promote, { adminToken: ADMIN, ...args } as never);
+    expect(await errorCode(promote({ name: "x", kind: "agent", home: agentHome("x") }))).toBe("bad_request");
+    expect(await errorCode(promote({ name: "x", kind: "agent", home: agentHome("x"), owner: "a" }))).toBe("bad_request");
+    expect(await errorCode(promote({ name: "x", kind: "agent", home: agentHome("x"), owner: "nobody" }))).toBe("unknown_participant");
+    for (const name of ["owner", "all", "reminders", "alerts"]) {
+      expect(await errorCode(promote({ name, kind: "agent", home: agentHome(name), owner: "lee" })), name).toBe("bad_request");
+      expect(await errorCode(promote({ name, kind: "human" })), name).toBe("bad_request");
+    }
+    const r = await promote({ name: "x", kind: "agent", home: agentHome("x"), owner: "lee", description: "does x", duties: ["one"] });
+    expect(r.participant.name).toBe("x");
+    const x = await byName(t, "x");
+    expect(x.ownerId).toBe(await idOf(t, "lee"));
+    expect(x.owner).toBeUndefined();
+    const entry = (await t.query(api.registry.list, { adminToken: ADMIN })).agents.find((e) => e.participant.name === "x")!;
+    expect(entry).toMatchObject({ owner: { name: "lee", kind: "human" }, description: "does x", duties: ["one"] });
+    expect(await errorCode(promote({ name: "y", kind: "human", owner: "lee" }))).toBe("bad_request");
+  });
+});
+
+describe("R1 upgrade: system participants and the owner backfill", () => {
+  it("creates @reminders and @alerts, backfills ownerId from the old owner string (else the default), and clears the string", async () => {
+    const t = await setup();
+    await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "sam", kind: "human" });
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      const base = { kind: "agent" as const, state: "active" as const, presence: { status: "offline" as const, at: now }, createdAt: now };
+      await ctx.db.insert("participants", { ...base, name: "legacy-sam", owner: "sam", home: agentHome("legacy-sam") });
+      await ctx.db.insert("participants", { ...base, name: "legacy-none", home: agentHome("legacy-none") });
+      await ctx.db.insert("participants", { ...base, name: "legacy-gone", owner: "nobody", home: agentHome("legacy-gone") });
+      await ctx.db.insert("participants", { kind: "human", state: "active", presence: { status: "offline", at: now }, createdAt: now, name: "pat", owner: "x" });
+    });
+    const first = await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
+    expect(first).toEqual({ systemCreated: ["reminders", "alerts"], ownersSet: 3, ownerStringsCleared: 3 });
+    const owner = async (name: string) => (await byName(t, name)).ownerId;
+    expect(await owner("legacy-sam")).toBe(await idOf(t, "sam"));
+    expect(await owner("legacy-none")).toBe(await idOf(t, "lee"));
+    expect(await owner("legacy-gone")).toBe(await idOf(t, "lee"));
+    expect((await byName(t, "pat")).ownerId).toBeUndefined();
+    for (const name of ["legacy-sam", "legacy-gone", "pat"]) expect((await byName(t, name)).owner, name).toBeUndefined();
+    const reminders = await byName(t, "reminders");
+    expect(reminders).toMatchObject({ kind: "system", state: "active" });
+    expect(reminders.home).toBeUndefined();
+    expect(await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" })).toEqual({ systemCreated: [], ownersSet: 0, ownerStringsCleared: 0 });
+  });
+
+  it("refuses when a non-system participant holds a system name", async () => {
+    const t = await setup();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("participants", { name: "alerts", kind: "human", state: "active", presence: { status: "offline", at: NOW }, createdAt: NOW });
+    });
+    expect(await errorCode(t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" }))).toBe("conflict");
+  });
+});
+
+describe("R1 addressing: @owner, system participants, the inbox", () => {
+  it("@owner resolves to the sending agent's owner, and the message lands in their inbox, not as a delivery", async () => {
+    const t = await setup();
+    const sent = await t.mutation(api.connector.send, { machine: m1, as: "a", to: ["owner"], text: "need a decision" });
+    expect(sent.message.recipients.map((r) => r.name)).toEqual(["lee"]);
+    expect(sent.deliveries).toEqual([]);
+    const inbox = await inboxOf(t, "lee");
+    expect(inbox.map((i) => i.messageId)).toEqual([sent.message.id]);
+    expect(inbox[0]!.readAt).toBeUndefined();
+    expect((await t.query(api.inbox.unreadCount, { adminToken: ADMIN, human: "lee" })).unread).toBe(1);
+
+    const g = await t.mutation(api.conversations.createGroup, { adminToken: ADMIN, title: "g", members: ["lee", "a", "b"] });
+    const inGroup = await t.mutation(api.connector.send, { machine: m1, as: "a", to: ["owner", "b"], conversationId: g.conversation.id, text: "both" });
+    expect(inGroup.message.recipients.map((r) => r.name)).toEqual(["lee", "b"]);
+    expect(inGroup.deliveries.map((d) => d.recipient)).toEqual(["b"]);
+    expect((await inboxOf(t, "lee")).length).toBe(2);
+  });
+
+  it("@owner without an owner is refused; system participants can't be addressed", async () => {
+    const t = await setup();
+    await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
+    await t.run(async (ctx) => {
+      const b = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "b")).unique())!;
+      await ctx.db.patch(b._id, { ownerId: undefined });
+    });
+    expect(await errorCode(t.mutation(api.connector.send, { machine: m1, as: "b", to: ["owner"], text: "x" }))).toBe("bad_request");
+    for (const name of ["reminders", "alerts"]) {
+      expect(await errorCode(t.mutation(api.connector.send, { machine: m1, as: "a", to: [name], text: "x" })), name).toBe("bad_request");
+    }
+    const g = await t.mutation(api.conversations.createGroup, { adminToken: ADMIN, title: "g", members: ["lee", "a"] });
+    expect(await errorCode(t.mutation(api.conversations.postAs, { adminToken: ADMIN, as: "lee", conversationId: g.conversation.id, to: ["owner"], text: "x" }))).toBe("unknown_participant");
+  });
+
+  it("a system participant's message to a person goes to their inbox, and an agent's answer to a system request addresses no one", async () => {
+    const t = await setup();
+    await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
+    const posted = await t.run(async (ctx) => {
+      const alerts = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "alerts")).unique())!;
+      const reminders = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "reminders")).unique())!;
+      const lee = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "lee")).unique())!;
+      const a = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "a")).unique())!;
+      const { openDm } = await import("./lib/post");
+      const alert = await post(ctx as never, { sender: alerts, conversation: await openDm(ctx as never, alerts, lee), recipients: [lee], kind: "request", text: "Alert: x", origin: { via: "web" } });
+      const fire = await post(ctx as never, { sender: reminders, conversation: await openDm(ctx as never, reminders, a), recipients: [a], kind: "request", text: "check CI", origin: { via: "web" } });
+      return { alert, fire };
+    });
+    expect(posted.alert.deliveries).toEqual([]);
+    expect((await inboxOf(t, "lee")).map((i) => i.messageId)).toEqual([posted.alert.message.id]);
+
+    const id = posted.fire.deliveries[0]!.id;
+    const { claim } = await t.mutation(api.connector.claim, { machine: m1, deliveryId: id });
+    await t.mutation(api.connector.delivered, { machine: m1, deliveryId: id, claimId: claim.claimId, turnId: "t1" });
+    const r = await t.mutation(api.connector.collect, { machine: m1, deliveryId: id, claimId: claim.claimId, turnId: "t1", answer: "CI green" });
+    expect(r.delivery.state).toBe("replied");
+    const answer = await t.run(async (ctx) => ctx.db.get(r.answerMessageId as Id<"messages">));
+    expect(answer!.recipientIds).toEqual([]);
+    const toSystem = await t.run(async (ctx) => (await ctx.db.query("deliveries").collect()).filter((d) => d.messageId === answer!._id));
+    expect(toSystem).toEqual([]);
+    const replied = await t.mutation(api.connector.reply, { machine: m1, as: "a", messageId: posted.fire.message.id, text: "also" });
+    expect(replied.message.recipients).toEqual([]);
+  });
+
+  it("a retired person gets no inbox row", async () => {
+    const t = await setup();
+    await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "sam", kind: "human" });
+    const g = await t.mutation(api.conversations.createGroup, { adminToken: ADMIN, title: "g", members: ["lee", "sam", "a"] });
+    await t.mutation(api.directory.setState, { adminToken: ADMIN, name: "sam", state: "retired" });
+    await t.mutation(api.connector.send, { machine: m1, as: "a", to: ["lee", "sam"], conversationId: g.conversation.id, text: "hi" });
+    expect((await inboxOf(t, "lee")).length).toBe(1);
+    expect((await inboxOf(t, "sam")).length).toBe(0);
+  });
+});
+
+describe("R1 registry over the connector", () => {
+  it("lists non-retired participants (homes only with long), shows one, and lets an agent edit only itself", async () => {
+    const t = await setup();
+    await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
+    await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "gone", kind: "agent", owner: "lee", home: agentHome("gone") });
+    await t.mutation(api.directory.setState, { adminToken: ADMIN, name: "gone", state: "retired" });
+    const all = await t.query(api.connector.agents, { machine: m1, as: "a" });
+    expect(all.agents.map((e) => e.participant.name)).toEqual(["a", "alerts", "b", "lee", "reminders"]);
+    expect(all.agents.find((e) => e.participant.name === "a")!.home).toBeUndefined();
+    const one = await t.query(api.connector.agents, { machine: m1, as: "a", name: "b", long: true });
+    expect(one.agents).toHaveLength(1);
+    expect(one.agents[0]!.home).toEqual(agentHome("b"));
+    expect(await errorCode(t.query(api.connector.agents, { machine: m1, as: "a", name: "nobody" }))).toBe("unknown_participant");
+
+    const set = await t.mutation(api.connector.agentsSet, { machine: m1, as: "a", name: "a", description: "builds comms", duties: ["merge"] });
+    expect(set.agent).toMatchObject({ description: "builds comms", duties: ["merge"] });
+    expect(await errorCode(t.mutation(api.connector.agentsSet, { machine: m1, as: "a", name: "b", description: "x" }))).toBe("conflict");
   });
 });

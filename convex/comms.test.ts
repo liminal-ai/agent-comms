@@ -17,7 +17,7 @@ async function setup(): Promise<T> {
   await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m1", secret: m1.secret });
   await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m2", secret: m2.secret });
   const agent = (name: string, machine = "m1", harness: "t3" | "claude-code" = "t3") =>
-    t.mutation(api.directory.promote, { adminToken: ADMIN, name, kind: "agent", home: { machine, harness, locator: `loc-${name}` } });
+    t.mutation(api.directory.promote, { adminToken: ADMIN, name, kind: "agent", owner: "lee", home: { machine, harness, locator: `loc-${name}` } });
   await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "lee", kind: "human" });
   await agent("a");
   await agent("b", "m1", "claude-code");
@@ -163,9 +163,10 @@ describe("fix pass 2.4-2.6", () => {
     process.env.COMMS_ADMIN_TOKEN = ADMIN;
     const t = convexTest({ schema, modules, transactionLimits: { documentsRead: 200 } });
     await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m1", secret: m1.secret });
-    await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "a", kind: "agent", home: { machine: "m1", harness: "t3", locator: "x" } });
+    await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "lee", kind: "human" });
+    await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "a", kind: "agent", owner: "lee", home: { machine: "m1", harness: "t3", locator: "x" } });
     await t.run(async (ctx) => {
-      const a = (await ctx.db.query("participants").collect())[0]!;
+      const a = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "a")).unique())!;
       const c = await ctx.db.insert("conversations", { kind: "group", title: "x", lastSeq: 0, lastAt: 0, createdAt: 0 });
       const m = await ctx.db.insert("messages", {
         conversationId: c, seq: 1, senderId: a._id, recipientIds: [a._id], kind: "answer", text: "x", attachments: [], origin: { via: "cli" }, createdAt: 0,
@@ -459,7 +460,7 @@ describe("directory", () => {
   it("validates promotion", async () => {
     const t = await setup();
     const promote = (args: object) =>
-      errorCode(t.mutation(api.directory.promote, { adminToken: ADMIN, name: "x", kind: "agent", ...args } as never));
+      errorCode(t.mutation(api.directory.promote, { adminToken: ADMIN, name: "x", kind: "agent", owner: "lee", ...args } as never));
     expect(await promote({ name: "Bad Name", home: { machine: "m1", harness: "t3", locator: "l" } })).toBe("bad_request");
     expect(await promote({})).toBe("bad_request");
     expect(await promote({ name: "a", home: { machine: "m1", harness: "t3", locator: "l" } })).toBe("conflict");

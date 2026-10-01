@@ -162,3 +162,24 @@ describe("capabilities R0", () => {
     assert.deepEqual(EXIT, CLI_EXIT);
   });
 });
+
+describe("capabilities R1: comms agents", () => {
+  it("sets its own entry, lists the registry, and shows one with duties", async () => {
+    const set = await comms(["agents", "set", "--as", "cedar", "@cedar", "--description", "Builds comms", "--duty", "merge hazel", "--duty", "keep services up"]);
+    assert.equal(set.code, EXIT.ok, set.stderr);
+    assert.match(set.stdout, /^@cedar \(agent, active\)/);
+    const all = await comms(["agents", "--as", "cedar"]);
+    assert.equal(all.code, EXIT.ok, all.stderr);
+    assert.match(all.stdout, /^@cedar \(agent, active\) .*claude-code.* — Builds comms$/m);
+    assert.match(all.stdout, /^@lee \(human, active\)$/m);
+    assert.doesNotMatch(all.stdout, /merge hazel/);
+    const one = await comms(["agents", "--as", "cedar", "@cedar", "--long"]);
+    assert.match(one.stdout, /^  duties:\n  - merge hazel\n  - keep services up$/m);
+    assert.match(one.stdout, /^  home: claude-code cedar on box$/m);
+    const other = await comms(["agents", "set", "--as", "cedar", "@hazel", "--description", "x"]);
+    assert.equal(other.code, EXIT.refused);
+    assert.match(other.stderr, /conflict/);
+    const json = await comms(["agents", "--as", "cedar", "@hazel", "--json"]);
+    assert.equal(JSON.parse(json.stdout).agents[0].participant.name, "hazel");
+  });
+});

@@ -1,0 +1,9 @@
+    not ok 1 - lists the registry, shows one with its home, and lets an agent set only its own entry
+# pass 21
+# fail 1
+    not ok 1 - sets its own entry, lists the registry, and shows one with duties
+# pass 13
+# fail 1
+[31m     [31m×[31m passes the registry operations through[39m[32m 15[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m15 passed[39m[22m[90m (16)[39m

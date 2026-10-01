@@ -36,6 +36,8 @@ export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResu
   if (input.kind === "request" && input.inReplyTo) fail("bad_request", "a request can't have inReplyTo");
   if (new Set(recipients.map((r) => r._id)).size !== recipients.length) fail("bad_request", "a recipient is named twice");
   if (recipients.some((r) => r._id === sender._id)) fail("bad_request", "can't address yourself");
+  const system = recipients.find((r) => r.kind === "system");
+  if (system) fail("bad_request", `@${system.name} is a system participant; it sends, and can't be addressed`);
   if (!input.inFlight) await membership(ctx, conversation._id, sender);
   for (const r of recipients) await membership(ctx, conversation._id, r);
 
@@ -64,13 +66,16 @@ export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResu
     skipped: [],
   };
   // Addressed wakes: one delivery per addressed agent. Retired get none, paused
-  // ones wait as pending, humans read in the web view.
+  // ones wait as pending. People get an inbox row instead, and read in the web view.
   for (const r of recipients) {
     if (r.state === "retired") {
       result.skipped.push({ name: r.name, reason: "retired" });
       continue;
     }
-    if (r.kind === "human") continue;
+    if (r.kind === "human") {
+      await ctx.db.insert("inbox", { humanId: r._id, messageId, conversationId: conversation._id, createdAt: now });
+      continue;
+    }
     const deliveryId = await ctx.db.insert("deliveries", {
       messageId,
       conversationId: conversation._id,

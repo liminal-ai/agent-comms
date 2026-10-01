@@ -29,7 +29,8 @@ const expand = (p: string) => (p.startsWith("~/") ? resolve(homedir(), p.slice(2
 const adminToken = readFileSync(expand(values["admin-token-file"]), "utf8").trim();
 const seed = JSON.parse(readFileSync(expand(values.seed), "utf8")) as {
   machine?: { id: string; secretFile: string };
-  participants?: { name: string; kind: "human" | "agent"; home?: { machine: string; harness: "t3" | "claude-code" | "web"; locator: string } }[];
+  /** People first: an agent's owner (default "lee") must exist when it's promoted. */
+  participants?: { name: string; kind: "human" | "agent"; owner?: string; home?: { machine: string; harness: "t3" | "claude-code" | "web"; locator: string } }[];
   groups?: { title: string; members: string[] }[];
 };
 const client = new ConvexHttpClient(values.url);
@@ -41,7 +42,13 @@ if (seed.machine) {
 }
 for (const p of seed.participants ?? []) {
   try {
-    await client.mutation(api.directory.promote, { adminToken, name: p.name, kind: p.kind, ...(p.home ? { home: p.home } : {}) });
+    await client.mutation(api.directory.promote, {
+      adminToken,
+      name: p.name,
+      kind: p.kind,
+      ...(p.home ? { home: p.home } : {}),
+      ...(p.kind === "agent" ? { owner: p.owner ?? "lee" } : {}),
+    });
     console.log(`@${p.name}: promoted`);
   } catch (error) {
     const code = (error as { data?: { code?: string } }).data?.code;
@@ -49,6 +56,9 @@ for (const p of seed.participants ?? []) {
     console.log(`@${p.name}: already exists`);
   }
 }
+// System participants and the owner migration (capabilities pass); idempotent.
+const upgraded = await client.mutation(api.directory.upgrade, { adminToken, defaultOwner: "lee" });
+console.log(`upgrade: ${JSON.stringify(upgraded)}`);
 for (const g of seed.groups ?? []) {
   const r = await client.mutation(api.conversations.createGroup, { adminToken, title: g.title, members: g.members });
   console.log(`group "${g.title}": ${r.conversation.id}`);

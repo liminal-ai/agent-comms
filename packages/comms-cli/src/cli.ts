@@ -6,9 +6,11 @@ import { parseArgs } from "node:util";
 import {
   CLI_EXIT,
   type ConversationSummary,
+  formatDuration,
   type MessageEnvelope,
   type Op,
   PARTICIPANT_ENV,
+  type RegistryEntry,
   type Requests,
   type Responses,
   type SendResult,
@@ -24,8 +26,12 @@ export const USAGE = `usage:
   comms reply --as <me> <message-id> "text"                  answer a message (sets inReplyTo)
   comms read  --as <me> <conversation-id> [--before <seq>] [--limit <n>]
   comms list  --as <me>                                      my conversations
+  comms agents --as <me> [@name] [--long]                    the agent registry (one with its duties; --long adds homes)
+  comms agents set --as <me> @me [--description "…"] [--duty "…"]…   set your registry entry
+                                                             ("" clears the description; any --duty replaces the list)
   comms status                                               the connector and who is homed here
 
+  @owner addresses your owner (the person who owns you); @reminders and @alerts can't be addressed.
   --as defaults to $${PARTICIPANT_ENV}. It names you; the connector accepts any
   participant homed on this machine (a trusted-machine shortcut, not proof of identity).
   Text may be given as several words, or "-" to read it from stdin. Text may start
@@ -53,6 +59,9 @@ const OPTIONS = {
   limit: { type: "string" },
   key: { type: "string" },
   json: { type: "boolean" },
+  long: { type: "boolean" },
+  description: { type: "string" },
+  duty: { type: "string", multiple: true },
   socket: { type: "string" },
   help: { type: "boolean", short: "h" },
 } as const;
@@ -61,22 +70,25 @@ const OPTIONS = {
  * Our options anywhere; anything else is message text, even if it starts with
  * "-" (a number, a list item). `--` ends options: everything after it is text (3.7).
  */
-function parseOptions(argv: string[]): { values: { [K in keyof typeof OPTIONS]?: (typeof OPTIONS)[K]["type"] extends "string" ? string : boolean }; positionals: string[] } {
+type OptionValue<O> = O extends { multiple: true } ? string[] : O extends { type: "string" } ? string : boolean;
+
+function parseOptions(argv: string[]): { values: { [K in keyof typeof OPTIONS]?: OptionValue<(typeof OPTIONS)[K]> }; positionals: string[] } {
   const { tokens } = parseArgs({ args: argv, allowPositionals: true, strict: false, tokens: true, options: OPTIONS });
-  const values: Record<string, string | boolean> = {};
+  const values: Record<string, string | boolean | string[]> = {};
   const positionals: string[] = [];
   const unknownAt = new Set<number>();
   for (const t of tokens) {
     if (t.kind === "positional") positionals.push(t.value);
     else if (t.kind === "option") {
-      const spec = (OPTIONS as Record<string, { type: "string" | "boolean" }>)[t.name];
+      const spec = (OPTIONS as Record<string, { type: "string" | "boolean"; multiple?: boolean }>)[t.name];
       if (!spec) {
         // Not one of ours: the whole argument is text (once, however it was split into short options).
         if (!unknownAt.has(t.index)) positionals.push(argv[t.index]!);
         unknownAt.add(t.index);
       } else if (spec.type === "string") {
         if (t.value === undefined) throw new Error(`option ${t.rawName} needs a value`);
-        values[t.name] = t.value;
+        if (spec.multiple) values[t.name] = [...((values[t.name] as string[] | undefined) ?? []), t.value];
+        else values[t.name] = t.value;
       } else values[t.name] = true;
     }
   }
@@ -185,6 +197,32 @@ export async function run(argv: string[], io: Io): Promise<number> {
         if (!values.json) io.stdout(describeList(me, r.conversations));
         return EXIT.ok;
       }
+      case "agents": {
+        if (rest[0] === "set") {
+          const [, target, extra] = rest;
+          if (!target?.startsWith("@") || extra) throw new UsageError("comms agents set needs exactly one @name");
+          if (values.description === undefined && values.duty === undefined) throw new UsageError("give --description and/or --duty");
+          const r = await request("agents-set", {
+            as: as(),
+            name: target.slice(1),
+            ...(values.description !== undefined ? { description: values.description } : {}),
+            ...(values.duty !== undefined ? { duties: values.duty } : {}),
+          });
+          if (!r) return EXIT.refused;
+          if (!values.json) io.stdout(describeAgent(r.agent, true));
+          return EXIT.ok;
+        }
+        const [target, extra] = rest;
+        if (extra || (target !== undefined && !target.startsWith("@"))) throw new UsageError("comms agents takes at most one @name");
+        const r = await request("agents", {
+          as: as(),
+          ...(target ? { name: target.slice(1) } : {}),
+          ...(values.long ? { long: true } : {}),
+        });
+        if (!r) return EXIT.refused;
+        if (!values.json) io.stdout(r.agents.map((e) => describeAgent(e, target !== undefined)).join(""));
+        return EXIT.ok;
+      }
       case "status": {
         const r = await request("status", {});
         if (!r) return EXIT.refused;
@@ -210,6 +248,26 @@ export async function run(argv: string[], io: Io): Promise<number> {
     }
     throw error;
   }
+}
+
+/** One registry line; with `full`, the owner, duties and home below it. */
+function describeAgent(e: RegistryEntry, full: boolean): string {
+  const p = e.participant;
+  const presence = e.presence
+    ? e.presence.stale
+      ? "presence unknown (connector not heard from)"
+      : e.presence.status === "idle" && e.presence.idleSince !== undefined
+        ? `idle for ${formatDuration(Math.max(60_000, Math.floor((Date.now() - e.presence.idleSince) / 60_000) * 60_000))}`
+        : e.presence.status
+    : undefined;
+  const parts = [presence, e.harness].filter(Boolean).join(" · ");
+  const lines = [`@${p.name} (${p.kind}, ${e.state})${parts ? ` ${parts}` : ""}${e.description ? ` — ${e.description}` : ""}`];
+  if (full) {
+    if (e.owner) lines.push(`  owner: @${e.owner.name}`);
+    if (e.duties?.length) lines.push("  duties:", ...e.duties.map((d) => `  - ${d}`));
+    if (e.home) lines.push(`  home: ${e.home.harness} ${e.home.locator} on ${e.home.machine}`);
+  }
+  return lines.join("\n") + "\n";
 }
 
 function integerOption(flag: string, value: string): number {

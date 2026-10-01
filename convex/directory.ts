@@ -1,9 +1,10 @@
 // The participant directory and machines. Admin only (Lee's web view, setup scripts).
 
-import { NAME_PATTERN } from "@agent-comms/protocol";
+import { NAME_PATTERN, RESERVED_NAMES, SYSTEM_PARTICIPANTS } from "@agent-comms/protocol";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { fail, participantByName, ref, requireAdmin, sha256Hex } from "./lib/core";
+import { profilePatch } from "./lib/registry";
 import { home, promotableKind } from "./validators";
 
 /** Create or rotate a machine's connector credential. Only the hash is stored. */
@@ -23,19 +24,32 @@ export const registerMachine = mutation({
   },
 });
 
-/** Register a person or promote an agent where it already lives. Agents need a home. */
+/**
+ * Register a person or promote an agent where it already lives. Agents need a
+ * home and an owner (a person: `@owner` resolves to them, and alerts go to them).
+ * Reserved names (`owner`, `all`, and the system participants') are refused.
+ */
 export const promote = mutation({
   args: {
     adminToken: v.string(),
     name: v.string(),
     kind: promotableKind,
     home: v.optional(home),
+    /** The owning person's name. Required for agents; people have none. */
     owner: v.optional(v.string()),
+    description: v.optional(v.string()),
+    duties: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     await requireAdmin(args.adminToken);
     if (!NAME_PATTERN.test(args.name)) fail("bad_request", `@${args.name} isn't a valid name (lowercase [a-z0-9_-], 1-48)`);
+    if (RESERVED_NAMES.includes(args.name)) fail("bad_request", `@${args.name} is a reserved name`);
     if (args.kind === "agent" && !args.home) fail("bad_request", "an agent needs a home");
+    if (args.kind === "agent" && !args.owner) fail("bad_request", "an agent needs an owner (a person's name)");
+    if (args.kind === "human" && args.owner) fail("bad_request", "people have no owner");
+    const owner = args.owner ? await participantByName(ctx, args.owner) : undefined;
+    if (owner && owner.kind !== "human") fail("bad_request", `@${owner.name} isn't a person; an agent's owner is a person`);
+    const profile = profilePatch(args);
     const taken = await ctx.db
       .query("participants")
       .withIndex("by_name", (q) => q.eq("name", args.name))
@@ -47,7 +61,9 @@ export const promote = mutation({
       kind: args.kind,
       state: "active",
       ...(args.home ? { home: args.home } : {}),
-      ...(args.owner ? { owner: args.owner } : {}),
+      ...(owner ? { ownerId: owner._id } : {}),
+      ...(profile.description ? { description: profile.description } : {}),
+      ...(profile.duties ? { duties: profile.duties } : {}),
       presence: { status: "offline", at: now },
       createdAt: now,
     });
@@ -107,5 +123,54 @@ export const list = query({
       })),
       machines: machines.map((m) => ({ machineId: m.machineId, lastSeenAt: m.lastSeenAt ?? null })),
     };
+  },
+});
+
+/**
+ * Brings an existing deployment up to the capabilities pass; idempotent, run
+ * after each deploy. Creates the system participants (`reminders`, `alerts`),
+ * and migrates owners (R1 step 2 of 3): every agent without `ownerId` gets the
+ * person its old `owner` string named, else `defaultOwner`; every old `owner`
+ * string is then cleared, so step 3 can drop the field from the schema.
+ */
+export const upgrade = mutation({
+  args: { adminToken: v.string(), defaultOwner: v.string() },
+  handler: async (ctx, args) => {
+    await requireAdmin(args.adminToken);
+    const fallback = await participantByName(ctx, args.defaultOwner);
+    if (fallback.kind !== "human") fail("bad_request", `@${fallback.name} isn't a person`);
+    const now = Date.now();
+    const systemCreated: string[] = [];
+    for (const name of SYSTEM_PARTICIPANTS) {
+      const existing = await ctx.db
+        .query("participants")
+        .withIndex("by_name", (q) => q.eq("name", name))
+        .unique();
+      if (existing && existing.kind !== "system") fail("conflict", `@${name} is taken by a ${existing.kind}; rename it before upgrading`);
+      if (existing) continue;
+      await ctx.db.insert("participants", { name, kind: "system", state: "active", presence: { status: "offline", at: now }, createdAt: now });
+      systemCreated.push(name);
+    }
+    let ownersSet = 0;
+    let ownerStringsCleared = 0;
+    for (const p of await ctx.db.query("participants").collect()) {
+      const patch: { ownerId?: typeof fallback._id; owner?: undefined } = {};
+      if (p.kind === "agent" && !p.ownerId) {
+        const named = p.owner
+          ? await ctx.db
+              .query("participants")
+              .withIndex("by_name", (q) => q.eq("name", p.owner!))
+              .unique()
+          : null;
+        patch.ownerId = named && named.kind === "human" ? named._id : fallback._id;
+        ownersSet++;
+      }
+      if (p.owner !== undefined) {
+        patch.owner = undefined;
+        ownerStringsCleared++;
+      }
+      if (Object.keys(patch).length > 0) await ctx.db.patch(p._id, patch);
+    }
+    return { systemCreated, ownersSet, ownerStringsCleared };
   },
 });

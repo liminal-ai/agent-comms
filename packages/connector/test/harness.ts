@@ -65,11 +65,13 @@ export async function world() {
   process.env.COMMS_ADMIN_TOKEN = ADMIN;
   const t = convexTest(schema, modules);
   await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: machine.id, secret: machine.secret });
+  await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "lee", kind: "human" });
   for (const name of ["a", "b"]) {
     await t.mutation(api.directory.promote, {
       adminToken: ADMIN,
       name,
       kind: "agent",
+      owner: "lee",
       home: { machine: machine.id, harness: "claude-code", locator: name },
     });
   }
@@ -77,9 +79,9 @@ export async function world() {
     adminToken: ADMIN,
     name: "tee",
     kind: "agent",
+    owner: "lee",
     home: { machine: machine.id, harness: "t3", locator: "thread-1" },
   });
-  await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "lee", kind: "human" });
   const tr = transport(t);
   const serverApi = makeServerApi(tr, { machine, callTimeout: "2 seconds" });
   const dir = await mkdtemp(join(tmpdir(), "connector-test-"));
