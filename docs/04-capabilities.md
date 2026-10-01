@@ -1,6 +1,6 @@
 # Capabilities pass: reminders, registry, send-and-wait, people, alerts
 
-Draft 4 by Reed, 2026-10-01: Cedar's review of draft 1, Alder's and Wrenn's reviews of drafts 2 and 3, folded in. Builds on `main` after fix pass 1 is signed off.
+Draft 5 by Reed, 2026-10-01: Cedar's review of draft 1, Alder's and Wrenn's reviews of drafts 2 and 3, folded in. Builds on `main` after fix pass 1 is signed off.
 
 ## Why
 
@@ -47,12 +47,12 @@ All behaviour lives in Convex and the connector. Agents reach it through the `co
   - A separate pass over the work stream matches pending answer deliveries against the waits this connector holds, ignoring busy state and serial order. Add each answer delivery's `inReplyTo` to the work query for this (`convex/connector.ts:105-116` doesn't carry it today).
   - **One Convex mutation consumes it,** and only while that recipient's result is still open. A wait holds one result per addressed agent (`open`, `answered`, `expired`); the first answer in a group closes only its own result. The mutation compare-and-sets that result from `open` to `answered`, storing the answer's message id. In the same transaction it sets the delivery from `pending` to `delivered`, with detail "returned to the waiting send". It must not be a claim followed by `delivered`, which would race the normal path.
   - **The CLI reads answers from the stored results, not from the connector's memory.** If the connector dies between consuming and returning, the CLI reconnects and `await` finds them.
-  - **Routing is decided once; receipt isn't guaranteed.** A result ends by compare-and-set, `open` to `answered` or `open` to `expired` (when the CLI's bound or `until` passes), so an answer is routed either to the call or to the thread, never both and never neither. That can't prove the CLI process actually printed it. So:
-    - after printing, the CLI acknowledges each result with an `ack` operation;
-    - an `answered` result not acknowledged within a set time (default 2 minutes) is also delivered into the requester's thread as a normal answer, marked "may already have been returned to a waiting send";
-    - results stay readable through `await` and `comms status <id>` either way.
-    
-    So an answer reaches the agent at least once, and at most twice in the one case where the CLI printed it and died before acknowledging.
+  - **The answer is never lost; it may be shown twice.** A result ends by compare-and-set, `open` to `answered` or `open` to `expired` (when the CLI's bound or `until` passes). An answer that arrives after `expired` goes into the thread as normal. An `answered` result is held for the waiting call, and:
+  - after printing, the CLI acknowledges it with an `ack` operation;
+  - a result not acknowledged within a set time (default 2 minutes) gets **one** automatic fallback into the requester's thread, as a normal answer marked "may already have been returned to a waiting send". The fallback is idempotent: keyed on the result, so a retry or a second connector can't send it twice, and an `ack` racing the fallback is decided by the same compare-and-set (`answered` to `acknowledged`, or `answered` to `fell-back`);
+  - the answer stays readable through `await` and `comms status <id>` in every case.
+  
+  Duplicate presentation is possible: if the CLI printed the answer and died before acknowledging, the agent sees it again in its thread.
   - **What ends the wait, per recipient:**
     - `replied`: the collected answer, or a `comms reply` that completes the delivery, is returned.
     - `ambiguous`: keep waiting, since the agent will finish it with `comms reply`.
@@ -119,7 +119,7 @@ It's worth splitting because the web view and the measurements are independent o
 - the new loopback operations and their JSON, including `await`, and the CLI's JSON output and exit codes for `send`, `await` and `status` (a distinct code for "bound reached, still pending"), since the mod and any later MCP wrapper build on them;
 - the reminder and alert renderings in `render.ts`;
 - **every** Convex query and mutation the web view will call: registry edit, inbox, reminders and alerts.
-- the wait contract: per-recipient results, `ack`, the acknowledgement window and its fallback into the thread, and how long results are kept.
+- the wait contract: per-recipient results (`open`, `answered`, `expired`, `acknowledged`, `fell-back`), `ack`, the acknowledgement window and its single idempotent fallback into the thread, and how long results are kept.
 
 Hazel reviews R0 before R1.
 
@@ -147,7 +147,7 @@ Rules as before: a failing test before each behaviour, one progress file per lan
    - the connector is killed after consuming an answer and before the CLI gets it: the CLI reconnects and gets the stored answer;
    - the CLI is killed mid-wait: its wait expires and later answers go into the thread;
    - the CLI is killed after the answer is stored and before it acknowledges: the answer reaches the thread after the acknowledgement window, and stays readable with `comms status`.
-8. **Answer at the bound:** an answer arriving as the wait expires is routed exactly once, either to the call or to the thread, never both, never neither (forced by fault injection). In a group wait, one recipient answering doesn't close the others' results.
+8. **Answer at the bound, and ack racing fallback:** an answer arriving as the wait expires is never lost (forced by fault injection); an `ack` arriving at the moment the fallback fires produces at most one fallback, and the result ends either `acknowledged` or `fell-back`. In a group wait, one recipient answering doesn't close the others' results.
 9. A reminder every 2 minutes to a T3 agent fires, arrives labelled as a reminder from `reminders` with its creator, collects the answer, and reports to `@lee`. A slow answer causes skipped fires, not a pile-up; an ambiguous fire stops blocking after one interval.
 10. `--idle-for` defers a fire while the target is busy; `--watch` defers it on another agent's activity; `--max 3` stops after three; `done` and `blocked` stop it; a short expiry ends it and tells the creator. Pausing or cancelling while a fire's turn is running stops later fires and lets that turn finish.
 11. An injected `uncertain` delivery and a stopped connector each produce exactly one alert to the owner. Stopping the connector, restarting it, and stopping it again produces two alerts.
