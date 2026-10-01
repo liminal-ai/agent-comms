@@ -1,0 +1,10 @@
+2026-10-01T20:02:53.547Z open alert {"cause":"uncertain-delivery","subject":{"conversationId":"j570v4nve0nsrgamney96m9v8d8fc55c","id":"j97bgecyd3hm6f526d91rdn8w98ff0sd","kind":"delivery"},"summary":"Alert: delivery j97bgecyd3hm6f526d91rdn8w98ff0sd is uncertain: it can't be told whether it ran, and it won't be re-run (the turn it was delivered into can't be found)."}
+2026-10-01T20:02:53.552Z its delivery {"message":"jn7fvf25h2zjq8mkdcvqa12yhs8ffnpt","text":"[run mupvt376] item 7a': the connector dies while the CLI waits","recipient":"smoke-b","state":"uncertain"}
+2026-10-01T20:02:53.695Z comms reply answered jn7fvf25h2zjq8mkdcvqa12yhs8ffnpt with jn75eb37v652gpzmpda9a9whhn8ffktc (#158 in j570v4nve0nsrgamney96m9v8d8fc55c)
+  → @smoke-a: delivery j974qjrg915a9j1afb6q74a7gh8ff2we pending
+completed delivery j97bgecyd3hm6f526d91rdn8w98ff0sd 0
+2026-10-01T20:03:43.776Z resolved jx7btvtyxh0db6mbanyc2hp83d8ff5t3
+2026-10-01T20:03:43.783Z marking read ["alerts: Alert: the connector on lim-builder hasn't been heard from (not heard ","alerts: Alert: the connector on lim-builder hasn't been heard from (not heard ","alerts: Alert: delivery j971hbk1k3hrwwg7vpdp5r0bgn8fe6ny is uncertain: it can'","alerts: Alert: reminder k9714zhpt5xqyt4h9f1bt1a5dn8feemp expired before it was","alerts: Alert: delivery j97bgecyd3hm6f526d91rdn8w98ff0sd is uncertain: it can'","smoke-b: (stale: left over from an aborted acceptance run)","smoke-b: (stale: left over from an aborted acceptance run)"]
+2026-10-01T20:03:43.844Z markRead {"marked":7,"unread":1}
+2026-10-01T20:03:43.844Z left unread in Lee's inbox ["reminders: Reminder acc9-mupxognj (k975qn522t4rc410jyk6meq8fd8ff6ce) was marked d"]
+2026-10-01T20:03:52.763Z marking read (Cedar's item 9 reminder notice) {"marked":1,"unread":0}
