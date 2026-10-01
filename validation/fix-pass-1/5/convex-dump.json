@@ -1,6 +1,513 @@
 [
  {
   "conversation": {
+   "id": "j57cnwc28pdynp8yy2q7tfe4j58ffmah",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+     "kind": "agent",
+     "name": "fp1-lhc"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 shared kill 14:15:07",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+    "kind": "agent",
+    "name": "fp1-lhc"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790864172636,
+      "id": "j9700y98bjhv381jcw8mrrhk2n8ffe59",
+      "recipient": "fp1-lhc",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57cnwc28pdynp8yy2q7tfe4j58ffmah",
+     "createdAt": 1790864107940,
+     "id": "jn71kdn7p63e3ts6m2nvj8hsjn8fffaz",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+       "kind": "agent",
+       "name": "fp1-lhc"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Acceptance rerun 8: without tools, write the numbers one to sixty in words, one per line, then a final line ACC2-8-DONE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790864172636,
+      "id": "j97e0d00s3ctt8hr5hj837et8d8ffbm8",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j9700y98bjhv381jcw8mrrhk2n8ffe59",
+     "conversationId": "j57cnwc28pdynp8yy2q7tfe4j58ffmah",
+     "createdAt": 1790864172636,
+     "id": "jn78dgwp8zt751nvd1g0qesxd98feb7v",
+     "inReplyTo": "jn71kdn7p63e3ts6m2nvj8hsjn8fffaz",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+      "kind": "agent",
+      "name": "fp1-lhc"
+     },
+     "seq": 2,
+     "text": "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nnineteen\ntwenty\ntwenty-one\ntwenty-two\ntwenty-three\ntwenty-four\ntwenty-five\ntwenty-six\ntwenty-seven\ntwenty-eight\ntwenty-nine\nthirty\nthirty-one\nthirty-two\nthirty-three\nthirty-four\nthirty-five\nthirty-six\nthirty-seven\nthirty-eight\nthirty-nine\nforty\nforty-one\nforty-two\nforty-three\nforty-four\nforty-five\nforty-six\nforty-seven\nforty-eight\nforty-nine\nfifty\nfifty-one\nfifty-two\nfifty-three\nfifty-four\nfifty-five\nfifty-six\nfifty-seven\nfifty-eight\nfifty-nine\nsixty\nACC2-8-DONE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j57197qrwtttsqaykmnemah9gd8ffp8g",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+     "kind": "agent",
+     "name": "fp1-lhc"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 shared work 14:11:46",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+    "kind": "agent",
+    "name": "fp1-lhc"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790863912759,
+      "id": "j97a4948afrjetcwqtnq2q832x8fedq0",
+      "recipient": "fp1-lhc",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57197qrwtttsqaykmnemah9gd8ffp8g",
+     "createdAt": 1790863906297,
+     "id": "jn71vnnasmmany67nw74qym55n8ffpa4",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+       "kind": "agent",
+       "name": "fp1-lhc"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Acceptance rerun 5: run `ls /srv/work/agent-comms/packages | wc -l` in your shell and reply with just the number it prints."
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790863912759,
+      "id": "j97ctf1124feyrjc9b5sgx0r7s8ff500",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j97a4948afrjetcwqtnq2q832x8fedq0",
+     "conversationId": "j57197qrwtttsqaykmnemah9gd8ffp8g",
+     "createdAt": 1790863912759,
+     "id": "jn7f3cb6ymrtk24getn9xjcx198fehsb",
+     "inReplyTo": "jn71vnnasmmany67nw74qym55n8ffpa4",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+      "kind": "agent",
+      "name": "fp1-lhc"
+     },
+     "seq": 2,
+     "text": "6"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j576x2d114y59eb1m5yqw3dn9h8fe6wg",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 shared typed 14:06:21",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790863604992,
+      "detail": "other input entered the turn: t3-user-message",
+      "id": "j974yqk88rsjpd9n0ywvy0tp2h8fedj9",
+      "recipient": "fp1-native",
+      "state": "ambiguous"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j576x2d114y59eb1m5yqw3dn9h8fe6wg",
+     "createdAt": 1790863581449,
+     "id": "jn7dwy22af1fd5q51h6gxvcvb98ff4bq",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Acceptance rerun 4: run `sleep 15` in the foreground, then reply with exactly ACC2-4"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790863600080,
+      "id": "j97027xw2eht0gaqmhpha5pfz98ffxkq",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j576x2d114y59eb1m5yqw3dn9h8fe6wg",
+     "createdAt": 1790863600080,
+     "id": "jn73s7zzsj07jgw3hzjyprp1558feeng",
+     "inReplyTo": "jn7dwy22af1fd5q51h6gxvcvb98ff4bq",
+     "kind": "answer",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+      "kind": "agent",
+      "name": "fp1-native"
+     },
+     "seq": 2,
+     "text": "ACC2-4"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j572hsxyzns9qfnrjq5jg2m78s8ffmk7",
+   "kind": "group",
+   "lastSeq": 3,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    },
+    {
+     "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+     "kind": "agent",
+     "name": "fp1-lhc"
+    },
+    {
+     "id": "js79dhbzw3jkamzb5zdzn6mpgh8ffxa9",
+     "kind": "agent",
+     "name": "term-a"
+    }
+   ],
+   "readSeq": 3,
+   "title": "fp1 shared group 14:06:07",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   },
+   {
+    "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+    "kind": "agent",
+    "name": "fp1-lhc"
+   },
+   {
+    "id": "js79dhbzw3jkamzb5zdzn6mpgh8ffxa9",
+    "kind": "agent",
+    "name": "term-a"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790863573097,
+      "id": "j978m1cd5y2kjjmgh7a6ag3xbx8fft3k",
+      "recipient": "fp1-lhc",
+      "state": "replied"
+     },
+     {
+      "at": 1790863569468,
+      "id": "j97bjsh7agc03nemsnne4ysn6d8feztr",
+      "recipient": "term-a",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j572hsxyzns9qfnrjq5jg2m78s8ffmk7",
+     "createdAt": 1790863567613,
+     "id": "jn70w3bbbjcqrx4qzjme8tp8x58ffkvw",
+     "kind": "request",
+     "origin": {
+      "via": "web"
+     },
+     "recipients": [
+      {
+       "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+       "kind": "agent",
+       "name": "fp1-lhc"
+      },
+      {
+       "id": "js79dhbzw3jkamzb5zdzn6mpgh8ffxa9",
+       "kind": "agent",
+       "name": "term-a"
+      }
+     ],
+     "sender": {
+      "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+      "kind": "human",
+      "name": "lee"
+     },
+     "seq": 1,
+     "text": "@fp1-lhc @term-a Acceptance rerun 3: reply with your comms name only."
+    }
+   },
+   {
+    "deliveries": [],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j97bjsh7agc03nemsnne4ysn6d8feztr",
+     "conversationId": "j572hsxyzns9qfnrjq5jg2m78s8ffmk7",
+     "createdAt": 1790863569468,
+     "id": "jn7dv0c7an2en6apdwxdgxrjc58ffv3b",
+     "inReplyTo": "jn70w3bbbjcqrx4qzjme8tp8x58ffkvw",
+     "kind": "answer",
+     "origin": {
+      "via": "claude-code"
+     },
+     "recipients": [
+      {
+       "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+       "kind": "human",
+       "name": "lee"
+      }
+     ],
+     "sender": {
+      "id": "js79dhbzw3jkamzb5zdzn6mpgh8ffxa9",
+      "kind": "agent",
+      "name": "term-a"
+     },
+     "seq": 2,
+     "text": "@term-a"
+    }
+   },
+   {
+    "deliveries": [],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j978m1cd5y2kjjmgh7a6ag3xbx8fft3k",
+     "conversationId": "j572hsxyzns9qfnrjq5jg2m78s8ffmk7",
+     "createdAt": 1790863573097,
+     "id": "jn7495ts6ww5e4w6a6xcnvtj0d8ffnh8",
+     "inReplyTo": "jn70w3bbbjcqrx4qzjme8tp8x58ffkvw",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+       "kind": "human",
+       "name": "lee"
+      }
+     ],
+     "sender": {
+      "id": "js75azzng7v6777bdmaakmfpx98fec5y",
+      "kind": "agent",
+      "name": "fp1-lhc"
+     },
+     "seq": 3,
+     "text": "@fp1-lhc"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
    "id": "j571ddgnzyj615cgnjeq5wn92d8ff65t",
    "kind": "group",
    "lastSeq": 2,

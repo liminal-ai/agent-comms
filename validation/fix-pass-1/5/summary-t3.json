@@ -1,39 +1,930 @@
 {
- "conversations": 22,
- "requestDeliveries": 18,
+ "requestDeliveries": 23,
  "requestStates": {
-  "ambiguous": 1,
-  "replied": 16,
+  "replied": 20,
+  "ambiguous": 2,
   "failed": 1
  },
- "answerDeliveriesBeyondDelivered": 0,
- "messagesAppendedInT3": {
-  "deliveriesSeen": 18,
-  "appendedMoreThanOnce": []
- },
- "t3Dispatches": {
-  "deliveries": 19,
-  "dispatchedMoreThanOnce": []
- },
- "collectedAnswers": 10,
- "deliveriesWithMoreThanOneCollectedAnswer": [],
- "scenarios": {
-  "baseline": "replied",
-  "oversize": {},
-  "crashWindow": "replied",
-  "queuedFlush": "replied",
-  "typedIn": "ambiguous",
-  "interruptRecovery": "failed",
-  "queuedRace": [
-   "ambiguous",
-   "ambiguous",
-   "ambiguous"
-  ],
-  "lifecycle": {
-   "retire": "replied",
-   "remove": "replied",
-   "rebind": "replied"
+ "t3EventsRecordedFor": 22,
+ "t3DeliveriesNotRecorded": [],
+ "turnsStartedOtherwise": [
+  {
+   "delivery": "j9721mkm6gny4b1197m4x37qmn8ffgq9",
+   "conversation": "fp1 claim-lost 13:48:21",
+   "turns": [
+    "32974518-a25b-4e7d-90d5-7280fd6f350a"
+   ],
+   "linkedByConnector": []
   },
-  "claimLost": "replied"
- }
+  {
+   "delivery": "j9708c5c38wfqb5agsmp9b28tx8ffj2p",
+   "conversation": "fp1 queued-race-1 13:45:45",
+   "turns": [
+    "1f04a1ae-8089-4356-bd0b-f2d1a2477c3a"
+   ],
+   "linkedByConnector": []
+  },
+  {
+   "delivery": "j97c35erfv80er1zxpw664kwad8fecgk",
+   "conversation": "fp1 queued-race-0 13:45:24",
+   "turns": [
+    "3afb7a94-a247-4d92-8ddb-0aa3427d4295"
+   ],
+   "linkedByConnector": []
+  },
+  {
+   "delivery": "j971bv0z64ywjk3njd8r0ht3wn8fe4px",
+   "conversation": "fp1 queued-race-0 13:44:59",
+   "turns": [
+    "28bce69a-db99-4f82-83a8-828f67274279"
+   ],
+   "linkedByConnector": []
+  },
+  {
+   "delivery": "j9731n1vvzfkq85qap3r8p5p2n8feefe",
+   "conversation": "fp1 queued-race-0 13:44:27",
+   "turns": [
+    "654c041e-53cb-4542-93a1-03e8b271a018"
+   ],
+   "linkedByConnector": []
+  }
+ ],
+ "moreThanOneAppend": [],
+ "moreThanOneCommandTurn": [],
+ "moreThanOneDispatch": [],
+ "moreThanOneTurnLinkedByConnector": [],
+ "moreThanOneCollectedAnswer": [],
+ "answerDeliveriesBeyondDelivered": 0,
+ "focus": [
+  {
+   "scenario": "shared 8-t3",
+   "delivery": "j9700y98bjhv381jcw8mrrhk2n8ffe59",
+   "conversation": "fp1 shared kill 14:15:07",
+   "recipient": "fp1-lhc",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "lhc",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "840841b0-b70f-4e05-83e7-6f722cc0c569"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "end of recording"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "840841b0-b70f-4e05-83e7-6f722cc0c569"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-lhc",
+     "handoff to t3:thr-fp1-lhc-e723958b",
+     "gate claim confirmed; sending (cursor=2039)",
+     "handoff-accepted turn=840841b0-b70f-4e05-83e7-6f722cc0c569",
+     "recover state=delivered participant=fp1-lhc",
+     "check-completed recorded=delivered turn=840841b0-b70f-4e05-83e7-6f722cc0c569",
+     "outcome replied turn=840841b0-b70f-4e05-83e7-6f722cc0c569"
+    ]
+   }
+  },
+  {
+   "scenario": "crashWindow",
+   "delivery": "j970p4pj4hb7vrrzxe2fdesmf58ffq0d",
+   "conversation": "fp1 crash-window 13:57:55",
+   "recipient": "fp1-codex",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "codex",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "01a0f7c1-f337-7e83-ace5-841b0c6894bd"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "end of recording"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "01a0f7c1-f337-7e83-ace5-841b0c6894bd"
+    ],
+    "decisions": [
+     "recover state=claimed participant=fp1-codex",
+     "check-completed recorded=claimed turn=01a0f7c1-f337-7e83-ace5-841b0c6894bd",
+     "outcome replied turn=01a0f7c1-f337-7e83-ace5-841b0c6894bd",
+     "claimed state=claimed participant=fp1-codex",
+     "handoff to t3:thr-fp1-codex-0bf722a1",
+     "gate claim confirmed; sending (cursor=1848)",
+     "handoff-accepted turn=01a0f7c1-f337-7e83-ace5-841b0c6894bd",
+     "fault crash-after-accept: killing the connector before recording delivered"
+    ]
+   }
+  },
+  {
+   "scenario": "claimLost",
+   "delivery": "j9721mkm6gny4b1197m4x37qmn8ffgq9",
+   "conversation": "fp1 claim-lost 13:48:21",
+   "recipient": "fp1-native",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "bf1732fb-d33a-4946-8742-2489a8e1160e"
+    ],
+    "turnsStartedOtherwise": [
+     "32974518-a25b-4e7d-90d5-7280fd6f350a"
+    ],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "bf1732fb-d33a-4946-8742-2489a8e1160e"
+    ],
+    "decisions": [
+     "recover state=claimed participant=fp1-native",
+     "check-absent recorded=claimed",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1703)",
+     "handoff-accepted turn=bf1732fb-d33a-4946-8742-2489a8e1160e",
+     "outcome replied turn=bf1732fb-d33a-4946-8742-2489a8e1160e",
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09"
+    ]
+   }
+  },
+  {
+   "scenario": "interruptRecovery",
+   "delivery": "j97ard45c36zv7gt09yfdmrsc58febva",
+   "conversation": "fp1 interrupt 13:42:55",
+   "recipient": "fp1-native",
+   "state": "failed",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "04702e70-d4b9-41b3-9d05-4deec99de0d2"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "04702e70-d4b9-41b3-9d05-4deec99de0d2"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1315)",
+     "handoff-accepted turn=04702e70-d4b9-41b3-9d05-4deec99de0d2",
+     "recover state=delivered participant=fp1-native",
+     "check-completed recorded=delivered turn=04702e70-d4b9-41b3-9d05-4deec99de0d2",
+     "outcome failed turn=04702e70-d4b9-41b3-9d05-4deec99de0d2 aborted: the turn was interrupted; its partial answer wasn't collected"
+    ]
+   }
+  },
+  {
+   "scenario": "crashWindow",
+   "delivery": "j970ekp001ss74pramq1b63sn58ffzpb",
+   "conversation": "fp1 crash-window 13:40:50",
+   "recipient": "fp1-codex",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "codex",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "01a0f7b2-5047-7020-9d74-3f95a2409020"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "01a0f7b2-5047-7020-9d74-3f95a2409020"
+    ],
+    "decisions": [
+     "recover state=claimed participant=fp1-codex",
+     "check-completed recorded=claimed turn=01a0f7b2-5047-7020-9d74-3f95a2409020",
+     "outcome replied turn=01a0f7b2-5047-7020-9d74-3f95a2409020",
+     "claimed state=claimed participant=fp1-codex",
+     "handoff to t3:thr-fp1-codex-0bf722a1",
+     "gate claim confirmed; sending (cursor=1225)",
+     "handoff-accepted turn=01a0f7b2-5047-7020-9d74-3f95a2409020",
+     "fault crash-after-accept: killing the connector before recording delivered"
+    ]
+   }
+  }
+ ],
+ "perDelivery": [
+  {
+   "delivery": "j9700y98bjhv381jcw8mrrhk2n8ffe59",
+   "conversation": "fp1 shared kill 14:15:07",
+   "recipient": "fp1-lhc",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "lhc",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "840841b0-b70f-4e05-83e7-6f722cc0c569"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "end of recording"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "840841b0-b70f-4e05-83e7-6f722cc0c569"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-lhc",
+     "handoff to t3:thr-fp1-lhc-e723958b",
+     "gate claim confirmed; sending (cursor=2039)",
+     "handoff-accepted turn=840841b0-b70f-4e05-83e7-6f722cc0c569",
+     "recover state=delivered participant=fp1-lhc",
+     "check-completed recorded=delivered turn=840841b0-b70f-4e05-83e7-6f722cc0c569",
+     "outcome replied turn=840841b0-b70f-4e05-83e7-6f722cc0c569"
+    ]
+   }
+  },
+  {
+   "delivery": "j97a4948afrjetcwqtnq2q832x8fedq0",
+   "conversation": "fp1 shared work 14:11:46",
+   "recipient": "fp1-lhc",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "lhc",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "c91665b7-33d0-45dd-813f-f511bb25742a"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "c91665b7-33d0-45dd-813f-f511bb25742a"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-lhc",
+     "handoff to t3:thr-fp1-lhc-e723958b",
+     "gate claim confirmed; sending (cursor=2022)",
+     "handoff-accepted turn=c91665b7-33d0-45dd-813f-f511bb25742a",
+     "outcome replied turn=c91665b7-33d0-45dd-813f-f511bb25742a"
+    ]
+   }
+  },
+  {
+   "delivery": "j974yqk88rsjpd9n0ywvy0tp2h8fedj9",
+   "conversation": "fp1 shared typed 14:06:21",
+   "recipient": "fp1-native",
+   "state": "ambiguous",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "2a02617b-46cd-453f-97de-284674416439"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "2a02617b-46cd-453f-97de-284674416439"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1974)",
+     "handoff-accepted turn=2a02617b-46cd-453f-97de-284674416439",
+     "outcome ambiguous turn=2a02617b-46cd-453f-97de-284674416439 entered=t3-user-message"
+    ]
+   }
+  },
+  {
+   "delivery": "j978m1cd5y2kjjmgh7a6ag3xbx8fft3k",
+   "conversation": "fp1 shared group 14:06:07",
+   "recipient": "fp1-lhc",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "lhc",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "3478a606-1579-4595-bc26-84e663026984"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "3478a606-1579-4595-bc26-84e663026984"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-lhc",
+     "handoff to t3:thr-fp1-lhc-e723958b",
+     "gate claim confirmed; sending (cursor=1964)",
+     "handoff-accepted turn=3478a606-1579-4595-bc26-84e663026984",
+     "outcome replied turn=3478a606-1579-4595-bc26-84e663026984"
+    ]
+   }
+  },
+  {
+   "delivery": "j97bjsh7agc03nemsnne4ysn6d8feztr",
+   "conversation": "fp1 shared group 14:06:07",
+   "recipient": "term-a",
+   "state": "replied",
+   "t3": {
+    "recorded": false,
+    "why": "Claude Code recipient: see claude-code/"
+   },
+   "connector": {
+    "t3Dispatches": 0,
+    "turnIdsLinked": [
+     "9ad45aab-1f2d-46f5-803e-c4f6244f52ef"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=term-a",
+     "handoff to claude-code:term-a",
+     "gate claim confirmed; sending (cursor=none)",
+     "handoff-accepted turn=9ad45aab-1f2d-46f5-803e-c4f6244f52ef",
+     "outcome replied turn=9ad45aab-1f2d-46f5-803e-c4f6244f52ef"
+    ]
+   }
+  },
+  {
+   "delivery": "j976zr7nv6hg1b4b2n1darmg5d8fesz2",
+   "conversation": "fp1 typed-in 13:59:03",
+   "recipient": "fp1-native",
+   "state": "ambiguous",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "5c78bba3-be80-411b-8dca-ff5ef8f65cc7"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "5c78bba3-be80-411b-8dca-ff5ef8f65cc7"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1856)",
+     "handoff-accepted turn=5c78bba3-be80-411b-8dca-ff5ef8f65cc7",
+     "outcome ambiguous turn=5c78bba3-be80-411b-8dca-ff5ef8f65cc7 entered=t3-user-message"
+    ]
+   }
+  },
+  {
+   "delivery": "j970p4pj4hb7vrrzxe2fdesmf58ffq0d",
+   "conversation": "fp1 crash-window 13:57:55",
+   "recipient": "fp1-codex",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "codex",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "01a0f7c1-f337-7e83-ace5-841b0c6894bd"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "end of recording"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "01a0f7c1-f337-7e83-ace5-841b0c6894bd"
+    ],
+    "decisions": [
+     "recover state=claimed participant=fp1-codex",
+     "check-completed recorded=claimed turn=01a0f7c1-f337-7e83-ace5-841b0c6894bd",
+     "outcome replied turn=01a0f7c1-f337-7e83-ace5-841b0c6894bd",
+     "claimed state=claimed participant=fp1-codex",
+     "handoff to t3:thr-fp1-codex-0bf722a1",
+     "gate claim confirmed; sending (cursor=1848)",
+     "handoff-accepted turn=01a0f7c1-f337-7e83-ace5-841b0c6894bd",
+     "fault crash-after-accept: killing the connector before recording delivered"
+    ]
+   }
+  },
+  {
+   "delivery": "j9791mk7fn5egfyeq80h8zv8m98fe166",
+   "conversation": "fp1 baseline 13:57:46",
+   "recipient": "fp1-codex",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "codex",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "01a0f7c1-c76e-7223-b72f-1a5d96d401e9"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "01a0f7c1-c76e-7223-b72f-1a5d96d401e9"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-codex",
+     "handoff to t3:thr-fp1-codex-0bf722a1",
+     "gate claim confirmed; sending (cursor=1840)",
+     "handoff-accepted turn=01a0f7c1-c76e-7223-b72f-1a5d96d401e9",
+     "outcome replied turn=01a0f7c1-c76e-7223-b72f-1a5d96d401e9"
+    ]
+   }
+  },
+  {
+   "delivery": "j97d4c38mjdz8wfk4c74kqea858ff2gy",
+   "conversation": "fp1 web lccbe",
+   "recipient": "fp1-codex",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "codex",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "01a0f7ba-6c93-7373-b811-ee604c1c0591"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "01a0f7ba-6c93-7373-b811-ee604c1c0591"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-codex",
+     "handoff to t3:thr-fp1-codex-0bf722a1",
+     "gate claim confirmed; sending (cursor=1724)",
+     "handoff-accepted turn=01a0f7ba-6c93-7373-b811-ee604c1c0591",
+     "outcome replied turn=01a0f7ba-6c93-7373-b811-ee604c1c0591"
+    ]
+   }
+  },
+  {
+   "delivery": "j9721mkm6gny4b1197m4x37qmn8ffgq9",
+   "conversation": "fp1 claim-lost 13:48:21",
+   "recipient": "fp1-native",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "bf1732fb-d33a-4946-8742-2489a8e1160e"
+    ],
+    "turnsStartedOtherwise": [
+     "32974518-a25b-4e7d-90d5-7280fd6f350a"
+    ],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "bf1732fb-d33a-4946-8742-2489a8e1160e"
+    ],
+    "decisions": [
+     "recover state=claimed participant=fp1-native",
+     "check-absent recorded=claimed",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1703)",
+     "handoff-accepted turn=bf1732fb-d33a-4946-8742-2489a8e1160e",
+     "outcome replied turn=bf1732fb-d33a-4946-8742-2489a8e1160e",
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09"
+    ]
+   }
+  },
+  {
+   "delivery": "j973xs8ynga94a0wxy0txq4yc98ffy3k",
+   "conversation": "fp1 rebind 13:47:11",
+   "recipient": "fp1-rebind-mupl941x",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "codex",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "01a0f7b8-175a-74d2-abef-0652720102fd"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "01a0f7b8-175a-74d2-abef-0652720102fd"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-rebind-mupl941x",
+     "handoff to t3:thr-fp1-codex-0bf722a1",
+     "gate claim confirmed; sending (cursor=1633)",
+     "handoff-accepted turn=01a0f7b8-175a-74d2-abef-0652720102fd",
+     "outcome replied turn=01a0f7b8-175a-74d2-abef-0652720102fd"
+    ]
+   }
+  },
+  {
+   "delivery": "j972mza375rwd6rd1zmvb4bjdh8fehej",
+   "conversation": "fp1 remove 13:46:52",
+   "recipient": "fp1-remove-mupl8p0z",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "codex",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "01a0f7b7-cb40-73a0-b150-97a467645ef1"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "01a0f7b7-cb40-73a0-b150-97a467645ef1"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-remove-mupl8p0z",
+     "handoff to t3:thr-fp1-codex-0bf722a1",
+     "gate claim confirmed; sending (cursor=1620)",
+     "handoff-accepted turn=01a0f7b7-cb40-73a0-b150-97a467645ef1",
+     "outcome replied turn=01a0f7b7-cb40-73a0-b150-97a467645ef1"
+    ]
+   }
+  },
+  {
+   "delivery": "j976x99x5f253mw2mkjmd7yf598fewvg",
+   "conversation": "fp1 retire 13:46:32",
+   "recipient": "fp1-retire-mupl89zf",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "codex",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "01a0f7b7-7ed0-7972-9cff-1d2e87d67539"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "01a0f7b7-7ed0-7972-9cff-1d2e87d67539"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-retire-mupl89zf",
+     "handoff to t3:thr-fp1-codex-0bf722a1",
+     "gate claim confirmed; sending (cursor=1607)",
+     "handoff-accepted turn=01a0f7b7-7ed0-7972-9cff-1d2e87d67539",
+     "outcome replied turn=01a0f7b7-7ed0-7972-9cff-1d2e87d67539"
+    ]
+   }
+  },
+  {
+   "delivery": "j973qs30mp9y7pgnwb12j4xb818feyxv",
+   "conversation": "fp1 queued-race-2 13:46:06",
+   "recipient": "fp1-native",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": "3f69bb87-8f3e-492a-a7eb-b88e9e365a1b",
+    "turnsStartedByCommand": [
+     "f8e3feb2-0ab2-46b4-99d6-0f555b321bdd"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "3f69bb87-8f3e-492a-a7eb-b88e9e365a1b"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1571)",
+     "handoff-accepted turn=3f69bb87-8f3e-492a-a7eb-b88e9e365a1b",
+     "outcome ambiguous turn=3f69bb87-8f3e-492a-a7eb-b88e9e365a1b entered=t3-turn-already-running"
+    ]
+   }
+  },
+  {
+   "delivery": "j9708c5c38wfqb5agsmp9b28tx8ffj2p",
+   "conversation": "fp1 queued-race-1 13:45:45",
+   "recipient": "fp1-native",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": "c3061111-edbc-4289-aec1-4ab8cd27627c",
+    "turnsStartedByCommand": [],
+    "turnsStartedOtherwise": [
+     "1f04a1ae-8089-4356-bd0b-f2d1a2477c3a"
+    ],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "c3061111-edbc-4289-aec1-4ab8cd27627c"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1518)",
+     "handoff-accepted turn=c3061111-edbc-4289-aec1-4ab8cd27627c",
+     "outcome ambiguous turn=c3061111-edbc-4289-aec1-4ab8cd27627c entered=t3-turn-already-running"
+    ]
+   }
+  },
+  {
+   "delivery": "j97c35erfv80er1zxpw664kwad8fecgk",
+   "conversation": "fp1 queued-race-0 13:45:24",
+   "recipient": "fp1-native",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": "9b9b8010-6644-4fac-a2e3-cc330254805e",
+    "turnsStartedByCommand": [],
+    "turnsStartedOtherwise": [
+     "3afb7a94-a247-4d92-8ddb-0aa3427d4295"
+    ],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "9b9b8010-6644-4fac-a2e3-cc330254805e"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1463)",
+     "handoff-accepted turn=9b9b8010-6644-4fac-a2e3-cc330254805e",
+     "outcome ambiguous turn=9b9b8010-6644-4fac-a2e3-cc330254805e entered=t3-turn-already-running"
+    ]
+   }
+  },
+  {
+   "delivery": "j971bv0z64ywjk3njd8r0ht3wn8fe4px",
+   "conversation": "fp1 queued-race-0 13:44:59",
+   "recipient": "fp1-native",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": "b7c0720d-9b20-4eb0-b415-1fa10226a5d6",
+    "turnsStartedByCommand": [],
+    "turnsStartedOtherwise": [
+     "28bce69a-db99-4f82-83a8-828f67274279"
+    ],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "b7c0720d-9b20-4eb0-b415-1fa10226a5d6"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1410)",
+     "handoff-accepted turn=b7c0720d-9b20-4eb0-b415-1fa10226a5d6",
+     "outcome ambiguous turn=b7c0720d-9b20-4eb0-b415-1fa10226a5d6 entered=t3-turn-already-running"
+    ]
+   }
+  },
+  {
+   "delivery": "j9731n1vvzfkq85qap3r8p5p2n8feefe",
+   "conversation": "fp1 queued-race-0 13:44:27",
+   "recipient": "fp1-native",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": "956d4459-2218-46d3-a6bb-de40afd60640",
+    "turnsStartedByCommand": [],
+    "turnsStartedOtherwise": [
+     "654c041e-53cb-4542-93a1-03e8b271a018"
+    ],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "956d4459-2218-46d3-a6bb-de40afd60640"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1357)",
+     "handoff-accepted turn=956d4459-2218-46d3-a6bb-de40afd60640",
+     "outcome ambiguous turn=956d4459-2218-46d3-a6bb-de40afd60640 entered=t3-turn-already-running"
+    ]
+   }
+  },
+  {
+   "delivery": "j97ard45c36zv7gt09yfdmrsc58febva",
+   "conversation": "fp1 interrupt 13:42:55",
+   "recipient": "fp1-native",
+   "state": "failed",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "04702e70-d4b9-41b3-9d05-4deec99de0d2"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "04702e70-d4b9-41b3-9d05-4deec99de0d2"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1315)",
+     "handoff-accepted turn=04702e70-d4b9-41b3-9d05-4deec99de0d2",
+     "recover state=delivered participant=fp1-native",
+     "check-completed recorded=delivered turn=04702e70-d4b9-41b3-9d05-4deec99de0d2",
+     "outcome failed turn=04702e70-d4b9-41b3-9d05-4deec99de0d2 aborted: the turn was interrupted; its partial answer wasn't collected"
+    ]
+   }
+  },
+  {
+   "delivery": "j973s6m5dnrzqkr3z5xe7zwhy58fe136",
+   "conversation": "fp1 typed-in 13:42:28",
+   "recipient": "fp1-native",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "985c1b8c-fed5-42d5-b951-b0b62038dc94"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "985c1b8c-fed5-42d5-b951-b0b62038dc94"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1275)",
+     "handoff-accepted turn=985c1b8c-fed5-42d5-b951-b0b62038dc94",
+     "outcome ambiguous turn=985c1b8c-fed5-42d5-b951-b0b62038dc94 entered=t3-user-message"
+    ]
+   }
+  },
+  {
+   "delivery": "j97ddem7p858k6xyxewk2mk4e98ffpez",
+   "conversation": "fp1 queued-flush 13:42:05",
+   "recipient": "fp1-native",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "native",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "dff4e656-1de1-4c3f-be33-7875f115dbe4"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "dff4e656-1de1-4c3f-be33-7875f115dbe4"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-native",
+     "handoff to t3:thr-fp1-native-83810a09",
+     "gate claim confirmed; sending (cursor=1255)",
+     "handoff-accepted turn=dff4e656-1de1-4c3f-be33-7875f115dbe4",
+     "outcome replied turn=dff4e656-1de1-4c3f-be33-7875f115dbe4"
+    ]
+   }
+  },
+  {
+   "delivery": "j970ekp001ss74pramq1b63sn58ffzpb",
+   "conversation": "fp1 crash-window 13:40:50",
+   "recipient": "fp1-codex",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "codex",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "01a0f7b2-5047-7020-9d74-3f95a2409020"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "01a0f7b2-5047-7020-9d74-3f95a2409020"
+    ],
+    "decisions": [
+     "recover state=claimed participant=fp1-codex",
+     "check-completed recorded=claimed turn=01a0f7b2-5047-7020-9d74-3f95a2409020",
+     "outcome replied turn=01a0f7b2-5047-7020-9d74-3f95a2409020",
+     "claimed state=claimed participant=fp1-codex",
+     "handoff to t3:thr-fp1-codex-0bf722a1",
+     "gate claim confirmed; sending (cursor=1225)",
+     "handoff-accepted turn=01a0f7b2-5047-7020-9d74-3f95a2409020",
+     "fault crash-after-accept: killing the connector before recording delivered"
+    ]
+   }
+  },
+  {
+   "delivery": "j97ekgfk59kqvhr8pd2yt942wx8fe4rf",
+   "conversation": "fp1 baseline 13:40:32",
+   "recipient": "fp1-codex",
+   "state": "replied",
+   "t3": {
+    "recorded": true,
+    "thread": "codex",
+    "ourMessageAppends": 1,
+    "joinedRunningTurn": false,
+    "turnsStartedByCommand": [
+     "01a0f7b2-0231-7d52-aad9-743107a35efe"
+    ],
+    "turnsStartedOtherwise": [],
+    "windowEnd": "next user message"
+   },
+   "connector": {
+    "t3Dispatches": 1,
+    "turnIdsLinked": [
+     "01a0f7b2-0231-7d52-aad9-743107a35efe"
+    ],
+    "decisions": [
+     "claimed state=claimed participant=fp1-codex",
+     "handoff to t3:thr-fp1-codex-0bf722a1",
+     "gate claim confirmed; sending (cursor=1213)",
+     "handoff-accepted turn=01a0f7b2-0231-7d52-aad9-743107a35efe",
+     "outcome replied turn=01a0f7b2-0231-7d52-aad9-743107a35efe"
+    ]
+   }
+  }
+ ]
 }

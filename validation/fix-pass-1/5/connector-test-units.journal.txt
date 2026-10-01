@@ -1,0 +1,76 @@
+2026-10-01T09:40:50-04:00 lim-builder systemd[1805]: Started cedar-fp1-faulty.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /home/leemoore/.config/agent-comms/connector.json.
+2026-10-01T09:40:50-04:00 lim-builder node[458364]: 2026-10-01T13:40:50.909Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T09:40:50-04:00 lim-builder node[458364]: 2026-10-01T13:40:50.925Z machine lim-builder: listening on /run/user/1000/agent-comms/connector.sock
+2026-10-01T09:40:53-04:00 lim-builder node[458364]: 2026-10-01T13:40:53.304Z decision j970ekp001ss74pramq1b63sn58ffzpb claimed state=claimed participant=fp1-codex
+2026-10-01T09:40:53-04:00 lim-builder node[458364]: 2026-10-01T13:40:53.341Z decision j970ekp001ss74pramq1b63sn58ffzpb handoff to t3:thr-fp1-codex-0bf722a1
+2026-10-01T09:40:53-04:00 lim-builder node[458364]: 2026-10-01T13:40:53.395Z decision j970ekp001ss74pramq1b63sn58ffzpb gate claim confirmed; sending (cursor=1225)
+2026-10-01T09:40:53-04:00 lim-builder node[458364]: 2026-10-01T13:40:53.396Z t3 dispatch comms-j970ekp001ss74pramq1b63sn58ffzpb to thr-fp1-codex-0bf722a1
+2026-10-01T09:40:53-04:00 lim-builder node[458364]: 2026-10-01T13:40:53.488Z decision j970ekp001ss74pramq1b63sn58ffzpb handoff-accepted turn=01a0f7b2-5047-7020-9d74-3f95a2409020
+2026-10-01T09:40:53-04:00 lim-builder node[458364]: 2026-10-01T13:40:53.488Z decision j970ekp001ss74pramq1b63sn58ffzpb fault crash-after-accept: killing the connector before recording delivered
+2026-10-01T09:40:53-04:00 lim-builder systemd[1805]: cedar-fp1-faulty.service: Main process exited, code=killed, status=9/KILL
+2026-10-01T09:40:53-04:00 lim-builder systemd[1805]: cedar-fp1-faulty.service: Failed with result 'signal'.
+2026-10-01T09:47:51-04:00 lim-builder systemd[1805]: Started cedar-fp1-a.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /srv/agents/cedar/smoke/connector-a.json.
+2026-10-01T09:47:52-04:00 lim-builder node[474381]: 2026-10-01T13:47:52.065Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T09:47:52-04:00 lim-builder node[474381]: 2026-10-01T13:47:52.082Z machine lim-builder: listening on /srv/agents/cedar/smoke/runA/agent-comms/connector.sock
+2026-10-01T09:48:10-04:00 lim-builder systemd[1805]: Stopping cedar-fp1-a.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /srv/agents/cedar/smoke/connector-a.json...
+2026-10-01T09:48:10-04:00 lim-builder node[474381]: 2026-10-01T13:48:10.270Z SIGTERM: stopping
+2026-10-01T09:48:10-04:00 lim-builder node[474381]: 2026-10-01T13:48:10.272Z server connection lost; retrying
+2026-10-01T09:48:10-04:00 lim-builder systemd[1805]: Stopped cedar-fp1-a.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /srv/agents/cedar/smoke/connector-a.json.
+2026-10-01T09:48:10-04:00 lim-builder systemd[1805]: Started cedar-fp1-a.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /srv/agents/cedar/smoke/connector-a.json.
+2026-10-01T09:48:10-04:00 lim-builder node[475192]: 2026-10-01T13:48:10.683Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T09:48:10-04:00 lim-builder node[475192]: 2026-10-01T13:48:10.701Z machine lim-builder: listening on /srv/agents/cedar/smoke/runA/agent-comms/connector.sock
+2026-10-01T09:48:21-04:00 lim-builder systemd[1805]: Stopping cedar-fp1-a.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /srv/agents/cedar/smoke/connector-a.json...
+2026-10-01T09:48:21-04:00 lim-builder node[475192]: 2026-10-01T13:48:21.318Z SIGTERM: stopping
+2026-10-01T09:48:21-04:00 lim-builder node[475192]: 2026-10-01T13:48:21.321Z server connection lost; retrying
+2026-10-01T09:48:21-04:00 lim-builder systemd[1805]: Stopped cedar-fp1-a.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /srv/agents/cedar/smoke/connector-a.json.
+2026-10-01T09:48:21-04:00 lim-builder systemd[1805]: Started cedar-fp1-a.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /srv/agents/cedar/smoke/connector-a.json.
+2026-10-01T09:48:21-04:00 lim-builder node[475720]: 2026-10-01T13:48:21.766Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T09:48:21-04:00 lim-builder node[475720]: 2026-10-01T13:48:21.782Z machine lim-builder: listening on /srv/agents/cedar/smoke/runA/agent-comms/connector.sock
+2026-10-01T09:48:24-04:00 lim-builder node[475720]: 2026-10-01T13:48:24.292Z decision j9721mkm6gny4b1197m4x37qmn8ffgq9 claimed state=claimed participant=fp1-native
+2026-10-01T09:48:24-04:00 lim-builder node[475720]: 2026-10-01T13:48:24.322Z decision j9721mkm6gny4b1197m4x37qmn8ffgq9 handoff to t3:thr-fp1-native-83810a09
+2026-10-01T09:48:46-04:00 lim-builder node[475720]: [CONVEX M(connector:renew)] [Request ID: 94db9b40a81bd778] Server Error
+2026-10-01T09:48:46-04:00 lim-builder node[475720]: Uncaught ConvexError: {"code":"conflict","message":"claim d9f7dd9e-5143-4143-a708-d231b810b299 on delivery j9721mkm6gny4b1197m4x37qmn8ffgq9 is no longer held"}
+2026-10-01T09:48:46-04:00 lim-builder node[475720]:     at fail (../../convex/lib/core.ts:27:0)
+2026-10-01T09:48:46-04:00 lim-builder node[475720]:     at holdsClaim (../convex/connector.ts:203:0)
+2026-10-01T09:48:46-04:00 lim-builder node[475720]:     at handler (../convex/connector.ts:212:4)
+2026-10-01T09:48:46-04:00 lim-builder node[475720]: 2026-10-01T13:48:46.427Z j9721mkm6gny4b1197m4x37qmn8ffgq9: claim lost to another holder; stopped
+2026-10-01T09:48:46-04:00 lim-builder node[475720]: [CONVEX M(connector:prepare)] [Request ID: 60b441310f09bb87] Server Error
+2026-10-01T09:48:46-04:00 lim-builder node[475720]: Uncaught ConvexError: {"code":"conflict","message":"delivery j9721mkm6gny4b1197m4x37qmn8ffgq9 is replied"}
+2026-10-01T09:48:46-04:00 lim-builder node[475720]:     at fail (../../convex/lib/core.ts:27:0)
+2026-10-01T09:48:46-04:00 lim-builder node[475720]:     at handler (../convex/connector.ts:233:36)
+2026-10-01T09:48:46-04:00 lim-builder node[475720]: 2026-10-01T13:48:46.432Z j9721mkm6gny4b1197m4x37qmn8ffgq9: not sending (delivery j9721mkm6gny4b1197m4x37qmn8ffgq9 is replied)
+2026-10-01T09:48:51-04:00 lim-builder systemd[1805]: Stopping cedar-fp1-a.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /srv/agents/cedar/smoke/connector-a.json...
+2026-10-01T09:48:51-04:00 lim-builder node[475720]: 2026-10-01T13:48:51.430Z SIGTERM: stopping
+2026-10-01T09:48:51-04:00 lim-builder node[475720]: 2026-10-01T13:48:51.437Z server connection lost; retrying
+2026-10-01T09:48:51-04:00 lim-builder systemd[1805]: Stopped cedar-fp1-a.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /srv/agents/cedar/smoke/connector-a.json.
+2026-10-01T09:57:55-04:00 lim-builder systemd[1805]: Started cedar-fp1-faulty.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /home/leemoore/.config/agent-comms/connector.json.
+2026-10-01T09:57:55-04:00 lim-builder node[498383]: 2026-10-01T13:57:55.443Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T09:57:55-04:00 lim-builder node[498383]: 2026-10-01T13:57:55.461Z machine lim-builder: listening on /run/user/1000/agent-comms/connector.sock
+2026-10-01T09:57:57-04:00 lim-builder node[498383]: 2026-10-01T13:57:57.870Z decision j970p4pj4hb7vrrzxe2fdesmf58ffq0d claimed state=claimed participant=fp1-codex
+2026-10-01T09:57:58-04:00 lim-builder node[498383]: 2026-10-01T13:57:58.014Z decision j970p4pj4hb7vrrzxe2fdesmf58ffq0d handoff to t3:thr-fp1-codex-0bf722a1
+2026-10-01T09:57:58-04:00 lim-builder node[498383]: 2026-10-01T13:57:58.132Z decision j970p4pj4hb7vrrzxe2fdesmf58ffq0d gate claim confirmed; sending (cursor=1848)
+2026-10-01T09:57:58-04:00 lim-builder node[498383]: 2026-10-01T13:57:58.132Z t3 dispatch comms-j970p4pj4hb7vrrzxe2fdesmf58ffq0d to thr-fp1-codex-0bf722a1
+2026-10-01T09:57:58-04:00 lim-builder node[498383]: 2026-10-01T13:57:58.235Z decision j970p4pj4hb7vrrzxe2fdesmf58ffq0d handoff-accepted turn=01a0f7c1-f337-7e83-ace5-841b0c6894bd
+2026-10-01T09:57:58-04:00 lim-builder node[498383]: 2026-10-01T13:57:58.235Z decision j970p4pj4hb7vrrzxe2fdesmf58ffq0d fault crash-after-accept: killing the connector before recording delivered
+2026-10-01T09:57:58-04:00 lim-builder systemd[1805]: cedar-fp1-faulty.service: Main process exited, code=killed, status=9/KILL
+2026-10-01T09:57:58-04:00 lim-builder systemd[1805]: cedar-fp1-faulty.service: Failed with result 'signal'.
+2026-10-01T10:05:26-04:00 lim-builder systemd[1805]: Started hazel-fp1-faulty.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /home/leemoore/.config/agent-comms/connector.json.
+2026-10-01T10:05:26-04:00 lim-builder node[516642]: 2026-10-01T14:05:26.602Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T10:05:26-04:00 lim-builder node[516642]: 2026-10-01T14:05:26.618Z machine lim-builder: listening on /run/user/1000/agent-comms/connector.sock
+2026-10-01T10:05:29-04:00 lim-builder node[516642]: 2026-10-01T14:05:29.908Z decision j9766t0jr70523nnq3hhrqez558ffdf3 claimed state=claimed participant=cc-a
+2026-10-01T10:05:29-04:00 lim-builder node[516642]: 2026-10-01T14:05:29.943Z decision j9766t0jr70523nnq3hhrqez558ffdf3 handoff to claude-code:cc-a
+2026-10-01T10:05:29-04:00 lim-builder node[516642]: 2026-10-01T14:05:29.977Z decision j9766t0jr70523nnq3hhrqez558ffdf3 gate claim confirmed; sending (cursor=none)
+2026-10-01T10:05:30-04:00 lim-builder node[516642]: 2026-10-01T14:05:30.013Z decision j9766t0jr70523nnq3hhrqez558ffdf3 handoff-accepted turn=b0d23750-fafe-4906-9b2e-10868238c4b7
+2026-10-01T10:05:30-04:00 lim-builder node[516642]: 2026-10-01T14:05:30.013Z decision j9766t0jr70523nnq3hhrqez558ffdf3 fault crash-after-accept: killing the connector before recording delivered
+2026-10-01T10:05:30-04:00 lim-builder systemd[1805]: hazel-fp1-faulty.service: Main process exited, code=killed, status=9/KILL
+2026-10-01T10:05:30-04:00 lim-builder systemd[1805]: hazel-fp1-faulty.service: Failed with result 'signal'.
+2026-10-01T10:19:21-04:00 lim-builder systemd[1805]: Started hazel-fp1-faulty.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /home/leemoore/.config/agent-comms/connector.json.
+2026-10-01T10:19:21-04:00 lim-builder node[551568]: 2026-10-01T14:19:21.793Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T10:19:21-04:00 lim-builder node[551568]: 2026-10-01T14:19:21.808Z machine lim-builder: listening on /run/user/1000/agent-comms/connector.sock
+2026-10-01T10:19:25-04:00 lim-builder node[551568]: 2026-10-01T14:19:25.025Z decision j971wfrvj1mmbnnympfk7hfdhd8fe99j claimed state=claimed participant=term-a
+2026-10-01T10:19:25-04:00 lim-builder node[551568]: 2026-10-01T14:19:25.065Z decision j971wfrvj1mmbnnympfk7hfdhd8fe99j handoff to claude-code:term-a
+2026-10-01T10:19:25-04:00 lim-builder node[551568]: 2026-10-01T14:19:25.101Z decision j971wfrvj1mmbnnympfk7hfdhd8fe99j gate claim confirmed; sending (cursor=none)
+2026-10-01T10:19:25-04:00 lim-builder node[551568]: 2026-10-01T14:19:25.125Z decision j971wfrvj1mmbnnympfk7hfdhd8fe99j handoff-accepted turn=76ae30be-af39-4f1c-a403-9f51c8aeba42
+2026-10-01T10:19:25-04:00 lim-builder node[551568]: 2026-10-01T14:19:25.125Z decision j971wfrvj1mmbnnympfk7hfdhd8fe99j fault crash-after-accept: killing the connector before recording delivered
+2026-10-01T10:19:25-04:00 lim-builder systemd[1805]: hazel-fp1-faulty.service: Main process exited, code=killed, status=9/KILL
+2026-10-01T10:19:25-04:00 lim-builder systemd[1805]: hazel-fp1-faulty.service: Failed with result 'signal'.

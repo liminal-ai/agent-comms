@@ -1,0 +1,119 @@
+2026-10-01T10:05:26-04:00 lim-builder systemd[1805]: Stopping agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms)...
+2026-10-01T10:05:26-04:00 lim-builder node[498559]: 2026-10-01T14:05:26.325Z SIGTERM: stopping
+2026-10-01T10:05:26-04:00 lim-builder node[498559]: 2026-10-01T14:05:26.327Z server connection lost; retrying
+2026-10-01T10:05:26-04:00 lim-builder systemd[1805]: Stopped agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms).
+2026-10-01T10:05:26-04:00 lim-builder systemd[1805]: agent-comms-connector.service: Consumed 1.706s CPU time.
+2026-10-01T10:05:30-04:00 lim-builder systemd[1805]: Started agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms).
+2026-10-01T10:05:31-04:00 lim-builder node[516819]: 2026-10-01T14:05:31.245Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T10:05:31-04:00 lim-builder node[516819]: 2026-10-01T14:05:31.261Z machine lim-builder: listening on /run/user/1000/agent-comms/connector.sock
+2026-10-01T10:05:53-04:00 lim-builder node[516819]: 2026-10-01T14:05:53.773Z decision j978dxr81xz0wsy1kt7xgjf1rs8fes4j claimed state=claimed participant=fp1-lhc
+2026-10-01T10:05:53-04:00 lim-builder node[516819]: 2026-10-01T14:05:53.811Z decision j978dxr81xz0wsy1kt7xgjf1rs8fes4j handoff to t3:thr-fp1-lhc-e723958b
+2026-10-01T10:05:53-04:00 lim-builder node[516819]: 2026-10-01T14:05:53.860Z decision j978dxr81xz0wsy1kt7xgjf1rs8fes4j gate claim confirmed; sending (cursor=1906)
+2026-10-01T10:05:53-04:00 lim-builder node[516819]: 2026-10-01T14:05:53.860Z t3 dispatch comms-j978dxr81xz0wsy1kt7xgjf1rs8fes4j to thr-fp1-lhc-e723958b
+2026-10-01T10:05:54-04:00 lim-builder node[516819]: 2026-10-01T14:05:54.787Z decision j978dxr81xz0wsy1kt7xgjf1rs8fes4j handoff-accepted turn=bb48201b-3845-421b-a04d-c736b96de7e2
+2026-10-01T10:06:01-04:00 lim-builder node[516819]: 2026-10-01T14:06:01.556Z decision j978dxr81xz0wsy1kt7xgjf1rs8fes4j outcome replied turn=bb48201b-3845-421b-a04d-c736b96de7e2
+2026-10-01T10:06:01-04:00 lim-builder node[516819]: 2026-10-01T14:06:01.638Z decision j978y1dc3w6g6gkesajwrd6whx8fe81a claimed state=claimed participant=fp1-native
+2026-10-01T10:06:01-04:00 lim-builder node[516819]: 2026-10-01T14:06:01.674Z decision j978y1dc3w6g6gkesajwrd6whx8fe81a handoff to t3:thr-fp1-native-83810a09
+2026-10-01T10:06:01-04:00 lim-builder node[516819]: 2026-10-01T14:06:01.723Z decision j978y1dc3w6g6gkesajwrd6whx8fe81a gate claim confirmed; sending (cursor=1927)
+2026-10-01T10:06:01-04:00 lim-builder node[516819]: 2026-10-01T14:06:01.723Z t3 dispatch comms-j978y1dc3w6g6gkesajwrd6whx8fe81a to thr-fp1-native-83810a09
+2026-10-01T10:06:01-04:00 lim-builder node[516819]: 2026-10-01T14:06:01.776Z decision j978y1dc3w6g6gkesajwrd6whx8fe81a handoff-accepted turn=4e17ae59-9808-47bf-8d40-ae7e99e1e759
+2026-10-01T10:06:04-04:00 lim-builder node[516819]: 2026-10-01T14:06:04.317Z decision j970wwvc3hgpgcg7gr466ba3r98fen8y claimed state=claimed participant=term-a
+2026-10-01T10:06:04-04:00 lim-builder node[516819]: 2026-10-01T14:06:04.355Z decision j970wwvc3hgpgcg7gr466ba3r98fen8y handoff to claude-code:term-a
+2026-10-01T10:06:04-04:00 lim-builder node[516819]: 2026-10-01T14:06:04.389Z decision j970wwvc3hgpgcg7gr466ba3r98fen8y gate claim confirmed; sending (cursor=none)
+2026-10-01T10:06:04-04:00 lim-builder node[516819]: 2026-10-01T14:06:04.450Z decision j970wwvc3hgpgcg7gr466ba3r98fen8y handoff-accepted turn=8b91aa8b-b3c5-4ebb-a083-d72e8df0107f
+2026-10-01T10:06:05-04:00 lim-builder node[516819]: 2026-10-01T14:06:05.863Z decision j970wwvc3hgpgcg7gr466ba3r98fen8y outcome replied turn=8b91aa8b-b3c5-4ebb-a083-d72e8df0107f
+2026-10-01T10:06:06-04:00 lim-builder node[516819]: 2026-10-01T14:06:06.004Z decision j978jnzgh953kefnzk160tcqsx8ff7yt claimed state=claimed participant=fp1-lhc
+2026-10-01T10:06:06-04:00 lim-builder node[516819]: 2026-10-01T14:06:06.039Z decision j978jnzgh953kefnzk160tcqsx8ff7yt handoff to t3:thr-fp1-lhc-e723958b
+2026-10-01T10:06:06-04:00 lim-builder node[516819]: 2026-10-01T14:06:06.081Z decision j978jnzgh953kefnzk160tcqsx8ff7yt gate claim confirmed; sending (cursor=1954)
+2026-10-01T10:06:06-04:00 lim-builder node[516819]: 2026-10-01T14:06:06.081Z t3 dispatch comms-j978jnzgh953kefnzk160tcqsx8ff7yt to thr-fp1-lhc-e723958b
+2026-10-01T10:06:06-04:00 lim-builder node[516819]: 2026-10-01T14:06:06.144Z decision j978jnzgh953kefnzk160tcqsx8ff7yt handoff-accepted turn=92bcf933-1ec8-42ac-b8a8-662d838d9dc6
+2026-10-01T10:06:07-04:00 lim-builder node[516819]: 2026-10-01T14:06:07.726Z decision j97bjsh7agc03nemsnne4ysn6d8feztr claimed state=claimed participant=term-a
+2026-10-01T10:06:07-04:00 lim-builder node[516819]: 2026-10-01T14:06:07.763Z decision j978m1cd5y2kjjmgh7a6ag3xbx8fft3k claimed state=claimed participant=fp1-lhc
+2026-10-01T10:06:07-04:00 lim-builder node[516819]: 2026-10-01T14:06:07.791Z decision j97bjsh7agc03nemsnne4ysn6d8feztr handoff to claude-code:term-a
+2026-10-01T10:06:07-04:00 lim-builder node[516819]: 2026-10-01T14:06:07.864Z decision j978m1cd5y2kjjmgh7a6ag3xbx8fft3k handoff to t3:thr-fp1-lhc-e723958b
+2026-10-01T10:06:07-04:00 lim-builder node[516819]: 2026-10-01T14:06:07.910Z decision j97bjsh7agc03nemsnne4ysn6d8feztr gate claim confirmed; sending (cursor=none)
+2026-10-01T10:06:07-04:00 lim-builder node[516819]: 2026-10-01T14:06:07.941Z decision j978m1cd5y2kjjmgh7a6ag3xbx8fft3k gate claim confirmed; sending (cursor=1964)
+2026-10-01T10:06:07-04:00 lim-builder node[516819]: 2026-10-01T14:06:07.941Z t3 dispatch comms-j978m1cd5y2kjjmgh7a6ag3xbx8fft3k to thr-fp1-lhc-e723958b
+2026-10-01T10:06:07-04:00 lim-builder node[516819]: 2026-10-01T14:06:07.946Z decision j97bjsh7agc03nemsnne4ysn6d8feztr handoff-accepted turn=9ad45aab-1f2d-46f5-803e-c4f6244f52ef
+2026-10-01T10:06:07-04:00 lim-builder node[516819]: 2026-10-01T14:06:07.999Z decision j978m1cd5y2kjjmgh7a6ag3xbx8fft3k handoff-accepted turn=3478a606-1579-4595-bc26-84e663026984
+2026-10-01T10:06:09-04:00 lim-builder node[516819]: 2026-10-01T14:06:09.455Z decision j97bjsh7agc03nemsnne4ysn6d8feztr outcome replied turn=9ad45aab-1f2d-46f5-803e-c4f6244f52ef
+2026-10-01T10:06:13-04:00 lim-builder node[516819]: 2026-10-01T14:06:13.097Z decision j978m1cd5y2kjjmgh7a6ag3xbx8fft3k outcome replied turn=3478a606-1579-4595-bc26-84e663026984
+2026-10-01T10:06:21-04:00 lim-builder node[516819]: 2026-10-01T14:06:21.525Z decision j974yqk88rsjpd9n0ywvy0tp2h8fedj9 claimed state=claimed participant=fp1-native
+2026-10-01T10:06:21-04:00 lim-builder node[516819]: 2026-10-01T14:06:21.561Z decision j974yqk88rsjpd9n0ywvy0tp2h8fedj9 handoff to t3:thr-fp1-native-83810a09
+2026-10-01T10:06:21-04:00 lim-builder node[516819]: 2026-10-01T14:06:21.608Z decision j974yqk88rsjpd9n0ywvy0tp2h8fedj9 gate claim confirmed; sending (cursor=1974)
+2026-10-01T10:06:21-04:00 lim-builder node[516819]: 2026-10-01T14:06:21.608Z t3 dispatch comms-j974yqk88rsjpd9n0ywvy0tp2h8fedj9 to thr-fp1-native-83810a09
+2026-10-01T10:06:21-04:00 lim-builder node[516819]: 2026-10-01T14:06:21.662Z decision j974yqk88rsjpd9n0ywvy0tp2h8fedj9 handoff-accepted turn=2a02617b-46cd-453f-97de-284674416439
+2026-10-01T10:06:30-04:00 lim-builder node[516819]: 2026-10-01T14:06:30.347Z decision j9766t0jr70523nnq3hhrqez558ffdf3 recover state=claimed participant=cc-a
+2026-10-01T10:06:30-04:00 lim-builder node[516819]: 2026-10-01T14:06:30.348Z decision j9766t0jr70523nnq3hhrqez558ffdf3 check-completed recorded=claimed turn=b0d23750-fafe-4906-9b2e-10868238c4b7
+2026-10-01T10:06:30-04:00 lim-builder node[516819]: 2026-10-01T14:06:30.412Z decision j9766t0jr70523nnq3hhrqez558ffdf3 outcome replied turn=b0d23750-fafe-4906-9b2e-10868238c4b7
+2026-10-01T10:06:44-04:00 lim-builder node[516819]: 2026-10-01T14:06:44.991Z decision j974yqk88rsjpd9n0ywvy0tp2h8fedj9 outcome ambiguous turn=2a02617b-46cd-453f-97de-284674416439 entered=t3-user-message
+2026-10-01T10:10:06-04:00 lim-builder node[516819]: 2026-10-01T14:10:06.182Z decision j971vwfdzpzekacawsj5tgzpb98fecvn claimed state=claimed participant=term-a
+2026-10-01T10:10:06-04:00 lim-builder node[516819]: 2026-10-01T14:10:06.217Z decision j971vwfdzpzekacawsj5tgzpb98fecvn handoff to claude-code:term-a
+2026-10-01T10:10:06-04:00 lim-builder node[516819]: 2026-10-01T14:10:06.250Z decision j971vwfdzpzekacawsj5tgzpb98fecvn gate claim confirmed; sending (cursor=none)
+2026-10-01T10:10:06-04:00 lim-builder node[516819]: 2026-10-01T14:10:06.285Z decision j971vwfdzpzekacawsj5tgzpb98fecvn handoff-accepted turn=8ff657ac-5fcf-4c67-9cf3-34ed37510f18
+2026-10-01T10:10:07-04:00 lim-builder node[516819]: 2026-10-01T14:10:07.912Z decision j971vwfdzpzekacawsj5tgzpb98fecvn outcome replied turn=8ff657ac-5fcf-4c67-9cf3-34ed37510f18
+2026-10-01T10:10:12-04:00 lim-builder node[516819]: 2026-10-01T14:10:12.481Z decision j970xkajg92w0d9q517g2aws5n8ffc5g claimed state=claimed participant=term-a
+2026-10-01T10:10:12-04:00 lim-builder node[516819]: 2026-10-01T14:10:12.514Z decision j970xkajg92w0d9q517g2aws5n8ffc5g handoff to claude-code:term-a
+2026-10-01T10:10:12-04:00 lim-builder node[516819]: 2026-10-01T14:10:12.548Z decision j970xkajg92w0d9q517g2aws5n8ffc5g gate claim confirmed; sending (cursor=none)
+2026-10-01T10:10:12-04:00 lim-builder node[516819]: 2026-10-01T14:10:12.576Z decision j970xkajg92w0d9q517g2aws5n8ffc5g handoff-accepted turn=4cb9d24e-1257-4c7c-b3d0-74f168e05a92
+2026-10-01T10:10:18-04:00 lim-builder node[516819]: 2026-10-01T14:10:18.253Z decision j970xkajg92w0d9q517g2aws5n8ffc5g outcome replied turn=4cb9d24e-1257-4c7c-b3d0-74f168e05a92
+2026-10-01T10:11:34-04:00 lim-builder node[516819]: 2026-10-01T14:11:34.019Z decision j97axe5eywgafnbbjm4kte6mj58ffcfj claimed state=claimed participant=fp1-native
+2026-10-01T10:11:34-04:00 lim-builder node[516819]: 2026-10-01T14:11:34.051Z decision j97axe5eywgafnbbjm4kte6mj58ffcfj handoff to t3:thr-fp1-native-83810a09
+2026-10-01T10:11:34-04:00 lim-builder node[516819]: 2026-10-01T14:11:34.100Z decision j97axe5eywgafnbbjm4kte6mj58ffcfj gate claim confirmed; sending (cursor=2012)
+2026-10-01T10:11:34-04:00 lim-builder node[516819]: 2026-10-01T14:11:34.100Z t3 dispatch comms-j97axe5eywgafnbbjm4kte6mj58ffcfj to thr-fp1-native-83810a09
+2026-10-01T10:11:34-04:00 lim-builder node[516819]: 2026-10-01T14:11:34.159Z decision j97axe5eywgafnbbjm4kte6mj58ffcfj handoff-accepted turn=c4baa8a9-afb1-4e9b-a0bb-8973b238b10d
+2026-10-01T10:11:39-04:00 lim-builder node[516819]: 2026-10-01T14:11:39.494Z decision j97axe5eywgafnbbjm4kte6mj58ffcfj outcome replied turn=c4baa8a9-afb1-4e9b-a0bb-8973b238b10d
+2026-10-01T10:11:39-04:00 lim-builder node[516819]: 2026-10-01T14:11:39.713Z decision j977xvm939nwy6g4q9248z2q8h8ffswm claimed state=claimed participant=term-a
+2026-10-01T10:11:39-04:00 lim-builder node[516819]: 2026-10-01T14:11:39.772Z decision j977xvm939nwy6g4q9248z2q8h8ffswm handoff to claude-code:term-a
+2026-10-01T10:11:39-04:00 lim-builder node[516819]: 2026-10-01T14:11:39.833Z decision j977xvm939nwy6g4q9248z2q8h8ffswm gate claim confirmed; sending (cursor=none)
+2026-10-01T10:11:39-04:00 lim-builder node[516819]: 2026-10-01T14:11:39.871Z decision j977xvm939nwy6g4q9248z2q8h8ffswm handoff-accepted turn=10a486f7-4f04-46d0-989f-70a837ae969b
+2026-10-01T10:11:46-04:00 lim-builder node[516819]: 2026-10-01T14:11:46.372Z decision j97a4948afrjetcwqtnq2q832x8fedq0 claimed state=claimed participant=fp1-lhc
+2026-10-01T10:11:46-04:00 lim-builder node[516819]: 2026-10-01T14:11:46.420Z decision j97a4948afrjetcwqtnq2q832x8fedq0 handoff to t3:thr-fp1-lhc-e723958b
+2026-10-01T10:11:46-04:00 lim-builder node[516819]: 2026-10-01T14:11:46.481Z decision j97a4948afrjetcwqtnq2q832x8fedq0 gate claim confirmed; sending (cursor=2022)
+2026-10-01T10:11:46-04:00 lim-builder node[516819]: 2026-10-01T14:11:46.481Z t3 dispatch comms-j97a4948afrjetcwqtnq2q832x8fedq0 to thr-fp1-lhc-e723958b
+2026-10-01T10:11:46-04:00 lim-builder node[516819]: 2026-10-01T14:11:46.542Z decision j97a4948afrjetcwqtnq2q832x8fedq0 handoff-accepted turn=c91665b7-33d0-45dd-813f-f511bb25742a
+2026-10-01T10:11:52-04:00 lim-builder node[516819]: 2026-10-01T14:11:52.758Z decision j97a4948afrjetcwqtnq2q832x8fedq0 outcome replied turn=c91665b7-33d0-45dd-813f-f511bb25742a
+2026-10-01T10:15:04-04:00 lim-builder systemd[1805]: Stopping agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms)...
+2026-10-01T10:15:04-04:00 lim-builder node[516819]: 2026-10-01T14:15:04.687Z SIGTERM: stopping
+2026-10-01T10:15:04-04:00 lim-builder node[516819]: 2026-10-01T14:15:04.689Z server connection lost; retrying
+2026-10-01T10:15:04-04:00 lim-builder systemd[1805]: Stopped agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms).
+2026-10-01T10:15:04-04:00 lim-builder systemd[1805]: agent-comms-connector.service: Consumed 2.222s CPU time.
+2026-10-01T10:15:04-04:00 lim-builder systemd[1805]: Started agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms).
+2026-10-01T10:15:04-04:00 lim-builder node[540763]: 2026-10-01T14:15:04.965Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T10:15:04-04:00 lim-builder node[540763]: 2026-10-01T14:15:04.981Z machine lim-builder: listening on /run/user/1000/agent-comms/connector.sock
+2026-10-01T10:15:08-04:00 lim-builder node[540763]: 2026-10-01T14:15:08.022Z decision j9700y98bjhv381jcw8mrrhk2n8ffe59 claimed state=claimed participant=fp1-lhc
+2026-10-01T10:15:08-04:00 lim-builder node[540763]: 2026-10-01T14:15:08.056Z decision j9700y98bjhv381jcw8mrrhk2n8ffe59 handoff to t3:thr-fp1-lhc-e723958b
+2026-10-01T10:15:08-04:00 lim-builder node[540763]: 2026-10-01T14:15:08.104Z decision j9700y98bjhv381jcw8mrrhk2n8ffe59 gate claim confirmed; sending (cursor=2039)
+2026-10-01T10:15:08-04:00 lim-builder node[540763]: 2026-10-01T14:15:08.104Z t3 dispatch comms-j9700y98bjhv381jcw8mrrhk2n8ffe59 to thr-fp1-lhc-e723958b
+2026-10-01T10:15:08-04:00 lim-builder node[540763]: 2026-10-01T14:15:08.165Z decision j9700y98bjhv381jcw8mrrhk2n8ffe59 handoff-accepted turn=840841b0-b70f-4e05-83e7-6f722cc0c569
+2026-10-01T10:15:09-04:00 lim-builder systemd[1805]: agent-comms-connector.service: Sent signal SIGKILL to main process 540763 (MainThread) on client request.
+2026-10-01T10:15:09-04:00 lim-builder systemd[1805]: agent-comms-connector.service: Main process exited, code=killed, status=9/KILL
+2026-10-01T10:15:09-04:00 lim-builder systemd[1805]: agent-comms-connector.service: Failed with result 'signal'.
+2026-10-01T10:15:14-04:00 lim-builder systemd[1805]: agent-comms-connector.service: Scheduled restart job, restart counter is at 1.
+2026-10-01T10:15:14-04:00 lim-builder systemd[1805]: Started agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms).
+2026-10-01T10:15:14-04:00 lim-builder node[541358]: 2026-10-01T14:15:14.417Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T10:15:14-04:00 lim-builder node[541358]: 2026-10-01T14:15:14.433Z machine lim-builder: listening on /run/user/1000/agent-comms/connector.sock
+2026-10-01T10:15:18-04:00 lim-builder node[541358]: 2026-10-01T14:15:18.407Z decision j971htmheb3tpvwn315j1cmwbn8ffm65 claimed state=claimed participant=term-a
+2026-10-01T10:15:18-04:00 lim-builder node[541358]: 2026-10-01T14:15:18.462Z decision j971htmheb3tpvwn315j1cmwbn8ffm65 handoff to claude-code:term-a
+2026-10-01T10:15:18-04:00 lim-builder node[541358]: 2026-10-01T14:15:18.517Z decision j971htmheb3tpvwn315j1cmwbn8ffm65 gate claim confirmed; sending (cursor=none)
+2026-10-01T10:15:18-04:00 lim-builder node[541358]: 2026-10-01T14:15:18.582Z decision j971htmheb3tpvwn315j1cmwbn8ffm65 handoff-accepted turn=6381661e-cec8-42fe-ad04-b05e04c8a0d5
+2026-10-01T10:15:50-04:00 lim-builder node[541358]: 2026-10-01T14:15:50.448Z decision j971htmheb3tpvwn315j1cmwbn8ffm65 outcome ambiguous turn=6381661e-cec8-42fe-ad04-b05e04c8a0d5 entered=composer
+2026-10-01T10:16:08-04:00 lim-builder node[541358]: 2026-10-01T14:16:08.607Z decision j9700y98bjhv381jcw8mrrhk2n8ffe59 recover state=delivered participant=fp1-lhc
+2026-10-01T10:16:12-04:00 lim-builder node[541358]: 2026-10-01T14:16:12.635Z decision j9700y98bjhv381jcw8mrrhk2n8ffe59 check-completed recorded=delivered turn=840841b0-b70f-4e05-83e7-6f722cc0c569
+2026-10-01T10:16:12-04:00 lim-builder node[541358]: 2026-10-01T14:16:12.635Z decision j9700y98bjhv381jcw8mrrhk2n8ffe59 outcome replied turn=840841b0-b70f-4e05-83e7-6f722cc0c569
+2026-10-01T10:17:25-04:00 lim-builder node[541358]: 2026-10-01T14:17:25.607Z decision j97d6vz3vbgz91nzz710qv1gbn8fezzw claimed state=claimed participant=term-a
+2026-10-01T10:17:25-04:00 lim-builder node[541358]: 2026-10-01T14:17:25.642Z decision j97d6vz3vbgz91nzz710qv1gbn8fezzw handoff to claude-code:term-a
+2026-10-01T10:17:25-04:00 lim-builder node[541358]: 2026-10-01T14:17:25.681Z decision j97d6vz3vbgz91nzz710qv1gbn8fezzw gate claim confirmed; sending (cursor=none)
+2026-10-01T10:17:25-04:00 lim-builder node[541358]: 2026-10-01T14:17:25.709Z decision j97d6vz3vbgz91nzz710qv1gbn8fezzw handoff-accepted turn=c9a51e74-f9a0-45c5-b406-0ff7a8bd1feb
+2026-10-01T10:17:56-04:00 lim-builder node[541358]: 2026-10-01T14:17:56.443Z decision j97d6vz3vbgz91nzz710qv1gbn8fezzw outcome replied turn=c9a51e74-f9a0-45c5-b406-0ff7a8bd1feb
+2026-10-01T10:19:21-04:00 lim-builder systemd[1805]: Stopping agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms)...
+2026-10-01T10:19:21-04:00 lim-builder node[541358]: 2026-10-01T14:19:21.506Z SIGTERM: stopping
+2026-10-01T10:19:21-04:00 lim-builder node[541358]: 2026-10-01T14:19:21.508Z server connection lost; retrying
+2026-10-01T10:19:21-04:00 lim-builder systemd[1805]: Stopped agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms).
+2026-10-01T10:19:21-04:00 lim-builder systemd[1805]: agent-comms-connector.service: Consumed 1.619s CPU time.
+2026-10-01T10:19:26-04:00 lim-builder systemd[1805]: Started agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms).
+2026-10-01T10:19:26-04:00 lim-builder node[551769]: 2026-10-01T14:19:26.413Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T10:19:26-04:00 lim-builder node[551769]: 2026-10-01T14:19:26.430Z machine lim-builder: listening on /run/user/1000/agent-comms/connector.sock
+2026-10-01T10:20:25-04:00 lim-builder node[551769]: 2026-10-01T14:20:25.600Z decision j971wfrvj1mmbnnympfk7hfdhd8fe99j recover state=claimed participant=term-a
+2026-10-01T10:20:25-04:00 lim-builder node[551769]: 2026-10-01T14:20:25.600Z decision j971wfrvj1mmbnnympfk7hfdhd8fe99j check-completed recorded=claimed turn=76ae30be-af39-4f1c-a403-9f51c8aeba42
+2026-10-01T10:20:25-04:00 lim-builder node[551769]: 2026-10-01T14:20:25.639Z decision j971wfrvj1mmbnnympfk7hfdhd8fe99j outcome replied turn=76ae30be-af39-4f1c-a403-9f51c8aeba42

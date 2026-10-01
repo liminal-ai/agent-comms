@@ -1,0 +1,83 @@
+{
+ "window": [
+  "2026-10-01T14:05:24.000Z",
+  "2026-10-01T14:25:00.000Z"
+ ],
+ "conversations": [
+  {
+   "id": "j57bfbbrnw2zby8gh46meeyd3s8ffdrc",
+   "title": "dm",
+   "members": [
+    "cc-b",
+    "term-a"
+   ]
+  },
+  {
+   "id": "j57cnwc28pdynp8yy2q7tfe4j58ffmah",
+   "title": "fp1 shared kill 14:15:07",
+   "members": [
+    "lee",
+    "fp1-req",
+    "fp1-lhc"
+   ]
+  },
+  {
+   "id": "j57197qrwtttsqaykmnemah9gd8ffp8g",
+   "title": "fp1 shared work 14:11:46",
+   "members": [
+    "lee",
+    "fp1-req",
+    "fp1-lhc"
+   ]
+  },
+  {
+   "id": "j574ak9t5de06823yjdq8cbhhn8fe496",
+   "title": "dm",
+   "members": [
+    "term-a",
+    "fp1-native"
+   ]
+  },
+  {
+   "id": "j576x2d114y59eb1m5yqw3dn9h8fe6wg",
+   "title": "fp1 shared typed 14:06:21",
+   "members": [
+    "lee",
+    "fp1-req",
+    "fp1-native"
+   ]
+  },
+  {
+   "id": "j572hsxyzns9qfnrjq5jg2m78s8ffmk7",
+   "title": "fp1 shared group 14:06:07",
+   "members": [
+    "lee",
+    "fp1-native",
+    "fp1-lhc",
+    "term-a"
+   ]
+  },
+  {
+   "id": "j570pc6mj4n3e5y8tryqk25v2h8fftdg",
+   "title": "dm",
+   "members": [
+    "fp1-lhc",
+    "term-a"
+   ]
+  },
+  {
+   "id": "j577tst32rmc5pqjmb84by6qsn8fev6d",
+   "title": "dm",
+   "members": [
+    "fp1-native",
+    "fp1-lhc"
+   ]
+  }
+ ],
+ "messages": 25,
+ "6 withPrivateMarker": 0,
+ "7 collectedAnswers": 11,
+ "7 collectedFromAnAnswersDelivery": 0,
+ "7 answerDeliveries": 11,
+ "7 answerDeliveriesPastDelivered": 0
+}
