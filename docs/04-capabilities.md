@@ -1,6 +1,6 @@
 # Capabilities pass: reminders, registry, send-and-wait, people, alerts
 
-Draft 2 by Reed, 2026-10-01, with Cedar's review of draft 1 against `main` `f2d55f0` folded in. Next review: Alder (scope) and Wrenn (references). Builds on `main` after fix pass 1 is signed off.
+Draft 3 by Reed, 2026-10-01: Cedar's review of draft 1, then Alder's and Wrenn's review of draft 2, folded in. Builds on `main` after fix pass 1 is signed off.
 
 ## Why
 
@@ -44,29 +44,43 @@ All behaviour lives in Convex and the connector. Agents reach it through the `co
   - if the connector restarts, the CLI re-registers the wait.
 - **The answer returns to the call, not as a new turn.**
   - It's handled outside the per-participant delivery loop. The requester is mid-turn while its CLI waits, so the dispatcher treats it as busy and works its in-flight delivery first (`dispatcher.ts:348, 358-364`); the answer would never be looked at.
-  - A separate pass over the work stream matches pending answer deliveries against the waits this connector holds, ignoring busy state and serial order. The work query exposes each answer delivery's `inReplyTo` for this (`convex/connector.ts:105-116`).
-  - One Convex mutation consumes it: a compare-and-set from `pending` to `delivered`, with detail "returned to the waiting send", that returns the answer text. It must not be a claim followed by `delivered`, which would race the normal path.
-  - **Which answer ends the wait:** the collected answer, or a `comms reply` that completes the delivery. Later follow-ups go into the thread as normal.
+  - A separate pass over the work stream matches pending answer deliveries against the waits this connector holds, ignoring busy state and serial order. Add each answer delivery's `inReplyTo` to the work query for this (`convex/connector.ts:105-116` doesn't carry it today).
+  - **One Convex mutation consumes it,** and only while the wait is still open. It compare-and-sets the wait from `open` to `answered`, storing the answer's message id on the wait row. In the same transaction it sets the delivery from `pending` to `delivered`, with detail "returned to the waiting send". It must not be a claim followed by `delivered`, which would race the normal path.
+  - **The CLI reads the answer from the wait row, not from the connector's memory.** If the connector dies between consuming and returning, the CLI reconnects and `await` finds the stored answer.
+  - **Timeout and answer can't both win.** The wait ends by the same kind of compare-and-set: `open` to `answered`, or `open` to `expired` when the CLI's bound or `until` passes. An answer arriving after `expired` goes into the thread as normal. So an answer is returned exactly once, either to the call or to the thread.
+  - **What ends the wait, per recipient:**
+    - `replied`: the collected answer, or a `comms reply` that completes the delivery, is returned.
+    - `ambiguous`: keep waiting, since the agent will finish it with `comms reply`.
+    - `failed` or `uncertain`: the wait ends for that recipient and reports the state.
+    - Later follow-ups go into the thread as normal.
+  - **People:** a human recipient never answers like an agent. For a human, the send is complete once the message is in their inbox, and `comms send @owner` returns at once with that. In a mixed group, the wait covers only the agents; humans are listed as "in inbox".
   - The overview's definition of `delivered` ("the harness accepted our message") gains this one exception; the overview is updated to say so.
 - **Late answers.** If the CLI's bound is reached first, it prints the message id and current state and exits with a distinct code. An answer arriving after that is delivered into the requester's thread as normal.
-- **Default bound.** Below the shortest shell-command timeout of the harnesses agents run in. Hazel measures those first (H0), and the default is set from her numbers. The usage text tells agents that a waiting send ties up their turn's shell for up to the bound, and to raise their shell timeout to match.
+- **Default bound.** Below the shortest default shell-command timeout of the harnesses agents run in. Claude Code's Bash tool defaults to 120 s and caps foreground commands at 600 s; Hazel measures Codex's shell in T3 (H0), and the default is set from the two, likely around 100 s. The usage text names three patterns:
+  - **short asks:** the default;
+  - **medium asks:** raise the shell timeout and pass `--wait 9m`; this ties up the turn's shell for that long;
+  - **long asks:** `--continue`, or in Claude Code run `comms send` as a background shell command. Its completion arrives as a task notification: inside the same turn if the turn is still running (the mod links it as the turn's own work), or as a new turn if the turn has ended. That's no worse than `--continue`, but not free.
+- **H0 measures behaviour, not just numbers:** for each harness, whether a long shell command finishes, times out (and what the agent sees), or is moved to the background, so we know send-and-wait returns inside the same turn.
 - **Several recipients.** A wait on a group request returns when every addressed agent's delivery is final, or at the bound with what has arrived.
 - **No mutual waits.**
   - A `waits` table `{participantId, messageId, until}`, indexed by participant.
   - The check and the insert happen in the same mutation as the send. Convex's serializable transactions then order two simultaneous sends, so the second sees the first's wait.
-  - A waiting send to a participant that is itself in an active wait doesn't wait: it falls back to `--continue` and says why. That closes any cycle, including A→B→C→A, without timing out.
+  - **The rule is "the target is busy waiting", not cycle detection.** A waiting send to a participant that is itself in an active wait, on anyone, doesn't wait: it falls back to `--continue` and tells the agent "@B is waiting on another request; your message is queued, check with `comms status <id>`." That's broader than a cycle, which is fine since B can't answer until its own wait ends, and it closes every cycle, including A→B→C→A, without timing out.
   - Waits are removed on completion or timeout, and expire at `until`, so a crashed CLI's wait ends on its own.
 - `comms status <message-id>` shows each addressed recipient's delivery state, and the answer text if there is one. `comms status` with no argument keeps showing the connector's own status.
 
 ### 4. Reminders
 
-- `comms remind @agent "text" --every <duration>` or `--at <time>`, plus `--name`, `--idle-for <duration>`, `--max <n>`, `--report-to @participant`, `--expires <duration>`.
+- `comms remind @agent "text" --every <duration>` or `--at <time>`, plus `--name`, `--idle-for <duration>`, `--watch @participant`, `--max <n>`, `--report-to @participant`, `--expires <duration>`.
 - `comms reminders` lists them; `comms reminder <id>` shows one with its history; `comms reminder pause|resume|done|cancel <id>`; `comms reminder blocked <id> "reason"`. Allowed for the reminder's creator, its target, and the target's owner.
 - **Storage:** a `reminders` table (target, text, name, created by, schedule, options, state, fire count, next fire time, expiry), indexed on `(state, nextFireAt)`, and a `reminderFires` table keyed by message id (reminder, delivery id, fired at, collected answer).
 - **Firing:** one Convex cron each minute fires due reminders through that index. That's simpler to recover and pause than chained per-reminder jobs.
 - **A fire is an ordinary request** from `reminders` to the target, in a DM between them, so delivery, matching and recovery are the ones we just hardened. Rendered as `Reminder: <name> (id …), set by @lee, every 30m.`, then the text, then how to mark it done or blocked.
-- **No pile-up:** a fire is skipped while the previous fire's delivery isn't final. Final means not `pending`, `claimed` or `delivered`. `ambiguous` counts as not final, since `comms reply` can still complete it.
-- **`--idle-for`:** fires only once the target has been idle at least that long; otherwise it retries next minute. Needs a new `presence.idleSince` that changes only on the transition to idle, since `presence.at` moves on every write, including each mod re-registration and the connector's reset at start (`connector/src/connector.ts:96`). A stale presence (connector not heard from) doesn't count as idle. This covers what `lhc-monitor` does.
+- **No pile-up:** a fire is skipped while the previous fire's delivery isn't final. Final means not `pending`, `claimed` or `delivered`. An `ambiguous` fire counts as not final for one interval, since `comms reply` can still complete it, and as final after that, so a reminder can't stall forever. Every skip is logged on the reminder with its reason.
+- **`--idle-for`:** fires only once a participant has been idle at least that long; otherwise it retries next minute. By default that's the reminder's own target, which covers what `lhc-monitor` does.
+- **`--watch @x`:** the idle condition is checked on `@x` instead of the target. "Wake Reed once Hazel has been idle for 20 minutes" is `comms remind @reed "check on Hazel" --watch @hazel --idle-for 20m`.
+- **Idle needs `presence.idleSince`,** which changes only on the transition to idle, since `presence.at` moves on every write, including each mod re-registration and the connector's reset at start (`connector/src/connector.ts:96`). A stale presence (connector not heard from) doesn't count as idle.
+- **Pausing or cancelling stops future fires only.** A turn already running from an earlier fire runs to its end, and its answer is still recorded.
 - **`--max` and expiry:** stops after n fires. Every reminder expires (default 7 days, maximum 30), and its creator is told.
 - **States:** `active`, `paused`, `blocked`, `done`, `cancelled`, `expired`. Only `active` fires.
 - **Reports:** collecting an answer looks up `reminderFires` by the request's message id and records the answer there. With `--report-to`, it's also posted to that participant from `reminders`, with the agent's name.
@@ -80,7 +94,7 @@ Posted by `alerts` to the affected agent's owner, from a Convex cron:
 - a reminder `blocked` for a set time, or expired;
 - a delivery claimed more than a set number of times. This needs a claim counter on the delivery (`convex/connector.ts:176`).
 
-"Once per cause" is an `alerts` table unique on `(cause, subject id)`. Alerts carry the delivery, participant or reminder id. Thresholds live in one config record.
+**Once per incident, not once forever.** An `alerts` table records incidents keyed by `(cause, subject id)`, with `openedAt` and `resolvedAt`. An alert is sent when an incident opens. The incident closes when the condition clears (the connector is heard from again, the delivery leaves `uncertain`, the reminder leaves `blocked`), and a later recurrence opens a new incident and a new alert. So down, recovered, down gives two alerts. Recovery itself isn't announced in this pass. Alerts carry the delivery, participant or reminder id. Thresholds live in one config record.
 
 ## Split: two agents
 
@@ -93,11 +107,11 @@ It's worth splitting because the web view and the measurements are independent o
 
 **Prerequisite:** Alder signs off fix pass 1 on `main`.
 
-**H0 (Hazel, first):** measure the default and maximum shell-command timeouts for Claude Code's Bash tool (in T3 and in a terminal) and Codex's shell in T3. Commit them to `docs/t3-api-notes.md` with how each was measured.
+**H0 (Hazel, first):** Claude Code's Bash tool is known: 120 s default, 600 s foreground maximum. Confirm that in T3 and in a terminal, and measure Codex's shell in T3. For each, record whether a long command finishes, times out (and what the agent sees), or is moved to the background. Commit the results to `docs/t3-api-notes.md` with how each was measured.
 
 **R0 (Cedar, contract):**
 - schema: the `system` kind, `description`, `duties`, `ownerId`, `presence.idleSince`, and the `waits`, `inbox`, `reminders`, `reminderFires` and `alerts` tables, plus the delivery claim counter;
-- the new loopback operations and their JSON, including `await`;
+- the new loopback operations and their JSON, including `await`, and the CLI's JSON output and exit codes for `send`, `await` and `status` (a distinct code for "bound reached, still pending"), since the mod and any later MCP wrapper build on them;
 - the reminder and alert renderings in `render.ts`;
 - **every** Convex query and mutation the web view will call: registry edit, inbox, reminders and alerts.
 
@@ -105,9 +119,9 @@ Hazel reviews R0 before R1.
 
 **R1 (Cedar):** the registry, `ownerId` and its migration, reserved names, `@owner`, the inbox.
 
-**R2 (Cedar):** send-and-wait (`await`, the consuming pass and mutation), `--continue`, `comms status <id>`, the waits table and mutual-wait rule.
+**R2 (Cedar):** send-and-wait (`await`, the consuming pass and mutation), `--continue`, `comms status <id>`, the waits table (open, answered, expired, with the stored answer) and the busy-waiting rule.
 
-**R3 (Cedar):** reminders, including system-recipient handling and `idleSince`.
+**R3 (Cedar):** reminders, including system-recipient handling, `idleSince` and `--watch`.
 
 **R4 (Cedar):** alerts.
 
@@ -120,13 +134,15 @@ Rules as before: a failing test before each behaviour, one progress file per lan
 1. `comms agents` lists the agents with descriptions; `comms agents @x` shows duties.
 2. `comms send` from a T3 agent to term-a, and from term-a to a T3 agent, returns the answer in the call, and the requester gets no extra turn.
 3. A wait that runs out prints the id; the late answer arrives as a normal message; `comms status <id>` shows it.
-4. A waits on B, then B sends to A: B's send falls back to `--continue` at once, and both requests complete. The same for two simultaneous sends.
-5. A group request waited on by one agent returns both answers.
-6. `comms send @owner` from an agent reaches Lee's inbox in the web view, unread until opened.
-7. A reminder every 2 minutes to a T3 agent fires, arrives labelled as a reminder from `reminders` with its creator, collects the answer, and reports to `@lee`. A slow answer causes skipped fires, not a pile-up.
-8. `--idle-for` defers a fire while the target is busy; `--max 3` stops after three; `done` and `blocked` stop it; a short expiry ends it and tells the creator.
-9. An injected `uncertain` delivery and a stopped connector each produce exactly one alert to the owner.
-10. No system participant ever receives a delivery.
+4. A waits on B, then B sends to A: B's send falls back to `--continue` at once with the "busy waiting" message, and both requests complete. The same for two simultaneous sends, and for a three-agent cycle A→B→C→A.
+5. A group request waited on by one agent returns both answers; a group with Lee in it returns the agents' answers and lists Lee as "in inbox".
+6. `comms send @owner` from an agent returns at once and reaches Lee's inbox in the web view, unread until opened.
+7. **Restart while waiting:** the connector is killed after consuming an answer and before the CLI gets it; the CLI reconnects and gets the stored answer, once. The CLI is killed mid-wait; its wait expires and the answer goes into the thread.
+8. **Answer at the bound:** an answer arriving as the wait expires is returned exactly once, either to the call or to the thread, never both, never neither (forced by fault injection).
+9. A reminder every 2 minutes to a T3 agent fires, arrives labelled as a reminder from `reminders` with its creator, collects the answer, and reports to `@lee`. A slow answer causes skipped fires, not a pile-up; an ambiguous fire stops blocking after one interval.
+10. `--idle-for` defers a fire while the target is busy; `--watch` defers it on another agent's activity; `--max 3` stops after three; `done` and `blocked` stop it; a short expiry ends it and tells the creator. Pausing or cancelling while a fire's turn is running stops later fires and lets that turn finish.
+11. An injected `uncertain` delivery and a stopped connector each produce exactly one alert to the owner. Stopping the connector, restarting it, and stopping it again produces two alerts.
+12. No system participant ever receives a delivery.
 
 ## Not in this pass
 
