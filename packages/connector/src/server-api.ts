@@ -70,6 +70,8 @@ export interface ServerApiShape {
   readonly reply: (req: Requests["reply"]) => Effect.Effect<Responses["reply"], ApiError>;
   readonly read: (req: Requests["read"]) => Effect.Effect<Responses["read"], ApiError>;
   readonly list: (req: Requests["list"]) => Effect.Effect<Responses["list"], ApiError>;
+  readonly agents: (req: Requests["agents"]) => Effect.Effect<Responses["agents"], ApiError>;
+  readonly agentsSet: (req: Requests["agents-set"]) => Effect.Effect<Responses["agents-set"], ApiError>;
 }
 
 export class ServerApi extends Context.Service<ServerApi, ServerApiShape>()("agent-comms/ServerApi") {}
@@ -197,6 +199,25 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
         }),
       ),
     list: (req) => call("list", () => transport.query(api.connector.list, { machine, as: req.as })),
+    agents: (req) =>
+      call("agents", () =>
+        transport.query(api.connector.agents, {
+          machine,
+          as: req.as,
+          ...(req.name !== undefined ? { name: req.name } : {}),
+          ...(req.long !== undefined ? { long: req.long } : {}),
+        }),
+      ),
+    agentsSet: (req) =>
+      call("agents-set", () =>
+        transport.mutation(api.connector.agentsSet, {
+          machine,
+          as: req.as,
+          name: req.name,
+          ...(req.description !== undefined ? { description: req.description } : {}),
+          ...(req.duties !== undefined ? { duties: req.duties } : {}),
+        }),
+      ),
   };
 }
 

@@ -1,0 +1,9 @@
+ok 5 - capabilities R0
+ok 6 - capabilities R1
+# pass 22
+# fail 0
+ok 4 - capabilities R0
+ok 5 - capabilities R1: comms agents
+# pass 14
+# fail 0
+[2m      Tests [22m [1m[32m16 passed[39m[22m[90m (16)[39m

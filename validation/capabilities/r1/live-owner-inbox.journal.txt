@@ -1,0 +1,10 @@
+$ comms send --as cedar-demo @owner "R1 live check: @owner reaches your inbox (Cedar; marked read by the check)"
+sent jn7f8b936c1ax5hysbngya32cd8ffnpf (#1 in j57bffqvp8t55mpgh9m1736bgs8fempv)
+  (no one addressed; visible to members, wakes no one)
+exit 0
+$ comms send --as cedar-demo @reminders "x"
+comms send: bad_request: @reminders is a system participant; it sends, and can't be addressed
+exit 1
+inbox.list (newest 3): [{"from":"cedar-demo","to":["lee"],"text":"R1 live check: @owner reaches your inbox (Cedar; marked read by the check)","readAt":null}]
+unread before: 1
+markRead: {"marked":1,"unread":0}

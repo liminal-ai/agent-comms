@@ -80,7 +80,7 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - [x] R0 Convex: schema (system kind, ownerId, description, duties, presence.idleSince, message meta, delivery claimCount and fallback; tables inbox, waits, waitResults, reminders, reminderFires, alerts, alertConfig); web functions registry.list/setProfile, inbox.list/unreadCount/markRead, reminders.list/get/create/update, alerts.list/config/setConfig; promotion refuses `system`; idleSince moves only on the transition to idle
 - [x] R0 connector and stub answer the new ops `unsupported` until built; a waiting send is refused, never sent unwaited
 - [x] Hazel's R0 review: approved; her changes taken (`validation/capabilities/r0-review/`): ack counts only within the waiter's same busy stretch (`busySince`), a wait with no open result isn't busy waiting, `--at` format, blocked needs a reason in the decoder, alert conversation ids, reminder lastFire/lastSkip
-- [ ] R1 registry, ownerId migration, reserved names, @owner, inbox
+- [x] R1 (`validation/capabilities/r1/`): promote requires a person as owner (ownerId) and refuses reserved names; `directory.upgrade` + `scripts/upgrade.ts` (system participants, owner backfill; run after each deploy); owner string dropped (3 deploys); `@owner`; inbox rows from post() for every person addressed, any sender; system participants never addressed, answers to system requests address no one; `agents`/`agents-set` in Convex, connector, stub and `comms agents`
 - [ ] R2 send-and-wait
 - [ ] R3 reminders
 - [ ] R4 alerts

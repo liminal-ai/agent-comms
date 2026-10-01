@@ -1,0 +1,4 @@
+    not ok 2 - sends in a group, addressing some members
+not ok 1 - comms CLI against the stub
+# pass 13
+# fail 1

@@ -277,8 +277,6 @@ describe("capabilities R0", () => {
       ["await", { as: "a", messageId: "m_1" }],
       ["ack", { as: "a", messageId: "m_1" }],
       ["message-status", { as: "a", messageId: "m_1" }],
-      ["agents", { as: "a" }],
-      ["agents-set", { as: "a", name: "a", description: "x" }],
       ["remind", { as: "a", target: "b", text: "x", everyMs: 60_000 }],
       ["reminders", { as: "a" }],
       ["reminder", { as: "a", id: "r_1" }],
@@ -291,5 +289,20 @@ describe("capabilities R0", () => {
     }
     const list = await call(w.socket, "list", { as: "a" });
     expect(list.ok && list.conversations).toHaveLength(0);
+  });
+});
+
+describe("capabilities R1", () => {
+  it("passes the registry operations through", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const set = await call(w.socket, "agents-set", { as: "a", name: "a", description: "builds", duties: ["merge"] });
+    expect(set.ok && set.agent).toMatchObject({ description: "builds", duties: ["merge"], owner: { name: "lee" } });
+    const all = await call(w.socket, "agents", { as: "a" });
+    expect(all.ok && all.agents.map((e) => e.participant.name)).toEqual(["a", "b", "lee", "tee"]);
+    const one = await call(w.socket, "agents", { as: "a", name: "tee", long: true });
+    expect(one.ok && one.agents[0]!.home).toEqual({ machine: "box", harness: "t3", locator: "thread-1" });
+    const other = await call(w.socket, "agents-set", { as: "a", name: "b", description: "x" });
+    expect(!other.ok && other.error.code).toBe("conflict");
   });
 });

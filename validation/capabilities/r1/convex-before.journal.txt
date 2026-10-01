@@ -1,0 +1,27 @@
+   [32m✓[39m R0 schema [2m(1)[22m
+     [32m✓[39m accepts the system kind, ownerId, description, duties and idleSince, but promotion refuses system[32m 23[2mms[22m[39m
+   [32m✓[39m R0 registry (web) [2m(3)[22m
+     [32m✓[39m lists every participant as a registry entry, with presence staleness from the machine's heartbeat[32m 38[2mms[22m[39m
+     [32m✓[39m idleSince moves only on the transition to idle, not on repeated idle writes[32m 5[2mms[22m[39m
+     [32m✓[39m edits description and duties within their caps; empty clears[32m 5[2mms[22m[39m
+   [32m✓[39m R0 inbox (web) [2m(1)[22m
+     [32m✓[39m lists a person's inbox newest first with the unread count, and marks read by message or conversation[32m 18[2mms[22m[39m
+   [32m✓[39m R0 reminders (web) [2m(2)[22m
+     [32m✓[39m creates a reminder as a person, with its first fire one interval out and the default expiry[32m 15[2mms[22m[39m
+     [32m✓[39m lists, shows with fires and skips, and moves through pause, resume, blocked, done[32m 9[2mms[22m[39m
+   [32m✓[39m R0 alerts (web) [2m(1)[22m
+     [32m✓[39m lists incidents newest first, open only on request, and reads and sets the thresholds[32m 10[2mms[22m[39m
+   [32m✓[39m R0 review (Hazel) [2m(3)[22m
+     [32m✓[39m busySince moves only on the transition to busy (an ack counts only within the same busy stretch, R2)[32m 5[2mms[22m[39m
+     [32m✓[39m an alert carries its DM's conversation id, and a delivery subject's conversation too[32m 3[2mms[22m[39m
+     [32m✓[39m reminders.list carries each reminder's last fire and last skip[32m 4[2mms[22m[39m
+[31m     [31m×[31m requires a person as an agent's owner, stores it as ownerId, and refuses reserved names[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m creates @reminders and @alerts, backfills ownerId from the old owner string (else the default), and clears the string[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m refuses when a non-system participant holds a system name[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m @owner resolves to the sending agent's owner, and the message lands in their inbox, not as a delivery[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m @owner without an owner is refused; system participants can't be addressed[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m a system participant's message to a person goes to their inbox, and an agent's answer to a system request addresses no one[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m a retired person gets no inbox row[39m[32m 12[2mms[22m[39m
+[31m     [31m×[31m lists non-retired participants (homes only with long), shows one, and lets an agent edit only itself[39m[32m 2[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 8 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m8 failed[39m[22m[2m | [22m[1m[32m11 passed[39m[22m[90m (19)[39m

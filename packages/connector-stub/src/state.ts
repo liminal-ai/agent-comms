@@ -19,6 +19,9 @@ import {
   type ErrorCode,
   type Home,
   type HomedParticipant,
+  MAX_DESCRIPTION_CHARS,
+  MAX_DUTIES,
+  MAX_DUTY_CHARS,
   type MessageEnvelope,
   type MessageKind,
   type OutcomeBody,
@@ -26,6 +29,7 @@ import {
   type ParticipantRef,
   type ParticipantState,
   type PollItem,
+  type RegistryEntry,
   type Requests,
   type Responses,
   type SendResult,
@@ -44,6 +48,9 @@ export interface StubParticipant {
   ref: ParticipantRef;
   home: Home;
   state: ParticipantState;
+  /** The agent registry (capabilities pass). */
+  description?: string;
+  duties?: string[];
 }
 
 export interface StubConversation {
@@ -559,6 +566,51 @@ export class StubComms {
   presence(req: Requests["presence"]): Responses["presence"] {
     this.session(req.sessionId).status = req.status;
     return {};
+  }
+
+  // -------------------------------------------------------------------------
+  // The agent registry (capabilities pass): no owners or machine heartbeats in the stub.
+
+  agents(req: Requests["agents"]): Responses["agents"] {
+    this.actingAs(req.as);
+    const rows = req.name !== undefined ? [this.participant(req.name)] : this.record.participants.filter((p) => p.state !== "retired");
+    return { agents: [...rows].sort((a, b) => a.ref.name.localeCompare(b.ref.name)).map((p) => this.registryEntry(p, req.long ?? false)) };
+  }
+
+  agentsSet(req: Requests["agents-set"]): Responses["agents-set"] {
+    const me = this.actingAs(req.as);
+    const target = this.participant(req.name);
+    if (target.ref.id !== me.ref.id) throw new StubError("conflict", `@${me.ref.name} can set only its own registry entry`);
+    if (req.description !== undefined) {
+      const d = req.description.trim();
+      if (d.length > MAX_DESCRIPTION_CHARS || /[\r\n]/.test(d)) throw new StubError("bad_request", `a description is one line of at most ${MAX_DESCRIPTION_CHARS} characters`);
+      if (d) target.description = d;
+      else delete target.description;
+    }
+    if (req.duties !== undefined) {
+      const duties = req.duties.map((d) => d.trim());
+      if (duties.length > MAX_DUTIES || duties.some((d) => !d || d.length > MAX_DUTY_CHARS || /[\r\n]/.test(d))) {
+        throw new StubError("bad_request", `at most ${MAX_DUTIES} duties of one line, 1-${MAX_DUTY_CHARS} characters`);
+      }
+      if (duties.length > 0) target.duties = duties;
+      else delete target.duties;
+    }
+    this.changed();
+    return { agent: this.registryEntry(target, true) };
+  }
+
+  private registryEntry(p: StubParticipant, long: boolean): RegistryEntry {
+    const agent = p.ref.kind === "agent";
+    const session = agent ? [...this.sessions.values()].find((s) => s.participantId === p.ref.id && !s.superseded) : undefined;
+    return {
+      participant: p.ref,
+      state: p.state,
+      presence: agent ? { status: session?.status ?? "offline", at: this.now(), stale: false } : null,
+      ...(p.description ? { description: p.description } : {}),
+      ...(p.duties ? { duties: p.duties } : {}),
+      ...(agent ? { harness: p.home.harness } : {}),
+      ...(agent && long ? { home: p.home } : {}),
+    };
   }
 
   send(req: Requests["send"]): Responses["send"] {

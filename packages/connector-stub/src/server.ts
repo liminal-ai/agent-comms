@@ -84,12 +84,14 @@ export async function startStubServer(options: StubServerOptions): Promise<StubS
         return ok(comms.read(decoded.value as Requests["read"]));
       case "list":
         return ok(comms.list(decoded.value as Requests["list"]));
+      case "agents":
+        return ok(comms.agents(decoded.value as Requests["agents"]));
+      case "agents-set":
+        return ok(comms.agentsSet(decoded.value as Requests["agents-set"]));
       // The capabilities pass (docs/04-capabilities.md) is built in Convex and the connector only.
       case "await":
       case "ack":
       case "message-status":
-      case "agents":
-      case "agents-set":
       case "remind":
       case "reminders":
       case "reminder":

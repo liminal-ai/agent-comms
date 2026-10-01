@@ -24,8 +24,6 @@ export default defineSchema({
     /** Unique, addressable (`@name`). */
     name: v.string(),
     kind: participantKind,
-    /** Legacy owner name. Replaced by `ownerId` (R1: add, backfill, then drop this). */
-    owner: v.optional(v.string()),
     /** Agents: the person who owns them (`@owner` resolves to this; alerts go here). */
     ownerId: v.optional(v.id("participants")),
     state: participantState,

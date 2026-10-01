@@ -370,8 +370,6 @@ describe("capabilities R0", () => {
       ["await", { as: "mod-a", messageId: "m_1" }],
       ["ack", { as: "mod-a", messageId: "m_1" }],
       ["message-status", { as: "mod-a", messageId: "m_1" }],
-      ["agents", { as: "mod-a" }],
-      ["agents-set", { as: "mod-a", name: "mod-a", description: "x" }],
       ["remind", { as: "mod-a", target: "reed", text: "x", everyMs: 60_000 }],
       ["reminders", { as: "mod-a" }],
       ["reminder", { as: "mod-a", id: "r_1" }],
@@ -383,5 +381,26 @@ describe("capabilities R0", () => {
       assert.equal(r.status, 501, `${name}: ${JSON.stringify(r.body)}`);
       assert.equal(r.body.error.code, "unsupported");
     }
+  });
+});
+
+describe("capabilities R1", () => {
+  beforeEach(() => start());
+  afterEach(() => server.close());
+
+  it("lists the registry, shows one with its home, and lets an agent set only its own entry", async () => {
+    const all = await ok("agents", { as: "mod-a" });
+    const names = all.agents.map((e: Body) => e.participant.name);
+    assert.ok(names.includes("mod-a") && names.includes("reed"));
+    assert.equal(all.agents.find((e: Body) => e.participant.name === "mod-a").home, undefined);
+    const set = await ok("agents-set", { as: "mod-a", name: "mod-a", description: "a mod", duties: ["poll"] });
+    assert.deepEqual([set.agent.description, set.agent.duties], ["a mod", ["poll"]]);
+    const one = await ok("agents", { as: "mod-a", name: "mod-a", long: true });
+    assert.equal(one.agents.length, 1);
+    assert.deepEqual([one.agents[0].description, one.agents[0].home.machine], ["a mod", "box"]);
+    const other = await op("agents-set", { as: "mod-a", name: "reed", description: "x" });
+    assert.equal(other.body.error.code, "conflict");
+    const long = await op("agents-set", { as: "mod-a", name: "mod-a", description: "x".repeat(201) });
+    assert.equal(long.body.error.code, "bad_request");
   });
 });

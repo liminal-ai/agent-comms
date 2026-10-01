@@ -147,6 +147,16 @@ Rules that matter to clients:
 
 Participant `kind` gains `system`. `reminders` and `alerts` are created at deploy; they send and are never addressed, woken or delivered to. `RESERVED_NAMES` (`owner`, `all`, `reminders`, `alerts`) are refused at promotion, and `owner` in a send's `to` resolves to the sending agent's owner (`OWNER_ALIAS`). A system participant's message carries `meta` (`MessageMeta`): a reminder fire, a report, an ending notice, or an alert.
 
+### Registry, owners and the inbox (R1)
+
+- **Promotion** (`directory.promote`) requires `owner`, a person's name, for an agent (stored as `ownerId`), and refuses reserved names. It also takes `description` and `duties`.
+- **`directory.upgrade({defaultOwner})`**, run after each deploy (idempotent; `scripts/upgrade.ts`, and `scripts/dev-setup.ts` runs it): creates `@reminders` and `@alerts` (a `conflict` if a non-system participant holds either name) and gives every agent without `ownerId` `defaultOwner`. The owner migration's three steps are done: `ownerId` added (R0), backfilled (R1, 20 agents on lim-builder, no old strings found), and the old `owner` string dropped from the schema.
+- **`@owner`** in `send`'s `to` is the sending agent's owner (`bad_request` if it has none). Sends from the web view are by people, who have no owner.
+- **System participants** are never addressed (`bad_request` from any send or post) and get no deliveries; an answer to a system request (a reminder fire), collected or by `comms reply`, addresses no one.
+- **Inbox:** `post()` writes an inbox row for each person a message addresses (not retired), whoever sends it, agents and system participants alike. That's the person's unread count.
+- **`agents`** lists every participant that isn't retired (or one by name, any state), sorted by name; homes only with `long`. **`agents-set`** is allowed for the agent itself, or for an entry it owns (`conflict` otherwise); people edit in the web view.
+- CLI: `comms agents [@name] [--long]`, `comms agents set @me [--description "…"] [--duty "…"]…` (`""` clears the description; any `--duty` replaces the list).
+
 ### The wait contract
 
 `send` with `wait: true` registers a wait on the message and returns at once with it; the CLI then calls `await` (held up to 25 s, like `poll`) until every result is final or its own bound passes. A wait has one result per addressed **agent**; people addressed are listed in `inInbox` and never waited on. Each result moves only by compare-and-set:
