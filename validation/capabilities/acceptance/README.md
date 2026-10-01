@@ -4,7 +4,7 @@ On the installed services (local Convex, the `agent-comms-connector` unit from `
 
 | Item | Script / journal | Result |
 |---|---|---|
-| 2 | `hazel/item2-term-a-to-t3/` (term-a → @t3-native); T3 → term-a: see below | term-a → T3 passes |
+| 2 | `hazel/item2-term-a-to-t3/` (term-a → @t3-native); `item2-t3-to-term-a.journal.txt` (@t3-codex, a Codex T3 agent, ran `comms send @term-a` in its own turn) | PASS both ways: term-a got "42" from t3-native (Hazel); t3-codex got "term-a pong" from term-a in the call, exit 0, result `acknowledged` (so no fallback, no extra turn) |
 | 3 | `a-waits` | PASS: exit 4 at the bound with the id; the late answer arrives as a normal answer; `comms status` shows it (result `expired`) |
 | 4 | `a-waits` | PASS: B's send to a waiting A doesn't wait and says so; both complete. Two simultaneous sends: exactly one waits. The cycle A→B→C→A closes in about 1 s, with no bound waited out |
 | 5 | `a-waits` | PASS: a group wait returns both agents' answers; Lee is listed "in their inbox" and has it unread |

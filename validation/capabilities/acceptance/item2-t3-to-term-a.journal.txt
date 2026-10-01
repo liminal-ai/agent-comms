@@ -1,0 +1,18 @@
+2026-10-01T20:01:53Z
+$ comms send --as cedar-demo --wait 9m @t3-codex "<instructions>"
+sent jn76k8t7jwx523h06m094kmnrn8fef05 (#1 in j576z5q2dtyfk6td1jxzccaeds8ffgn1), waiting up to 9m for @t3-codex
+@t3-codex answered (jn7bfmc2ebqhj008ghnd5e9rwn8fek41):
+  Full output:
+  ```text
+  sent jn75ymy411nj46twmgc8np4xqn8fe96q (#1 in j577vvp1qmb9ngjbt76rtcta798ffbg3), waiting up to 5m for @term-a
+  @term-a answered (jn7bwfsdyvywkfyfd6axwe21tx8ffjhg):
+    term-a pong
+  ```
+  
+  Exit code: 0
+exit 0
+--- 2026-10-01T20:02:19Z status of t3-codex's send
+jn75ymy411nj46twmgc8np4xqn8fe96q (#1 in j577vvp1qmb9ngjbt76rtcta798ffbg3) from @t3-codex: Acceptance item 2 from t3-codex: please reply with exactly: term-a pong
+@term-a: replied · answered: term-a pong
+wait: answered 1 of 1, ended
+[{"recipient":"term-a","state":"acknowledged","delivery":"replied"}]
