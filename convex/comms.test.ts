@@ -122,6 +122,30 @@ describe("send", () => {
   });
 });
 
+describe("fix pass 1.10", () => {
+  it("1.10 send, reply, web post and group titles over the caps are rejected with a clear error", async () => {
+    const t = await setup();
+    const P = await import("@agent-comms/protocol");
+    const long = "x".repeat(P.MAX_TEXT_CHARS + 1);
+    const g = await group(t, ["lee", "a", "b"]);
+    const errorOf = async (p: Promise<unknown>) => {
+      try {
+        await p;
+      } catch (e) {
+        return e instanceof ConvexError ? (e.data as { code: string; message: string }) : { code: "plain", message: String(e) };
+      }
+      return { code: "none", message: "" };
+    };
+    const send = await errorOf(t.mutation(api.connector.send, { machine: m1, as: "a", to: ["b"], text: long }));
+    expect(send.code).toBe("bad_request");
+    expect(send.message).toMatch(new RegExp(String(P.MAX_TEXT_CHARS)));
+    const post = await errorOf(t.mutation(api.conversations.postAs, { adminToken: ADMIN, as: "lee", conversationId: g, to: [], text: long }));
+    expect(post.code).toBe("bad_request");
+    const title = await errorOf(t.mutation(api.conversations.createGroup, { adminToken: ADMIN, title: "t".repeat(1000), members: ["lee", "a"] }));
+    expect(title.code).toBe("bad_request");
+  });
+});
+
 describe("claims", () => {
   it("claims with a lease and returns the full delivery with bounded history", async () => {
     const t = await setup();

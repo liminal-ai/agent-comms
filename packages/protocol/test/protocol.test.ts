@@ -144,3 +144,13 @@ describe("contract changes from Hazel's review", () => {
     assert.deepEqual(r, { ok: true, value: { sessionId: "s", deliveryId: "d", found: "yes", turnId: "t", turn: "completed" } });
   });
 });
+
+describe("fix pass 1.10", () => {
+  it("1.10 message text over the cap is refused with the limit in the error", async () => {
+    const { MAX_TEXT_CHARS } = await import("../src/index.ts");
+    assert.ok(MAX_TEXT_CHARS <= 32_000, `message cap ${MAX_TEXT_CHARS} is too large for one injection`);
+    const r = decodeRequest("send", { as: "cedar", to: ["reed"], text: "x".repeat(MAX_TEXT_CHARS + 1) });
+    assert.equal(r.ok, false);
+    assert.match(!r.ok ? r.error : "", new RegExp(`at most ${MAX_TEXT_CHARS}`));
+  });
+});
