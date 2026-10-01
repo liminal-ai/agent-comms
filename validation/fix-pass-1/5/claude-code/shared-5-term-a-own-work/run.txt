@@ -1,0 +1,5 @@
+case: shared-5-term-a-own-work
+started: 2026-10-01T14:17:25Z
+ended: 2026-10-01T14:18:37Z
+exit: 0
+command: /srv/agents/hazel/bin/acc2-case5
