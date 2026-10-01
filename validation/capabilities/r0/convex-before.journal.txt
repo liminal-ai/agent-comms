@@ -1,0 +1,18 @@
+[31m     [31m×[31m accepts the system kind, ownerId, description, duties and idleSince, but promotion refuses system[39m[32m 42[2mms[22m[39m
+[31m     [31m×[31m lists every participant as a registry entry, with presence staleness from the machine's heartbeat[39m[32m 26[2mms[22m[39m
+[31m     [31m×[31m idleSince moves only on the transition to idle, not on repeated idle writes[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m edits description and duties within their caps; empty clears[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m lists a person's inbox newest first with the unread count, and marks read by message or conversation[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m creates a reminder as a person, with its first fire one interval out and the default expiry[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m lists, shows with fires and skips, and moves through pause, resume, blocked, done[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m lists incidents newest first, open only on request, and reads and sets the thresholds[39m[32m 3[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 8 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[41m[1m FAIL [22m[49m [30m[42m convex [49m[39m convex/capabilities.test.ts[2m > [22mR0 schema[2m > [22maccepts the system kind, ownerId, description, duties and idleSince, but promotion refuses system
+[41m[1m FAIL [22m[49m [30m[42m convex [49m[39m convex/capabilities.test.ts[2m > [22mR0 registry (web)[2m > [22mlists every participant as a registry entry, with presence staleness from the machine's heartbeat
+[41m[1m FAIL [22m[49m [30m[42m convex [49m[39m convex/capabilities.test.ts[2m > [22mR0 registry (web)[2m > [22midleSince moves only on the transition to idle, not on repeated idle writes
+[41m[1m FAIL [22m[49m [30m[42m convex [49m[39m convex/capabilities.test.ts[2m > [22mR0 registry (web)[2m > [22medits description and duties within their caps; empty clears
+[41m[1m FAIL [22m[49m [30m[42m convex [49m[39m convex/capabilities.test.ts[2m > [22mR0 inbox (web)[2m > [22mlists a person's inbox newest first with the unread count, and marks read by message or conversation
+[41m[1m FAIL [22m[49m [30m[42m convex [49m[39m convex/capabilities.test.ts[2m > [22mR0 reminders (web)[2m > [22mcreates a reminder as a person, with its first fire one interval out and the default expiry
+[41m[1m FAIL [22m[49m [30m[42m convex [49m[39m convex/capabilities.test.ts[2m > [22mR0 reminders (web)[2m > [22mlists, shows with fires and skips, and moves through pause, resume, blocked, done
+[41m[1m FAIL [22m[49m [30m[42m convex [49m[39m convex/capabilities.test.ts[2m > [22mR0 alerts (web)[2m > [22mlists incidents newest first, open only on request, and reads and sets the thresholds
+[2m      Tests [22m [1m[31m8 failed[39m[22m[90m (8)[39m

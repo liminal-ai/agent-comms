@@ -1,0 +1,33 @@
+    not ok 1 - answers the capabilities operations unsupported (501) until they're built, never silently
+      ---
+      duration_ms: 30005.634535
+      type: 'test'
+      location: '/srv/agents/cedar/agent-comms/packages/connector-stub/test/stub.test.ts:368:3'
+--
+not ok 5 - capabilities R0
+  ---
+  duration_ms: 30008.145471
+  type: 'suite'
+  location: '/srv/agents/cedar/agent-comms/packages/connector-stub/test/stub.test.ts:364:1'
+--
+# pass 20
+# fail 0
+# cancelled 1
+# skipped 0
+# todo 0
+# duration_ms 31105.343589
+    [90m288|[39m     for (const [name, body] of cases) {
+    [90m289|[39m       const r = await call(w.socket, name as never, body as never);
+    [90m290|[39m       expect(!r.ok && r.error.code, name).toBe("unsupported");
+    [90m   |[39m                                           [31m^[39m
+    [90m291|[39m     }
+    [90m292|[39m     const list = await call(w.socket, "list", { as: "a" });
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[33m1 skipped[39m[90m (2)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m14 skipped[39m[90m (15)[39m
+[2m   Start at [22m 13:25:43
+[2m   Duration [22m 533ms[2m (transform 56%, import 31%, tests 12%, worker 1%)[22m
+

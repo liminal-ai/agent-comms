@@ -268,3 +268,28 @@ describe("fix pass 3.1", () => {
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 });
+
+describe("capabilities R0", () => {
+  it("answers the capabilities operations unsupported (501) until they're built; a waiting send isn't sent unwaited", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const cases: [string, unknown][] = [
+      ["await", { as: "a", messageId: "m_1" }],
+      ["ack", { as: "a", messageId: "m_1" }],
+      ["message-status", { as: "a", messageId: "m_1" }],
+      ["agents", { as: "a" }],
+      ["agents-set", { as: "a", name: "a", description: "x" }],
+      ["remind", { as: "a", target: "b", text: "x", everyMs: 60_000 }],
+      ["reminders", { as: "a" }],
+      ["reminder", { as: "a", id: "r_1" }],
+      ["reminder-update", { as: "a", id: "r_1", action: "pause" }],
+      ["send", { as: "a", to: ["b"], text: "x", wait: true }],
+    ];
+    for (const [name, body] of cases) {
+      const r = await call(w.socket, name as never, body as never);
+      expect(!r.ok && r.error.code, name).toBe("unsupported");
+    }
+    const list = await call(w.socket, "list", { as: "a" });
+    expect(list.ok && list.conversations).toHaveLength(0);
+  });
+});

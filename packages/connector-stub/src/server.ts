@@ -76,6 +76,7 @@ export async function startStubServer(options: StubServerOptions): Promise<StubS
       case "presence":
         return ok(comms.presence(decoded.value as Requests["presence"]));
       case "send":
+        if ((decoded.value as Requests["send"]).wait) return fail(res, path, body, "unsupported", "send --wait isn't supported by the stub");
         return ok(comms.send(decoded.value as Requests["send"]));
       case "reply":
         return ok(comms.reply(decoded.value as Requests["reply"]));
@@ -83,6 +84,21 @@ export async function startStubServer(options: StubServerOptions): Promise<StubS
         return ok(comms.read(decoded.value as Requests["read"]));
       case "list":
         return ok(comms.list(decoded.value as Requests["list"]));
+      // The capabilities pass (docs/04-capabilities.md) is built in Convex and the connector only.
+      case "await":
+      case "ack":
+      case "message-status":
+      case "agents":
+      case "agents-set":
+      case "remind":
+      case "reminders":
+      case "reminder":
+      case "reminder-update":
+        return fail(res, path, body, "unsupported", `${op} isn't supported by the stub`);
+      default: {
+        const unhandled: never = op;
+        return fail(res, path, body, "unknown_op", `unknown operation ${String(unhandled)}`);
+      }
     }
   };
 

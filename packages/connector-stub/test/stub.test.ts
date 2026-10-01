@@ -360,3 +360,28 @@ describe("fix pass 3.7", () => {
     assert.deepEqual(onlyDelivery(items).message.attachments, [{ name: "a.txt", url: "file:///tmp/a.txt" }]);
   });
 });
+
+describe("capabilities R0", () => {
+  beforeEach(() => start());
+  afterEach(() => server.close());
+
+  it("answers the capabilities operations unsupported (501) until they're built, never silently", async () => {
+    const cases: [string, unknown][] = [
+      ["await", { as: "mod-a", messageId: "m_1" }],
+      ["ack", { as: "mod-a", messageId: "m_1" }],
+      ["message-status", { as: "mod-a", messageId: "m_1" }],
+      ["agents", { as: "mod-a" }],
+      ["agents-set", { as: "mod-a", name: "mod-a", description: "x" }],
+      ["remind", { as: "mod-a", target: "reed", text: "x", everyMs: 60_000 }],
+      ["reminders", { as: "mod-a" }],
+      ["reminder", { as: "mod-a", id: "r_1" }],
+      ["reminder-update", { as: "mod-a", id: "r_1", action: "pause" }],
+      ["send", { as: "mod-a", to: ["reed"], text: "x", wait: true }],
+    ];
+    for (const [name, body] of cases) {
+      const r = await op(name, body);
+      assert.equal(r.status, 501, `${name}: ${JSON.stringify(r.body)}`);
+      assert.equal(r.body.error.code, "unsupported");
+    }
+  });
+});

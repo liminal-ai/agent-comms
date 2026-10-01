@@ -74,10 +74,23 @@ export const runConnector = (options: ConnectorOptions) =>
       outcome: (req) => sessions.outcome(req),
       "check-result": (req) => sessions.checkResult(req),
       presence: (req) => sessions.presence(req),
-      send: (req) => run(api.send(req)),
+      send: (req) => {
+        // Never send a waiting send unwaited: the caller would read silence as no answer.
+        if (req.wait) throw notYet("send --wait");
+        return run(api.send(req));
+      },
       reply: (req) => run(api.reply(req)),
       read: (req) => run(api.read(req)),
       list: (req) => run(api.list(req)),
+      await: () => Promise.reject(notYet("await")),
+      ack: () => Promise.reject(notYet("ack")),
+      "message-status": () => Promise.reject(notYet("message-status")),
+      agents: () => Promise.reject(notYet("agents")),
+      "agents-set": () => Promise.reject(notYet("agents-set")),
+      remind: () => Promise.reject(notYet("remind")),
+      reminders: () => Promise.reject(notYet("reminders")),
+      reminder: () => Promise.reject(notYet("reminder")),
+      "reminder-update": () => Promise.reject(notYet("reminder-update")),
     };
 
     const loopback = yield* Effect.acquireRelease(
@@ -142,3 +155,8 @@ export const runConnector = (options: ConnectorOptions) =>
     );
     return { sessions } satisfies RunningConnector;
   });
+
+/** Capabilities-pass operations not built yet (docs/04-capabilities.md, R1 to R4). */
+function notYet(op: string): LoopbackError {
+  return new LoopbackError("unsupported", `${op} isn't supported by this connector yet`);
+}

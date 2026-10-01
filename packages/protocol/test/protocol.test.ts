@@ -48,7 +48,8 @@ describe("decodeRequest", () => {
   it("knows every operation", () => {
     assert.deepEqual(OPS, [
       "status", "register", "unregister", "poll", "delivered", "outcome",
-      "check-result", "presence", "send", "reply", "read", "list",
+      "check-result", "presence", "send", "reply", "await", "ack", "message-status",
+      "agents", "agents-set", "remind", "reminders", "reminder", "reminder-update", "read", "list",
     ]);
     assert.equal(isOp("send"), true);
     assert.equal(isOp("toString"), false);
