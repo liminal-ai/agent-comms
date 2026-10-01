@@ -88,7 +88,7 @@ The adapter for standalone Claude Code terminal sessions: it delivers comms mess
   - `turn.complete` carries `turnId`, `reason` (`answer | aborted | refusal | error`) and the answer text in **`answer`**. With an `agentId` it is a subagent's turn.
   - A `task-notification` row carries its task: `id` (a subagent's `agentId`) and, when the notification includes it, `toolUseId`, the call that started the task.
 - **`$.prompt.submit({ text })`** wakes an idle session immediately. On a busy session it waits until the turn ends, then runs as its own turn. There's no mid-stream insertion.
-- **`$.http.fetch`** takes `socketPath` for a Unix socket, reads the whole body, and has **no timeout option**. `$.clock.every`, `$.env.get`, `$.fs` (confined to the session's folder) and `$.session.id()` are available.
+- **`$.http.fetch`** takes `socketPath` for a Unix socket, reads the whole body, and has **no timeout option**. `$.clock.every`, `$.env.get`, `$.fs` (not confined to the session's folder on 2.1.286, despite earlier notes) and `$.session.id()` are available.
 - **Configuration, verified** (Reed, `/scratch/reed/modflag`): the mod read `AGENT_COMMS_PARTICIPANT` with `$.env.get`, and reached a socket under `/run/user/<uid>/` with `socketPath`, outside the session folder. No token file is needed (see 01, M0).
 
 **Build against the stub connector:**

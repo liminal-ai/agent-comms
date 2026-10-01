@@ -47,7 +47,7 @@ Write in `packages/protocol`:
    - It identifies the source; it doesn't ask the model to treat the message as the user's authority. Normal permission checks apply to anything the message asks for. Wrenn's spike saw Sonnet refuse bare `[from: …]` injections until the source was explicit; start from that finding.
 4. **The loopback protocol** between the connector and local clients (the mod and the CLI). HTTP over a Unix socket at a fixed per-user path: `$XDG_RUNTIME_DIR/agent-comms/connector.sock` on Linux, `~/.agent-comms/connector.sock` on macOS, in a directory only the user can open (0700).
    - The connector creates that directory with mode 0700, and refuses to start if it already exists with wider permissions or another owner. On macOS there's no runtime directory doing this for us. Convex machine credentials are separate and unchanged.
-   - **No token.** Owner-only directory permissions give the same protection: any process that could read a token file could also open the socket. And the mod can't read files outside the session's folder. This is the same trusted-machine footing as `--as`.
+   - **No token.** Owner-only directory permissions give the same protection: any process that could read a token file could also open the socket. (Corrected 2026-09-30: `$.fs` is not confined to the session folder on Claude Code 2.1.286, so this isn't about what the mod can read.) This is the same trusted-machine footing as `--as`.
    - Verified (Reed, `/scratch/reed/modflag`): a mod reads `AGENT_COMMS_PARTICIPANT` with `$.env.get`, and `$.http.fetch` with `socketPath` reaches a socket under `/run/user/<uid>/`, outside the session folder.
    
    Operations:
