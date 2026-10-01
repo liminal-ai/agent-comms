@@ -1,8 +1,10 @@
 # Mod validation: Claude Code 2.1.286 against the connector stub (2026-09-30)
 
 Interactive Claude Code sessions in tmux on lim-builder (Sonnet 5.5 unless noted), the stub on a
-private socket, requests posted as `lee`. Evidence: the stub's request/response record and the
-mod's decision log (paths in PROGRESS-t3.md); summaries below.
+private socket, requests posted as `lee`. Evidence: the stub's request/response record, final state
+and fixture in `validation/mod-2026-09-30/` (`record.jsonl.gz`, `state.json`, `fixture.json`);
+summaries below. The mod's decision logs from these runs were not kept (the log was rewritten each
+session until fix pass 1). Fix pass 1 evidence is in `validation/fix-pass-1/claude-code/`.
 
 | Acceptance check | Result |
 |---|---|
@@ -10,8 +12,8 @@ mod's decision log (paths in PROGRESS-t3.md); summaries below.
 | Idle terminal woken by a delivery; answer reported as replied | Pass: `51` collected, `delivered` then `replied` |
 | Delivery during a long turn runs as the next turn and is matched | Pass: waited behind a 40 s turn, ran as its own turn, `Paris` collected |
 | Background shell task + helper subagent: collected normally; helper's answer never reported | Pass: a background shell's notification inside our turn was linked by its row (`toolUseId`) and the answer collected (`Background: 5, helper (9×9): 81, foreground: 6.`); subagent turns (`agentId`) never reported |
-| Do task notifications carry `toolUseId` in practice? | Yes, on their transcript rows (background shell and helper subagent). Rows are drawn only on a surface; headless `-p` can't link, so that case is ambiguous |
-| Lee types into the terminal while an injected turn runs | The typed text **enters our turn** (answered together). Delivery `ambiguous` (`origin: composer`); the mod's notice led the agent to `comms reply`, completing it |
+| Do task notifications carry `toolUseId` in practice? | Yes, on their transcript rows (background shell and helper subagent), and in the notification text itself (`<tool-use-id>`; a helper's `<task-id>` is its agent id). Since fix pass 1 the mod links by the text, so headless `-p` sessions link too |
+| Lee types into the terminal while an injected turn runs | The typed text **enters our turn** (answered together). Delivery `ambiguous` (`origin: composer`) in both runs (`d_3`, `d_4`). In `d_4` the mod's notice led the agent to `comms reply`, completing it; `d_3` predates the notice and stayed `ambiguous` |
 | An answer delivered in wakes the agent; nothing next is collected | Pass: `delivered` only, no outcome; the agent sent nothing back |
 | Connector restarts mid-session: reconnects, nothing run twice | Pass: stub restarted mid-turn; `unknown_session` → re-register → check `yes/running` → `replied`; submitted once |
 | A slow connector never leads to overlapping polls | Pass: 0 `poll_in_progress` over 69 live polls; unit test with a 1 s hold |

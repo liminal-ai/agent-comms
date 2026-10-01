@@ -1,0 +1,10 @@
+{
+  "machine": "lim-builder",
+  "participants": [
+    { "name": "lee", "kind": "human", "home": { "harness": "web" } },
+    { "name": "mod-a" },
+    { "name": "mod-b" }
+  ],
+  "conversations": [],
+  "messages": []
+}

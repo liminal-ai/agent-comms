@@ -290,7 +290,19 @@ export function parseTaskNotification(text: string): { taskId?: string; toolUseI
 
 const HAND_BACK = /^<agent-message from="([A-Za-z0-9_-]{1,128})">\n\[Subagent hand-back\]/;
 
-/** The subagent a hand-back prompt comes from: exactly one frame, at the start. */
+/**
+ * The subagent a hand-back prompt comes from: exactly one frame, at the start.
+ *
+ * Why the text is parsed: Claude Code 2.1.286 gives the hand-back no structured
+ * sender id. Its `prompt.submit` origin is a bare `peer`; neither `session.send`
+ * nor `session.receive` fires for it; and the transcript row's `from` holds the
+ * subagent's type (`general-purpose`), not its id (checked live, 2026-10-01). The
+ * frame is the engine's own: it opens the prompt at column zero, and the engine
+ * indents every line of the report inside it, so a frame-like line in a report is
+ * never at column zero. Another session's message is framed differently. So only
+ * a prompt that starts with the frame, carries exactly one, and names one of our
+ * subagents counts as ours; a message that merely mentions our helper's id doesn't.
+ */
 export function parseHandBack(text: string): string | undefined {
   const match = HAND_BACK.exec(text);
   if (!match) return undefined;

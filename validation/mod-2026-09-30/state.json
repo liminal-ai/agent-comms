@@ -1,0 +1,2076 @@
+{
+  "machine": "lim-builder",
+  "counters": {
+    "conversation": 2,
+    "message": 65,
+    "delivery": 33,
+    "claim": 33
+  },
+  "participants": [
+    {
+      "ref": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "home": {
+        "machine": "lim-builder",
+        "harness": "web",
+        "locator": "lee"
+      },
+      "state": "active"
+    },
+    {
+      "ref": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "home": {
+        "machine": "lim-builder",
+        "harness": "claude-code",
+        "locator": "mod-a"
+      },
+      "state": "active"
+    },
+    {
+      "ref": {
+        "id": "p_mod-b",
+        "name": "mod-b",
+        "kind": "agent"
+      },
+      "home": {
+        "machine": "lim-builder",
+        "harness": "claude-code",
+        "locator": "mod-b"
+      },
+      "state": "active"
+    }
+  ],
+  "conversations": [
+    {
+      "ref": {
+        "id": "c_1",
+        "kind": "dm"
+      },
+      "members": [
+        {
+          "participantId": "p_lee",
+          "readSeq": 61
+        },
+        {
+          "participantId": "p_mod-a",
+          "readSeq": 62
+        }
+      ],
+      "lastSeq": 62,
+      "lastAt": 1790808710251
+    },
+    {
+      "ref": {
+        "id": "c_2",
+        "kind": "dm"
+      },
+      "members": [
+        {
+          "participantId": "p_mod-a",
+          "readSeq": 3
+        },
+        {
+          "participantId": "p_mod-b",
+          "readSeq": 3
+        }
+      ],
+      "lastSeq": 3,
+      "lastAt": 1790808816317
+    }
+  ],
+  "messages": [
+    {
+      "id": "m_1",
+      "conversationId": "c_1",
+      "seq": 1,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "What is 17 * 3? Reply with just the number.",
+      "attachments": [],
+      "createdAt": 1790807825791,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_2",
+      "conversationId": "c_1",
+      "seq": 2,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_1",
+      "text": "51",
+      "attachments": [],
+      "createdAt": 1790807826902,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_1"
+    },
+    {
+      "id": "m_3",
+      "conversationId": "c_1",
+      "seq": 3,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "What is the capital of France? One word.",
+      "attachments": [],
+      "createdAt": 1790807868865,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_4",
+      "conversationId": "c_1",
+      "seq": 4,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_3",
+      "text": "Paris",
+      "attachments": [],
+      "createdAt": 1790807901909,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_2"
+    },
+    {
+      "id": "m_5",
+      "conversationId": "c_1",
+      "seq": 5,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Please run this shell command in the foreground: python3 -c \"import time; time.sleep(25); print(7)\" and then tell me what it printed.",
+      "attachments": [],
+      "createdAt": 1790807922048,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_6",
+      "conversationId": "c_1",
+      "seq": 6,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Please run this shell command in the foreground: python3 -c \"import time; time.sleep(20); print(9)\" and then tell me what it printed.",
+      "attachments": [],
+      "createdAt": 1790808027107,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_7",
+      "conversationId": "c_1",
+      "seq": 7,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_6",
+      "text": "The command ran in the foreground (after the 20-second sleep) and printed: 9",
+      "attachments": [],
+      "createdAt": 1790808057331,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_8",
+      "conversationId": "c_1",
+      "seq": 8,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Two things, in parallel. (1) Start this shell command in the background (run_in_background): python3 -c \"import time; time.sleep(15); print(42)\". (2) Launch a helper subagent in the background to answer: what is 6 times 7? Wait until both have finished (you will be notified), then give me one final reply with both results.",
+      "attachments": [],
+      "createdAt": 1790808113040,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_9",
+      "conversationId": "c_1",
+      "seq": 9,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_8",
+      "text": "Both are running in the background (the 15s shell command and the 6×7 helper). I'll send the combined reply once both notify me.",
+      "attachments": [],
+      "createdAt": 1790808116574,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_5"
+    },
+    {
+      "id": "m_10",
+      "conversationId": "c_1",
+      "seq": 10,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Two things, in parallel. (1) Start this shell command in the background (run_in_background): python3 -c \"import time; time.sleep(15); print(99)\". (2) Launch a helper subagent in the background to answer: what is 8 times 7? Wait until both have finished (you will be notified), then give me one final reply with both results.",
+      "attachments": [],
+      "createdAt": 1790808232275,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_11",
+      "conversationId": "c_1",
+      "seq": 11,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_10",
+      "text": "Both are running in the background; I'll reply once they finish.",
+      "attachments": [],
+      "createdAt": 1790808235310,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_6"
+    },
+    {
+      "id": "m_12",
+      "conversationId": "c_1",
+      "seq": 12,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_10",
+      "text": "Both finished. (1) Shell command: printed 99, exit code 0. (2) Helper subagent: 8 times 7 = 56.",
+      "attachments": [],
+      "createdAt": 1790808252103,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_13",
+      "conversationId": "c_1",
+      "seq": 13,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Do these in order. First start this in the background (run_in_background): python3 -c \"import time; time.sleep(3); print(5)\". Then, without waiting for it, run this in the foreground: python3 -c \"import time; time.sleep(15); print(6)\". Then use a helper subagent (foreground) to compute 9 times 9. Finally reply with all three results in one line.",
+      "attachments": [],
+      "createdAt": 1790808313096,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_14",
+      "conversationId": "c_1",
+      "seq": 14,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_13",
+      "text": "The helper subagent launched asynchronously, so I'm waiting for its result before replying.",
+      "attachments": [],
+      "createdAt": 1790808336308,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_7"
+    },
+    {
+      "id": "m_15",
+      "conversationId": "c_1",
+      "seq": 15,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_13",
+      "text": "Background: 5 | Foreground: 6 | Helper (9x9): 81",
+      "attachments": [],
+      "createdAt": 1790808338038,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_16",
+      "conversationId": "c_1",
+      "seq": 16,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Do these in order. First start this in the background (run_in_background): python3 -c \"import time; time.sleep(3); print(5)\". Then use a helper subagent to compute 9 times 9 and wait for its answer. Then run this in the foreground: python3 -c \"import time; time.sleep(12); print(6)\". Finally reply with all three results in one line.",
+      "attachments": [],
+      "createdAt": 1790808385043,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_17",
+      "conversationId": "c_1",
+      "seq": 17,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_16",
+      "text": "Background: 5, helper (9×9): 81, foreground: 6.",
+      "attachments": [],
+      "createdAt": 1790808407630,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_8"
+    },
+    {
+      "id": "m_18",
+      "conversationId": "c_1",
+      "seq": 18,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "You must use the Agent tool for this: spawn a general-purpose helper subagent that runs the shell command `echo helper-ran-ok` and reports its output. Wait for the helper to finish, then reply with exactly: FINAL <the helper output>.",
+      "attachments": [],
+      "createdAt": 1790808427534,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_19",
+      "conversationId": "c_1",
+      "seq": 19,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_18",
+      "text": "The helper is still running. I'm waiting for its completion notification before replying.",
+      "attachments": [],
+      "createdAt": 1790808433973,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_9"
+    },
+    {
+      "id": "m_20",
+      "conversationId": "c_1",
+      "seq": 20,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_18",
+      "text": "FINAL helper-ran-ok",
+      "attachments": [],
+      "createdAt": 1790808437097,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_21",
+      "conversationId": "c_1",
+      "seq": 21,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Run this in the foreground: python3 -c \"import time; time.sleep(20); print(314)\" and reply with what it printed.",
+      "attachments": [],
+      "createdAt": 1790808500055,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_22",
+      "conversationId": "c_1",
+      "seq": 22,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_21",
+      "text": "It printed 314.",
+      "attachments": [],
+      "createdAt": 1790808523464,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_10"
+    },
+    {
+      "id": "m_23",
+      "conversationId": "c_2",
+      "seq": 1,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-b",
+          "name": "mod-b",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "What is 12 + 30?",
+      "attachments": [],
+      "createdAt": 1790808542531,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_24",
+      "conversationId": "c_2",
+      "seq": 2,
+      "sender": {
+        "id": "p_mod-b",
+        "name": "mod-b",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_23",
+      "text": "42",
+      "attachments": [],
+      "createdAt": 1790808542563,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_25",
+      "conversationId": "c_1",
+      "seq": 23,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "What is 144 divided by 12? Reply with just the number.",
+      "attachments": [],
+      "createdAt": 1790808638474,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_26",
+      "conversationId": "c_1",
+      "seq": 24,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_25",
+      "text": "12",
+      "attachments": [],
+      "createdAt": 1790808639534,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_13"
+    },
+    {
+      "id": "m_27",
+      "conversationId": "c_1",
+      "seq": 25,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "What is the capital of Japan? One word.",
+      "attachments": [],
+      "createdAt": 1790808640555,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_28",
+      "conversationId": "c_1",
+      "seq": 26,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_27",
+      "text": "Tokyo",
+      "attachments": [],
+      "createdAt": 1790808641788,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_14"
+    },
+    {
+      "id": "m_29",
+      "conversationId": "c_1",
+      "seq": 27,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Translate 'good morning' into Spanish.",
+      "attachments": [],
+      "createdAt": 1790808642642,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_30",
+      "conversationId": "c_1",
+      "seq": 28,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_29",
+      "text": "Buenos días",
+      "attachments": [],
+      "createdAt": 1790808643743,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_15"
+    },
+    {
+      "id": "m_31",
+      "conversationId": "c_1",
+      "seq": 29,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "How many files are in your current working directory? Check with a shell command.",
+      "attachments": [],
+      "createdAt": 1790808644775,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_32",
+      "conversationId": "c_1",
+      "seq": 30,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_31",
+      "text": "There are 0 files in my current working directory (`/srv/agents/hazel/mod-work/moda`). The directory is empty, including hidden files.",
+      "attachments": [],
+      "createdAt": 1790808647365,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_16"
+    },
+    {
+      "id": "m_33",
+      "conversationId": "c_1",
+      "seq": 31,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "In one sentence, what is a hash map?",
+      "attachments": [],
+      "createdAt": 1790808648919,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_34",
+      "conversationId": "c_1",
+      "seq": 32,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_33",
+      "text": "A hash map is a data structure that stores key-value pairs and uses a hash function to turn each key into an index, which gives fast average-case lookup, insertion, and deletion.",
+      "attachments": [],
+      "createdAt": 1790808650182,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_17"
+    },
+    {
+      "id": "m_35",
+      "conversationId": "c_1",
+      "seq": 33,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Reply with the single word: pong",
+      "attachments": [],
+      "createdAt": 1790808650991,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_36",
+      "conversationId": "c_1",
+      "seq": 34,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_35",
+      "text": "pong",
+      "attachments": [],
+      "createdAt": 1790808652167,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_18"
+    },
+    {
+      "id": "m_37",
+      "conversationId": "c_1",
+      "seq": 35,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "What day of the week was 2026-01-01?",
+      "attachments": [],
+      "createdAt": 1790808653064,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_38",
+      "conversationId": "c_1",
+      "seq": 36,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_37",
+      "text": "Thursday.",
+      "attachments": [],
+      "createdAt": 1790808654056,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_19"
+    },
+    {
+      "id": "m_39",
+      "conversationId": "c_1",
+      "seq": 37,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Create a file named notes.txt in your working directory containing the word hello, then confirm.",
+      "attachments": [],
+      "createdAt": 1790808655151,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_40",
+      "conversationId": "c_1",
+      "seq": 38,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_39",
+      "text": "Created `/srv/agents/hazel/mod-work/moda/notes.txt` containing \"hello\".",
+      "attachments": [],
+      "createdAt": 1790808658065,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_20"
+    },
+    {
+      "id": "m_41",
+      "conversationId": "c_1",
+      "seq": 39,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Is 97 a prime number? Answer yes or no.",
+      "attachments": [],
+      "createdAt": 1790808659262,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_42",
+      "conversationId": "c_1",
+      "seq": 40,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_41",
+      "text": "Yes",
+      "attachments": [],
+      "createdAt": 1790808660192,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_21"
+    },
+    {
+      "id": "m_43",
+      "conversationId": "c_1",
+      "seq": 41,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "What is the sum of the digits of 2026?",
+      "attachments": [],
+      "createdAt": 1790808661336,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_44",
+      "conversationId": "c_1",
+      "seq": 42,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_43",
+      "text": "10",
+      "attachments": [],
+      "createdAt": 1790808662523,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_22"
+    },
+    {
+      "id": "m_45",
+      "conversationId": "c_1",
+      "seq": 43,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "What is 144 divided by 12? Reply with just the number.",
+      "attachments": [],
+      "createdAt": 1790808681924,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_46",
+      "conversationId": "c_1",
+      "seq": 44,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_45",
+      "text": "12",
+      "attachments": [],
+      "createdAt": 1790808683310,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_23"
+    },
+    {
+      "id": "m_47",
+      "conversationId": "c_1",
+      "seq": 45,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "What is the capital of Japan? One word.",
+      "attachments": [],
+      "createdAt": 1790808684018,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_48",
+      "conversationId": "c_1",
+      "seq": 46,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_47",
+      "text": "Tokyo",
+      "attachments": [],
+      "createdAt": 1790808685447,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_24"
+    },
+    {
+      "id": "m_49",
+      "conversationId": "c_1",
+      "seq": 47,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Translate 'good morning' into Spanish.",
+      "attachments": [],
+      "createdAt": 1790808686103,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_50",
+      "conversationId": "c_1",
+      "seq": 48,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_49",
+      "text": "Buenos días",
+      "attachments": [],
+      "createdAt": 1790808687446,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_25"
+    },
+    {
+      "id": "m_51",
+      "conversationId": "c_1",
+      "seq": 49,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "How many files are in your current working directory? Check with a shell command.",
+      "attachments": [],
+      "createdAt": 1790808688190,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_52",
+      "conversationId": "c_1",
+      "seq": 50,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_51",
+      "text": "Zero. `/srv/agents/hazel/mod-work/moda` is empty: no files and no hidden entries.",
+      "attachments": [],
+      "createdAt": 1790808692072,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_26"
+    },
+    {
+      "id": "m_53",
+      "conversationId": "c_1",
+      "seq": 51,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "In one sentence, what is a hash map?",
+      "attachments": [],
+      "createdAt": 1790808692301,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_54",
+      "conversationId": "c_1",
+      "seq": 52,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_53",
+      "text": "A hash map stores key-value pairs and runs a hash function on each key to find the slot that holds its value, so lookups, inserts and deletes take constant time on average.",
+      "attachments": [],
+      "createdAt": 1790808694381,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_27"
+    },
+    {
+      "id": "m_55",
+      "conversationId": "c_1",
+      "seq": 53,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Reply with the single word: pong",
+      "attachments": [],
+      "createdAt": 1790808696403,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_56",
+      "conversationId": "c_1",
+      "seq": 54,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_55",
+      "text": "pong",
+      "attachments": [],
+      "createdAt": 1790808697712,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_28"
+    },
+    {
+      "id": "m_57",
+      "conversationId": "c_1",
+      "seq": 55,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "What day of the week was 2026-01-01?",
+      "attachments": [],
+      "createdAt": 1790808698475,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_58",
+      "conversationId": "c_1",
+      "seq": 56,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_57",
+      "text": "Thursday",
+      "attachments": [],
+      "createdAt": 1790808700645,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_29"
+    },
+    {
+      "id": "m_59",
+      "conversationId": "c_1",
+      "seq": 57,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Create a file named notes.txt in your working directory containing the word hello, then confirm.",
+      "attachments": [],
+      "createdAt": 1790808702584,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_60",
+      "conversationId": "c_1",
+      "seq": 58,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_59",
+      "text": "I created `/srv/agents/hazel/mod-work/moda/notes.txt`, and it contains `hello`.",
+      "attachments": [],
+      "createdAt": 1790808706145,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_30"
+    },
+    {
+      "id": "m_61",
+      "conversationId": "c_1",
+      "seq": 59,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "Is 97 a prime number? Answer yes or no.",
+      "attachments": [],
+      "createdAt": 1790808706700,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_62",
+      "conversationId": "c_1",
+      "seq": 60,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_61",
+      "text": "yes",
+      "attachments": [],
+      "createdAt": 1790808708194,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_31"
+    },
+    {
+      "id": "m_63",
+      "conversationId": "c_1",
+      "seq": 61,
+      "sender": {
+        "id": "p_lee",
+        "name": "lee",
+        "kind": "human"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "request",
+      "text": "What is the sum of the digits of 2026?",
+      "attachments": [],
+      "createdAt": 1790808708787,
+      "origin": {
+        "via": "cli"
+      }
+    },
+    {
+      "id": "m_64",
+      "conversationId": "c_1",
+      "seq": 62,
+      "sender": {
+        "id": "p_mod-a",
+        "name": "mod-a",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_lee",
+          "name": "lee",
+          "kind": "human"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_63",
+      "text": "10",
+      "attachments": [],
+      "createdAt": 1790808710251,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_32"
+    },
+    {
+      "id": "m_65",
+      "conversationId": "c_2",
+      "seq": 3,
+      "sender": {
+        "id": "p_mod-b",
+        "name": "mod-b",
+        "kind": "agent"
+      },
+      "recipients": [
+        {
+          "id": "p_mod-a",
+          "name": "mod-a",
+          "kind": "agent"
+        }
+      ],
+      "kind": "answer",
+      "inReplyTo": "m_23",
+      "text": "12 + 30 = 42.",
+      "attachments": [],
+      "createdAt": 1790808816317,
+      "origin": {
+        "via": "claude-code"
+      },
+      "collectedFrom": "d_11"
+    }
+  ],
+  "deliveries": [
+    {
+      "id": "d_1",
+      "messageId": "m_1",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790807826902,
+        "turnId": "532ccd3b-c050-42ae-a66a-1787f69d589f"
+      },
+      "answerMessageId": "m_2"
+    },
+    {
+      "id": "d_2",
+      "messageId": "m_3",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790807901910,
+        "turnId": "99157a32-c3d8-4b1f-b094-1d0c42e30a75"
+      },
+      "answerMessageId": "m_4"
+    },
+    {
+      "id": "d_3",
+      "messageId": "m_5",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "ambiguous",
+        "at": 1790807953459,
+        "turnId": "efbb2d5a-0c49-4c57-aafe-390a7571dee6",
+        "detail": "other input entered the turn: composer"
+      }
+    },
+    {
+      "id": "d_4",
+      "messageId": "m_6",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808057331,
+        "turnId": "e13d7587-2dd1-4147-a94f-74e030370890",
+        "detail": "completed by comms reply m_7"
+      }
+    },
+    {
+      "id": "d_5",
+      "messageId": "m_8",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808116574,
+        "turnId": "ce0134be-a3c6-4b37-a3f9-f900358127a3"
+      },
+      "answerMessageId": "m_9"
+    },
+    {
+      "id": "d_6",
+      "messageId": "m_10",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808235310,
+        "turnId": "3bac8462-4afa-4a52-babf-f0d088be8e70"
+      },
+      "answerMessageId": "m_11"
+    },
+    {
+      "id": "d_7",
+      "messageId": "m_13",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808336308,
+        "turnId": "81665570-1df8-48fa-998b-6403cb32f881"
+      },
+      "answerMessageId": "m_14"
+    },
+    {
+      "id": "d_8",
+      "messageId": "m_16",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808407630,
+        "turnId": "1c9e84b2-fda4-4c1e-95ae-44e668666d4e"
+      },
+      "answerMessageId": "m_17"
+    },
+    {
+      "id": "d_9",
+      "messageId": "m_18",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808433973,
+        "turnId": "f2a0b57f-bd0e-4948-a478-d9f37a0e91ad"
+      },
+      "answerMessageId": "m_19"
+    },
+    {
+      "id": "d_10",
+      "messageId": "m_21",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808523464,
+        "turnId": "76279f01-251f-4748-bbee-f94778c3c783"
+      },
+      "answerMessageId": "m_22"
+    },
+    {
+      "id": "d_11",
+      "messageId": "m_23",
+      "recipientId": "p_mod-b",
+      "status": {
+        "state": "replied",
+        "at": 1790808816317,
+        "turnId": "ade6bbb8-1f8e-46cd-bd5d-afcf520baefd"
+      },
+      "answerMessageId": "m_65"
+    },
+    {
+      "id": "d_12",
+      "messageId": "m_24",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "delivered",
+        "at": 1790808542587,
+        "turnId": "c7c6742f-11c7-4e3c-a237-550137e526d7"
+      }
+    },
+    {
+      "id": "d_13",
+      "messageId": "m_25",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808639534,
+        "turnId": "9c838456-418f-4033-8818-657dde144d72"
+      },
+      "answerMessageId": "m_26"
+    },
+    {
+      "id": "d_14",
+      "messageId": "m_27",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808641788,
+        "turnId": "e7434c55-7507-4a05-add2-fdfd6579521f"
+      },
+      "answerMessageId": "m_28"
+    },
+    {
+      "id": "d_15",
+      "messageId": "m_29",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808643743,
+        "turnId": "56bdc40a-3f99-436a-95c0-e9f5548779e0"
+      },
+      "answerMessageId": "m_30"
+    },
+    {
+      "id": "d_16",
+      "messageId": "m_31",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808647366,
+        "turnId": "30385737-25cc-47ad-a1c3-cd54b340b3fe"
+      },
+      "answerMessageId": "m_32"
+    },
+    {
+      "id": "d_17",
+      "messageId": "m_33",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808650182,
+        "turnId": "79a3e336-18fe-43f9-a62b-55e61c12bc4e"
+      },
+      "answerMessageId": "m_34"
+    },
+    {
+      "id": "d_18",
+      "messageId": "m_35",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808652167,
+        "turnId": "b7de5292-a6fc-495c-928c-d13825757c1f"
+      },
+      "answerMessageId": "m_36"
+    },
+    {
+      "id": "d_19",
+      "messageId": "m_37",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808654056,
+        "turnId": "49176682-2158-450a-8671-e864e00613eb"
+      },
+      "answerMessageId": "m_38"
+    },
+    {
+      "id": "d_20",
+      "messageId": "m_39",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808658065,
+        "turnId": "68fea4c2-0f7c-4159-ad78-f59011b735d4"
+      },
+      "answerMessageId": "m_40"
+    },
+    {
+      "id": "d_21",
+      "messageId": "m_41",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808660192,
+        "turnId": "c40077b8-6b44-4619-a636-03607b535a22"
+      },
+      "answerMessageId": "m_42"
+    },
+    {
+      "id": "d_22",
+      "messageId": "m_43",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808662523,
+        "turnId": "7980ba2d-8112-477c-9bf5-1ef7edccf775"
+      },
+      "answerMessageId": "m_44"
+    },
+    {
+      "id": "d_23",
+      "messageId": "m_45",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808683310,
+        "turnId": "44fbfaac-aeb1-4d3a-82a4-f22a31c1fb41"
+      },
+      "answerMessageId": "m_46"
+    },
+    {
+      "id": "d_24",
+      "messageId": "m_47",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808685447,
+        "turnId": "8e1abcc0-708c-460c-afc6-6b760f04af77"
+      },
+      "answerMessageId": "m_48"
+    },
+    {
+      "id": "d_25",
+      "messageId": "m_49",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808687447,
+        "turnId": "491372cf-e299-4d2d-909b-752dd29a6aba"
+      },
+      "answerMessageId": "m_50"
+    },
+    {
+      "id": "d_26",
+      "messageId": "m_51",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808692072,
+        "turnId": "c3885434-6baf-4ff5-8e86-c14391908c45"
+      },
+      "answerMessageId": "m_52"
+    },
+    {
+      "id": "d_27",
+      "messageId": "m_53",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808694381,
+        "turnId": "5eccfac1-1803-4816-a5a9-fea1116e9cd2"
+      },
+      "answerMessageId": "m_54"
+    },
+    {
+      "id": "d_28",
+      "messageId": "m_55",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808697712,
+        "turnId": "ce62ae2b-6742-4928-96d9-ce025deee04b"
+      },
+      "answerMessageId": "m_56"
+    },
+    {
+      "id": "d_29",
+      "messageId": "m_57",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808700645,
+        "turnId": "663ad7d2-ce48-48a8-93b2-5bde80cd827e"
+      },
+      "answerMessageId": "m_58"
+    },
+    {
+      "id": "d_30",
+      "messageId": "m_59",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808706145,
+        "turnId": "aa192437-111e-4d19-84f1-3c346a36138b"
+      },
+      "answerMessageId": "m_60"
+    },
+    {
+      "id": "d_31",
+      "messageId": "m_61",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808708194,
+        "turnId": "bc673526-7a53-4779-97dd-c0eecadd6ff7"
+      },
+      "answerMessageId": "m_62"
+    },
+    {
+      "id": "d_32",
+      "messageId": "m_63",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "replied",
+        "at": 1790808710251,
+        "turnId": "7cf45ac3-742d-4659-8db1-d49a4bce6731"
+      },
+      "answerMessageId": "m_64"
+    },
+    {
+      "id": "d_33",
+      "messageId": "m_65",
+      "recipientId": "p_mod-a",
+      "status": {
+        "state": "delivered",
+        "at": 1790808816360,
+        "turnId": "f89b95e3-0806-4f23-a093-5dba3debacf4"
+      }
+    }
+  ]
+}
