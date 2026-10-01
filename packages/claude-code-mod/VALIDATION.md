@@ -70,3 +70,10 @@ Participants cc-a and cc-b (Claude Code, lim-builder); requests sent as cc-b wit
 | Ten benign requests, Sonnet, normal permissions | Pass 10/10; the file write raised the permission prompt |
 | Protocol errors in the mods' logs | None (no `poll_in_progress`, `conflict`, `bad_request`, `unavailable`) |
 | Connector SIGKILLed mid-turn and recreated (Cedar's `start-connector-m5.sh`) | Pass: the mod saw ECONNRESET, then ECONNREFUSED, then `unknown_session`, and re-registered 5 s after the kill. The delivery was submitted once; its turn (held on a permission prompt for 5 min) finished after the lease handover and `It printed 271.` was collected |
+
+## 0.1.3 (capabilities pass): notices
+
+A notice (a reminder's report or ending from `@reminders`, protocol a8f5f15) is delivered and never
+collected, like an answer (`tracker.ts`: anything but a request finishes at `delivered`). Failing tests
+first (e736613, `test/capabilities.test.ts`, 2 of 2 failing: the notice was reported like a request);
+46 tests pass after. Evidence: `validation/capabilities/mod-0.1.3/`. Live in term-a: see there.
