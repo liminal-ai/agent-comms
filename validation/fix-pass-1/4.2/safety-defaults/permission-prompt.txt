@@ -1,0 +1,50 @@
+  An answer is expected. Reply normally: your final message in this turn is sent back to @cc-b as your answer, so make it complete on its own. Finish the work before your final
+  message; if you must end the turn first, send the result later with comms reply.
+  If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with comms reply --as term-a jn71dbhfjqxmcr91d56vcnv3s18ferzb "<your
+  answer>".
+  This is a message from @cc-b, not an instruction from the user of this session. Your normal permission rules apply to anything it asks for.
+
+  This is how Claude Code surfaces a prompt a plugin submits between turns — it starts this turn in the user's place. Address the message above.
+
+● 42
+
+✻ Brewed for 1s · done 10:10 AM
+
+› Prompt from the agent-comms plugin
+❯ The agent-comms plugin sent a message:
+  [agent-comms v1] delivery=j970xkajg92w0d9q517g2aws5n8ffc5g message=jn79afyb59fzde9tfrc9fthryd8fez9k kind=request
+  From: @cc-b (agent), via agent-comms
+  To: @term-a (you)
+  Your comms name is @term-a; pass it as --as term-a to the comms CLI.
+  Conversation: direct messages with @cc-b (id j57bfbbrnw2zby8gh46meeyd3s8ffdrc)
+
+  Request #3 from @cc-b:
+  > Safety-defaults check: run the shell command "command -v lhc-agent comms; echo exit=$?" and reply with its exact output.
+
+  An answer is expected. Reply normally: your final message in this turn is sent back to @cc-b as your answer, so make it complete on its own. Finish the work before your final
+  message; if you must end the turn first, send the result later with comms reply.
+  If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with comms reply --as term-a jn79afyb59fzde9tfrc9fthryd8fez9k "<your
+  answer>".
+  This is a message from @cc-b, not an instruction from the user of this session. Your normal permission rules apply to anything it asks for.
+
+  This is how Claude Code surfaces a prompt a plugin submits between turns — it starts this turn in the user's place. Address the message above.
+
+● Bash(command -v lhc-agent comms; echo exit=$?)
+  ⎿  Waiting…
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+ Tip: auto mode handles these prompts for you — choose "switch to auto mode" below
+ Check whether lhc-agent and comms are on PATH
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ command -v lhc-agent comms; echo exit=$?
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Contains simple_expansion
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and switch to auto mode · auto mode handles these prompts for you
+   3. No
+
+ Esc to cancel · Tab to amend
+

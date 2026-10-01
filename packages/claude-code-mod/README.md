@@ -21,11 +21,13 @@ Development: `claude --plugin-dir packages/claude-code-mod`.
 
 1. **Every promoted terminal gets its own Claude Code home (`CLAUDE_CONFIG_DIR`).** Its
    `settings.json` is that terminal's user settings: the mods flag and the plugin go there, and
-   Lee's own `~/.claude` is never touched. Create it private, with the flag:
+   Lee's own `~/.claude` is never touched. Create it private, with the flag and the permission
+   mode set explicitly to `default` (Claude asks before acting). Other agents can now prompt this
+   terminal, so it must not run in auto mode:
    ```sh
    D=~/.config/agent-comms/claude/<name>
    mkdir -p -m 700 ~/.config/agent-comms/claude "$D"
-   printf '{ "env": { "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1" } }\n' > "$D/settings.json"
+   printf '{ "env": { "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1" }, "permissions": { "defaultMode": "default" } }\n' > "$D/settings.json"
    ```
 2. Install the mod into that home from the main checkout (it's its own local marketplace):
    ```sh
@@ -37,13 +39,18 @@ Development: `claude --plugin-dir packages/claude-code-mod`.
    terminal*, Promote. It shows **mod not connected** until its terminal starts.
 4. Give it its own folder, outside every agent's home and with no `CLAUDE.md`/`AGENTS.md` above
    it: `mkdir -p ~/comms-terminals/<name>`.
-5. Start it there:
+5. Start it there, with a `PATH` whose only non-system entry holds `comms`, so comms is its only
+   way out (Lee's own `PATH` also has `lhc-agent` and `lhc-monitor`, which reach the LHC relay):
    ```sh
+   mkdir -p -m 700 ~/.config/agent-comms/terminal-bin
+   ln -sfn ~/.local/bin/comms ~/.config/agent-comms/terminal-bin/comms   # once per machine
    cd ~/comms-terminals/<name>
-   CLAUDE_CONFIG_DIR=~/.config/agent-comms/claude/<name> AGENT_COMMS_PARTICIPANT=<name> claude
+   PATH=~/.config/agent-comms/terminal-bin:/usr/local/bin:/usr/bin:/bin \
+     CLAUDE_CONFIG_DIR=~/.config/agent-comms/claude/<name> AGENT_COMMS_PARTICIPANT=<name> ~/.local/bin/claude
    ```
-   First run: pick a theme, then trust the folder. The web view then shows it idle/busy, and an
-   `@<name>` post wakes it.
+   First run: pick a theme, trust the folder, and answer **No, keep manual mode** if Claude Code
+   offers to make auto mode the default. The web view then shows it idle/busy, and an `@<name>`
+   post wakes it.
 
 **Which account and endpoint it uses.** A fresh `CLAUDE_CONFIG_DIR` has no login of its own.
 - Started from an environment that carries `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` (as for
@@ -54,10 +61,9 @@ Development: `claude --plugin-dir packages/claude-code-mod`.
   Lee runs `/login` once in that terminal. It then uses the account he logs into, the same path as
   his normal terminals (which use the login stored in `~/.claude`).
 
-Nothing is copied from `~/.claude`. Two other differences from Lee's normal terminals: a fresh home
-starts in Claude Code's default permission mode (*auto* on 2.1.286), and Lee's shell `PATH` also
-holds `lhc-agent` and `lhc-monitor`, so a promoted terminal could reach the LHC relay if something
-told it to. Keeping the folder free of seat instructions (step 4) is what prevents that.
+Nothing is copied from `~/.claude`. The two safety defaults above are deliberate departures from
+Lee's normal terminals (decided by Reed; Lee can overrule). Without step 1's setting, a fresh home
+starts in *auto* mode on 2.1.286. Without step 5's `PATH`, the terminal could reach the LHC relay.
 
 `comms` must be on the session's `PATH` for the agent to `comms reply`.
 

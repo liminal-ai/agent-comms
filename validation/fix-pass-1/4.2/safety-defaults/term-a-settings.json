@@ -1,0 +1,20 @@
+{
+  "env": {
+    "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"
+  },
+  "enabledPlugins": {
+    "agent-comms@agent-comms-local": true
+  },
+  "extraKnownMarketplaces": {
+    "agent-comms-local": {
+      "source": {
+        "source": "directory",
+        "path": "/srv/work/agent-comms/packages/claude-code-mod"
+      }
+    }
+  },
+  "theme": "dark",
+  "permissions": {
+    "defaultMode": "default"
+  }
+}
