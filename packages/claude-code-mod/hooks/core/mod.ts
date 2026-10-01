@@ -61,21 +61,24 @@ const JOURNAL_KEEP = 200;
 /** Delivery ids remembered for restart checks; past this the journal is marked incomplete. */
 const SEEN_KEEP = 5_000;
 /**
- * After the journal's history is lost (missing, empty or unreadable file, or ids
- * dropped), absence from it proves nothing for this long. A delivery is in flight
- * for at most the connector's deadlines (tens of minutes), so after a day nothing
- * from the lost history can still be asked about; without a bound, one lost file
- * would disable `no` for good.
+ * Allowance for clock skew between the server that stamps a delivery's creation
+ * time and this machine: a delivery counts as created after a history loss only
+ * if it was created this much later.
  */
-export const JOURNAL_LOSS_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const CLOCK_SKEW_MS = 5 * 60 * 1000;
 
 interface JournalFile {
   participant?: string;
   deliveries?: Tracked[];
   seen?: string[];
-  /** Until this time (epoch ms) absence from the journal proves nothing: its history was lost. */
+  /**
+   * When the journal's history was last lost (epoch ms): a missing, empty or
+   * unreadable file, or dropped ids. Absence proves nothing for a delivery
+   * created before then; everything created after is fully journaled.
+   */
+  historyLostAt?: number;
+  /** Older versions: a loss window end, or a loss with no time recorded. */
   incompleteUntil?: number;
-  /** Older journals: history lost, no end recorded. */
   incomplete?: boolean;
 }
 
@@ -94,8 +97,8 @@ export class CommsMod {
   /** Every delivery id seen, including ones from earlier sessions of this participant. */
   private seen = new Set<string>();
   private journalLoaded = false;
-  /** Until this time absence from the journal proves nothing (see JOURNAL_LOSS_WINDOW_MS). */
-  private incompleteUntil = 0;
+  /** When the journal's history was last lost (0: never). See JournalFile.historyLostAt. */
+  private historyLostAt = 0;
   /** When the session last became idle (no main turn running); undefined while busy. */
   private idleSince: number | undefined;
   /** Submitted deliveries whose prompt didn't start by the deadline: still tracked, checks answer unknown. */
@@ -451,7 +454,7 @@ export class CommsMod {
       const fresh = this.tracker.deliveries.get(check.deliveryId);
       if (fresh) return this.check(check);
     }
-    if (!this.journalComplete || this.seen.has(check.deliveryId)) {
+    if (!this.journalCovers(check) || this.seen.has(check.deliveryId)) {
       return this.queue({ op: "check-result", body: { ...base, found: "unknown", detail: "the mod's journal can't rule it out" } });
     }
     // A compacted transcript can't prove absence; it can only show presence.
@@ -517,7 +520,11 @@ export class CommsMod {
   private async loadJournal(): Promise<void> {
     if (this.journalLoaded) return;
     this.journalLoaded = true;
-    await this.reloadJournal();
+    const file = await this.readJournalFile();
+    if (file) this.merge(file);
+    // A missing or empty journal: write one now, so the loss time is pinned to
+    // this moment rather than moving forward with every later read.
+    if (file === null) await this.saveJournal();
   }
 
   /** Reads the journal and merges it in. False (and the journal counts as incomplete) if it can't be read. */
@@ -528,14 +535,20 @@ export class CommsMod {
     return true;
   }
 
-  /** Whether absence from the journal proves a delivery was never submitted. */
-  private get journalComplete(): boolean {
-    return this.host.now() >= this.incompleteUntil;
+  /**
+   * Whether absence from the journal proves this delivery was never submitted:
+   * only if no history was ever lost, or it was created after the last loss.
+   * A check that doesn't say when its delivery was created can't be placed.
+   */
+  private journalCovers(check: DeliveryCheck): boolean {
+    if (this.historyLostAt === 0) return true;
+    const createdAt = (check as DeliveryCheck & { createdAt?: number }).createdAt;
+    return typeof createdAt === "number" && createdAt > this.historyLostAt + CLOCK_SKEW_MS;
   }
 
   private journalLost(reason: string): void {
-    if (this.journalComplete) this.host.log(`journal history lost (${reason}): restart checks answer unknown for a day`);
-    this.incompleteUntil = Math.max(this.incompleteUntil, this.host.now() + JOURNAL_LOSS_WINDOW_MS);
+    this.host.log(`journal history lost (${reason}): deliveries created before now are checked as unknown`);
+    this.historyLostAt = Math.max(this.historyLostAt, this.host.now());
   }
 
   /**
@@ -566,8 +579,9 @@ export class CommsMod {
 
   private merge(file: JournalFile | null): void {
     if (!file) return;
-    if (typeof file.incompleteUntil === "number") this.incompleteUntil = Math.max(this.incompleteUntil, file.incompleteUntil);
-    if (file.incomplete) this.journalLost("marked incomplete by an earlier version");
+    if (typeof file.historyLostAt === "number") this.historyLostAt = Math.max(this.historyLostAt, file.historyLostAt);
+    // Older versions' markers carry no reliable loss time: treat the loss as now.
+    if (file.incomplete || typeof file.incompleteUntil === "number") this.journalLost("marked by an earlier version");
     for (const id of file.seen ?? []) this.seen.add(id);
     for (const d of file.deliveries ?? []) {
       this.seen.add(d.deliveryId);
@@ -590,7 +604,7 @@ export class CommsMod {
       participant: this.options.participant,
       deliveries,
       seen: seen.slice(-SEEN_KEEP),
-      ...(this.journalComplete ? {} : { incompleteUntil: this.incompleteUntil }),
+      ...(this.historyLostAt > 0 ? { historyLostAt: this.historyLostAt } : {}),
     };
     try {
       await this.host.saveJournal(JSON.stringify(file));

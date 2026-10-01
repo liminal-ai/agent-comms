@@ -1,7 +1,7 @@
 // Fix pass 1, section 1, mod-level items (1.8, 1.9) against the connector stub.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { JOURNAL_LOSS_WINDOW_MS } from "../hooks/core/mod.ts";
+import { CLOCK_SKEW_MS } from "../hooks/core/mod.ts";
 import { FakeSession, makeMod, pumpUntil, stubOps, until, useStub, wrap } from "./support.ts";
 
 const ctx = useStub("comms-mod-fp1-");
@@ -50,33 +50,31 @@ describe("1.8 journal safety", () => {
     assert.equal(session.ops("check-result")[0].found, "unknown");
   });
 
-  it("1.8: a lost journal stays inconclusive across sessions until the loss window ends", async () => {
+  it("1.8: the loss time is kept across sessions; checks without a creation time stay unknown after a loss", async () => {
     const first = new FakeSession(ctx.socketPath);
     first.journal = null;
     const mod1 = makeMod(first, "sess-1");
     await mod1.start();
-    await post({ sender: "mod-b", to: ["mod-a"], text: "write the journal" });
-    await pumpUntil(mod1, () => first.submitted.length === 1, "a submission writes the journal");
-    assert.match(first.journal ?? "", /incompleteUntil/);
+    const lostAt = first.clock;
+    assert.equal(JSON.parse(first.journal ?? "{}").historyLostAt, lostAt, "the journal is written at once with the loss time");
 
-    // A later session reads that journal: still inconclusive inside the window...
     const second = new FakeSession(ctx.socketPath);
     second.journal = first.journal;
+    second.clock = lostAt + 30 * 24 * 60 * 60 * 1000; // a month later
     const mod2 = makeMod(second, "sess-2");
     await mod2.start();
-    await (mod2 as any).check({ deliveryId: "d_unseen", messageId: "m_unseen", state: "claimed" });
-    await until(() => second.ops("check-result").length === 1, "the check result");
-    assert.equal(second.ops("check-result")[0].found, "unknown");
-
-    // ...and conclusive after it.
-    const third = new FakeSession(ctx.socketPath);
-    third.journal = first.journal;
-    third.clock = first.clock + JOURNAL_LOSS_WINDOW_MS + 1;
-    const mod3 = makeMod(third, "sess-3");
-    await mod3.start();
-    await (mod3 as any).check({ deliveryId: "d_unseen", messageId: "m_unseen", state: "claimed" });
-    await until(() => third.ops("check-result").length === 1, "the check result");
-    assert.equal(third.ops("check-result")[0].found, "no");
+    await (mod2 as any).check({ deliveryId: "d_nodate", messageId: "m_nodate", state: "claimed" });
+    await (mod2 as any).check({ deliveryId: "d_before", messageId: "m_before", state: "claimed", createdAt: lostAt - 1 });
+    await (mod2 as any).check({ deliveryId: "d_after", messageId: "m_after", state: "claimed", createdAt: lostAt + CLOCK_SKEW_MS + 1 });
+    await until(() => second.ops("check-result").length === 3, "three check results");
+    assert.deepEqual(
+      second.ops("check-result").map((c) => [c.deliveryId, c.found]),
+      [
+        ["d_nodate", "unknown"],
+        ["d_before", "unknown"],
+        ["d_after", "no"],
+      ],
+    );
   });
 
   it("1.8 (Reed): a delivery created before the journal was lost is unknown even when checked more than 24 h later", async () => {
@@ -101,7 +99,7 @@ describe("1.8 journal safety", () => {
     await mod.start(); // loss recorded at this clock
     await post({ sender: "mod-b", to: ["mod-a"], text: "journal written" });
     await pumpUntil(mod, () => session.submitted.length === 1, "a submission writes the journal");
-    const createdAfterLoss = session.clock + 10 * 60 * 1000;
+    const createdAfterLoss = session.clock + CLOCK_SKEW_MS + 60_000;
     session.clock = createdAfterLoss + 1_000;
     await (mod as any).check({ deliveryId: "d_new", messageId: "m_new", state: "claimed", createdAt: createdAfterLoss });
     await until(() => session.ops("check-result").length === 1, "the check result");
