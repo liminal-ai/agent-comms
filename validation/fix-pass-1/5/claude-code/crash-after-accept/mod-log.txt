@@ -1,0 +1,10 @@
+2026-10-01T14:05:26.327Z poll: unavailable: agent-comms: $.http.fetch(http://connector/v1/poll) over /run/user/1000/agent-comms/connector.sock failed: ECONNRESET: ECONNRESET: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()
+2026-10-01T14:05:26.789Z poll: unknown_session: session bf6d4ec9-318a-4e4b-a65c-0ec93c1c38ff is not registered; register again
+2026-10-01T14:05:28.789Z registered as @cc-a
+2026-10-01T14:05:30.005Z j9766t0jr70523nnq3hhrqez558ffdf3: delivered
+2026-10-01T14:05:30.787Z poll: unavailable: agent-comms: $.http.fetch(http://connector/v1/poll) over /run/user/1000/agent-comms/connector.sock failed: ECONNREFUSED: ECONNREFUSED: Was there a typo in the url or port?
+2026-10-01T14:05:31.194Z j9766t0jr70523nnq3hhrqez558ffdf3: outcome replied
+2026-10-01T14:05:31.195Z j9766t0jr70523nnq3hhrqez558ffdf3: done
+2026-10-01T14:05:31.197Z presence: unavailable: agent-comms: $.http.fetch(http://connector/v1/presence) over /run/user/1000/agent-comms/connector.sock failed: ECONNREFUSED: ECONNREFUSED: Was there a typo in the url or port?; will retry
+2026-10-01T14:05:32.798Z poll: unknown_session: session bf6d4ec9-318a-4e4b-a65c-0ec93c1c38ff is not registered; register again
+2026-10-01T14:05:32.829Z registered as @cc-a

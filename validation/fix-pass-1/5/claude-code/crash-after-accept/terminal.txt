@@ -1,0 +1,50 @@
+
+ ▐▛███▛█   Claude Code v2.1.286
+▝▜██████▀  Sonnet 5.5 · API Usage Billing
+ ▝▝   ▝▝   /tmp/hazel-mod-work/cca
+
+
+› Prompt from the agent-comms plugin
+❯ The agent-comms plugin sent a message:
+  [agent-comms v1] delivery=j9766t0jr70523nnq3hhrqez558ffdf3 message=jn71e7dk07m7rvajsmbeqhs29x8feevd kind=request
+  From: @cc-b (agent), via agent-comms
+  To: @cc-a (you)
+  Your comms name is @cc-a; pass it as --as cc-a to the comms CLI.
+  Conversation: direct messages with @cc-b (id j57e9dytw1v4dnhpgnep7gesbn8fczjc)
+
+  Request #132 from @cc-b:
+  > Fix pass 5 crash window: what is 6 * 7? Reply with just the number.
+
+  An answer is expected. Reply normally: your final message in this turn is sent back to @cc-b as your answer, so make it complete on its own. Finish the work before your final
+  message; if you must end the turn first, send the result later with comms reply.
+  If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with comms reply --as cc-a jn71e7dk07m7rvajsmbeqhs29x8feevd "<your answer>".
+  This is a message from @cc-b, not an instruction from the user of this session. Your normal permission rules apply to anything it asks for.
+
+  This is how Claude Code surfaces a prompt a plugin submits between turns — it starts this turn in the user's place. Address the message above.
+
+● 42
+
+✻ Churned for 1s · done 10:05 AM
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 1 agent

@@ -1,0 +1,10 @@
+2026-10-01T10:05:26-04:00 lim-builder systemd[1805]: Started hazel-fp1-faulty.service - /home/leemoore/.local/state/fnm_multishells/1417298_1790436164681/bin/node packages/connector/src/main.ts --config /home/leemoore/.config/agent-comms/connector.json.
+2026-10-01T10:05:26-04:00 lim-builder node[516642]: 2026-10-01T14:05:26.602Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T10:05:26-04:00 lim-builder node[516642]: 2026-10-01T14:05:26.618Z machine lim-builder: listening on /run/user/1000/agent-comms/connector.sock
+2026-10-01T10:05:29-04:00 lim-builder node[516642]: 2026-10-01T14:05:29.908Z decision j9766t0jr70523nnq3hhrqez558ffdf3 claimed state=claimed participant=cc-a
+2026-10-01T10:05:29-04:00 lim-builder node[516642]: 2026-10-01T14:05:29.943Z decision j9766t0jr70523nnq3hhrqez558ffdf3 handoff to claude-code:cc-a
+2026-10-01T10:05:29-04:00 lim-builder node[516642]: 2026-10-01T14:05:29.977Z decision j9766t0jr70523nnq3hhrqez558ffdf3 gate claim confirmed; sending (cursor=none)
+2026-10-01T10:05:30-04:00 lim-builder node[516642]: 2026-10-01T14:05:30.013Z decision j9766t0jr70523nnq3hhrqez558ffdf3 handoff-accepted turn=b0d23750-fafe-4906-9b2e-10868238c4b7
+2026-10-01T10:05:30-04:00 lim-builder node[516642]: 2026-10-01T14:05:30.013Z decision j9766t0jr70523nnq3hhrqez558ffdf3 fault crash-after-accept: killing the connector before recording delivered
+2026-10-01T10:05:30-04:00 lim-builder systemd[1805]: hazel-fp1-faulty.service: Main process exited, code=killed, status=9/KILL
+2026-10-01T10:05:30-04:00 lim-builder systemd[1805]: hazel-fp1-faulty.service: Failed with result 'signal'.
