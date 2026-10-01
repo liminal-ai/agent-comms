@@ -112,7 +112,8 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
 ### W: web view — built against R0 2026-10-01 (b99409b)
 - Failing tests first (9610657, 1526452); 16 pass. Registry, inbox with unread count, reminders, alerts in
   `apps/web` (`src/Capabilities.tsx`, `src/lib/view.ts`). Live check `validation/capabilities/w/`.
-- Waiting on Cedar: system participants (R1/R3), inbox rows (R1), alerts (R4), alert conversationId and
+- R1 live check passed (system participants, owners, promote with owner, inbox unread and read marking).
+- Waiting on Cedar: alerts (R4); reminders firing (R3). Done from review: alert conversationId and
   reminders' last fire/skip (review items 5, 6).
 - Mod: protocol already synced by Cedar in R0 (check passes, 44 tests). Still to do: the reminder render
   check in term-a once R3 fires reminders, then bump to 0.1.3 and update term-a.
