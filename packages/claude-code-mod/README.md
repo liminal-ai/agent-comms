@@ -35,6 +35,9 @@ Development: `claude --plugin-dir packages/claude-code-mod`.
    CLAUDE_CONFIG_DIR="$D" claude plugin install agent-comms@agent-comms-local
    CLAUDE_CONFIG_DIR="$D" claude plugin list   # agent-comms@agent-comms-local, enabled
    ```
+   The install is a copy (under `$D/plugins/cache`). After the mod changes on main (its version in
+   `.claude-plugin/plugin.json` is bumped), update it and restart the terminal:
+   `CLAUDE_CONFIG_DIR="$D" claude plugin marketplace update agent-comms-local && CLAUDE_CONFIG_DIR="$D" claude plugin update agent-comms@agent-comms-local`.
 3. Promote it in the web view (`http://127.0.0.1:3790`): Name `<name>`, Lives in *Claude Code
    terminal*, Promote. It shows **mod not connected** until its terminal starts.
 4. Give it its own folder, outside every agent's home and with no `CLAUDE.md`/`AGENTS.md` above
