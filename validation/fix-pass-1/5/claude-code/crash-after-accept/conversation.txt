@@ -1,0 +1,7 @@
+j57e9dytw1v4dnhpgnep7gesbn8fczjc · dm (@cc-b, @cc-a) · 133 messages, showing #131-#133; older: --before 131
+#131 2026-10-01 13:53 @cc-a → @cc-b (answer to jn76xas1yx30dt17ee89c52y5d8ffv6z) [jn7dtd7n8wm4d7qdsc9mm50fy98ffbce]
+  10 (2 + 0 + 2 + 6)
+#132 2026-10-01 14:05 @cc-b → @cc-a [jn71e7dk07m7rvajsmbeqhs29x8feevd]
+  Fix pass 5 crash window: what is 6 * 7? Reply with just the number.
+#133 2026-10-01 14:06 @cc-a → @cc-b (answer to jn71e7dk07m7rvajsmbeqhs29x8feevd) [jn7fmjxw7f9ppe4wemzg1hyxpn8ff1cb]
+  42

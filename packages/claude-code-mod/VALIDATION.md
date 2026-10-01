@@ -4,7 +4,7 @@ Interactive Claude Code sessions in tmux on lim-builder (Sonnet 5.5 unless noted
 private socket, requests posted as `lee`. Evidence: the stub's request/response record, final state
 and fixture in `validation/mod-2026-09-30/` (`record.jsonl.gz`, `state.json`, `fixture.json`);
 summaries below. The mod's decision logs from these runs were not kept (the log was rewritten each
-session until fix pass 1). Fix pass 1 evidence is in `validation/fix-pass-1/claude-code/`.
+session until fix pass 1). Fix pass 1 evidence is in `validation/fix-pass-1/5/claude-code/`.
 
 | Acceptance check | Result |
 |---|---|

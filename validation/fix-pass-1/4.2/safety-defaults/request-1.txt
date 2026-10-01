@@ -1,0 +1,2 @@
+delivery=j971vwfdzpzekacawsj5tgzpb98fecvn message=jn71dbhfjqxmcr91d56vcnv3s18ferzb conversation=j57bfbbrnw2zby8gh46meeyd3s8ffdrc outcome=replied
+collected '42'

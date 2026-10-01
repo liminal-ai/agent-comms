@@ -16,3 +16,9 @@ banner *API Usage Billing* (`terminal.txt`). Lee's own shells set no `ANTHROPIC_
 (checked by name), so a terminal he starts needs a one-time `/login` in its home and then uses his
 account. `start-term.sh` is the launcher used here: it passes Lee's interactive-shell `PATH` and
 drops this agent session's own variables; credentials are inherited, never put on a command line.
+
+## Safety defaults (Reed, 2026-10-01), applied to term-a
+
+- `permissions.defaultMode: "default"` in the terminal's own settings (`safety-defaults/term-a-settings.json`); at start Claude Code offered to make auto mode the default and was answered *No, keep manual mode*; the status line then reads "manual mode on".
+- Launcher `PATH` is `~/.config/agent-comms/terminal-bin` (only `comms`) plus `/usr/local/bin:/usr/bin:/bin` (`start-term.sh`).
+- Re-check (`safety-defaults/`): request 1 answered `42` (replied); request 2 ran `command -v lhc-agent comms` after a permission prompt (`permission-prompt.txt`, approved once) and answered `/home/leemoore/.config/agent-comms/terminal-bin/comms exit=1`, i.e. `lhc-agent` isn't reachable.

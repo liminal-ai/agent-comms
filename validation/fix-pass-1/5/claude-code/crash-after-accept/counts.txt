@@ -1,0 +1,6 @@
+delivery: j9766t0jr70523nnq3hhrqez558ffdf3 (message jn71e7dk07m7rvajsmbeqhs29x8feevd)
+turns started with its header (mod 'delivered' lines): 1
+turns started with its header (terminal): 1
+fault connector: 1 self-kill after handoff-accepted
+recovery by the restarted connector: recover check-completed outcome 
+answers to jn71e7dk07m7rvajsmbeqhs29x8feevd in the conversation: 1 (collected: 42)

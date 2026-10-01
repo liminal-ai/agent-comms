@@ -1,0 +1,2 @@
+delivery=j970xkajg92w0d9q517g2aws5n8ffc5g message=jn79afyb59fzde9tfrc9fthryd8fez9k conversation=j57bfbbrnw2zby8gh46meeyd3s8ffdrc outcome=replied
+collected '/home/leemoore/.config/agent-comms/terminal-bin/comms exit=1'
