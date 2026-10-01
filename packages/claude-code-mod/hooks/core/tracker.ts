@@ -1,13 +1,17 @@
 // Reply matching for deliveries the mod submitted into this session. Pure:
 // fed Claude Code's events in order, it says when a delivery was delivered and
 // how its turn ended. It never guesses: anything it can't link to our own
-// turn's work makes the delivery ambiguous.
+// turn's work by identity makes the delivery ambiguous.
 //
 // - Our turn is the main-loop turn whose `turn.start` text carries our header.
-// - Other input in our turn: a `prompt.submit` carrying our turnId. A task
-//   notification counts unless its row links it to a tool call or subagent our
-//   turn started. Any other prompt typed or delivered during our turn counts
-//   unless the next turn starts with it (then it waited for that turn).
+// - Our work: the main loop's tool calls during our turn; the subagents those
+//   calls spawned (from the Agent call's result and `agent.spawn`), and their
+//   descendants and tool calls; the background tasks those calls started
+//   (`backgroundTaskId` in the result, or a task row naming our call).
+// - Input entering our turn (a `prompt.submit` carrying our turnId) is ours
+//   only when it names our work: a task notification whose every task is ours,
+//   or a subagent hand-back from one of our subagents. Anything else (typed at
+//   the terminal, a peer, the bridge, the SDK, another plugin) is other input.
 // - A `turn.start` whose text holds more than the plugin wrapper and our
 //   rendering (other queued prompts merged into it) counts as other input.
 
@@ -15,10 +19,16 @@ import { parseDeliveryHeader } from "../protocol/render.ts";
 import type { EnteredInput, OutcomeBody } from "../protocol/loopback.ts";
 import type { MessageKind } from "../protocol/model.ts";
 
-/** How long after our turn ends a prompt typed during it may take to start its own turn. */
-export const SETTLE_MS = 3_000;
+/** The protocol's cap on `entered` (packages/protocol/src/loopback.ts). */
+export const MAX_ENTERED = 50;
 
-export type Phase = "submitted" | "running" | "settling" | "done";
+export type Phase = "submitted" | "running" | "done";
+
+/** A task notification that entered our turn: the tasks it names (ids only, never its text). */
+export interface NoticeRef {
+  at: number;
+  tasks: { taskId?: string; toolUseId?: string }[];
+}
 
 export interface Tracked {
   deliveryId: string;
@@ -34,23 +44,20 @@ export interface Tracked {
   phase: Phase;
   submittedAt: number;
   turnId?: string;
-  /** Main-loop tool calls of our turn. */
+  /** Tool calls our turn made: the main loop's during our turn, and our subagents'. */
   toolUseIds: string[];
-  /** Subagents seen during our turn. */
+  /** Subagents our turn started, and their descendants. */
   agentIds: string[];
-  /** Tool calls of our turn that started background work (a background shell or subagent). */
+  /** Background tasks our calls started (shell task ids). */
+  taskIds: string[];
+  /** Our tool calls that started background work (a background shell or subagent). */
   backgroundIds: string[];
   /** Input that certainly entered our turn. */
   entered: EnteredInput[];
-  /** Prompts typed or delivered during our turn: entered unless the next turn starts with them. */
-  maybeQueued: { origin: string; text: string; at: number }[];
-  /** Task notifications delivered into our turn, and the task rows linked to our work while it ran. */
-  taskNotices: number;
-  linkedTaskRows: number;
-  /** Tasks already counted, by id or call: a row can be drawn more than once. */
-  linkedTasks?: string[];
+  /** Task notifications and subagent hand-backs that entered our turn, judged at its end. */
+  notices: NoticeRef[];
+  handBacks: { at: number; agentId: string }[];
   completion?: { reason: "answer" | "aborted" | "refusal" | "error"; answer: string; at: number };
-  settleUntil?: number;
   /** For requests, once decided. */
   outcome?: OutcomeBody;
 }
@@ -64,6 +71,8 @@ export class Tracker {
   readonly deliveries = new Map<string, Tracked>();
   /** The main-loop turn running now, whoever started it. */
   activeTurnId: string | undefined;
+  /** Agent calls of our work in flight: a main-loop spawn during one is ours. */
+  private agentCallsInFlight = new Set<string>();
 
   readonly pluginName: string;
 
@@ -88,11 +97,11 @@ export class Tracker {
       submittedAt: input.at,
       toolUseIds: [],
       agentIds: [],
+      taskIds: [],
       backgroundIds: [],
       entered: [],
-      maybeQueued: [],
-      taskNotices: 0,
-      linkedTaskRows: 0,
+      notices: [],
+      handBacks: [],
     };
     this.deliveries.set(input.deliveryId, tracked);
     return tracked;
@@ -107,12 +116,6 @@ export class Tracker {
   turnStart(turnId: string, text: string, at: number): Action[] {
     this.activeTurnId = turnId;
     const actions: Action[] = [];
-    // A prompt that waited for this turn did not enter the one before it.
-    for (const d of this.deliveries.values()) {
-      if (d.phase !== "settling") continue;
-      d.maybeQueued = d.maybeQueued.filter((q) => !(q.text.trim() !== "" && text.includes(q.text.trim())));
-      actions.push(...this.finish(d, at));
-    }
     const header = parseDeliveryHeader(text);
     const d = header ? this.deliveries.get(header.deliveryId) : undefined;
     if (d && d.phase === "submitted" && header!.messageId === d.messageId) {
@@ -130,58 +133,86 @@ export class Tracker {
   }
 
   promptSubmit(input: { turnId?: string; origin: { kind: string; name?: string }; text: string; at: number }): void {
-    if (input.origin.kind === "plugin" && input.origin.name === this.pluginName) return;
     const d = this.running();
     if (!d || !input.turnId || input.turnId !== d.turnId) return;
-    if (input.origin.kind === "task-notification") d.taskNotices += 1;
-    else d.maybeQueued.push({ origin: input.origin.kind, text: input.text, at: input.at });
+    if (input.origin.kind === "task-notification") {
+      d.notices.push({ at: input.at, tasks: parseTaskNotification(input.text) });
+      return;
+    }
+    const handBack = input.origin.kind === "peer" ? parseHandBack(input.text) : undefined;
+    if (handBack) {
+      d.handBacks.push({ at: input.at, agentId: handBack });
+      return;
+    }
+    const origin = input.origin.kind === "plugin" && input.origin.name ? `plugin:${input.origin.name}` : input.origin.kind;
+    d.entered.push({ origin: origin.slice(0, 64), at: input.at });
   }
 
-  toolCall(input: { toolUseId?: string; agentId?: string; background?: boolean }): void {
+  /** A tool call starting. Ours if the main loop makes it during our turn, or one of our subagents does. */
+  toolCall(input: { toolUseId?: string; agentId?: string; background?: boolean; tool?: string }): void {
     const d = this.running();
-    if (!d || this.activeTurnId !== d.turnId) return;
-    if (input.agentId) {
-      if (!d.agentIds.includes(input.agentId)) d.agentIds.push(input.agentId);
-    } else if (input.toolUseId && !d.toolUseIds.includes(input.toolUseId)) {
-      d.toolUseIds.push(input.toolUseId);
-      if (input.background) d.backgroundIds.push(input.toolUseId);
+    if (!d || !input.toolUseId) return;
+    const ours = input.agentId === undefined ? this.activeTurnId === d.turnId : d.agentIds.includes(input.agentId);
+    if (!ours) return;
+    if (!d.toolUseIds.includes(input.toolUseId)) d.toolUseIds.push(input.toolUseId);
+    if (input.background && !d.backgroundIds.includes(input.toolUseId)) d.backgroundIds.push(input.toolUseId);
+    if (input.tool === "Agent") this.agentCallsInFlight.add(input.toolUseId);
+  }
+
+  /** A tool call's result: an Agent call names the subagent, a background shell its task. */
+  toolResult(input: { toolUseId?: string; result?: unknown }): void {
+    if (!input.toolUseId) return;
+    this.agentCallsInFlight.delete(input.toolUseId);
+    const d = this.running();
+    if (!d || !d.toolUseIds.includes(input.toolUseId)) return;
+    const result = (input.result ?? {}) as { agentId?: unknown; backgroundTaskId?: unknown };
+    if (typeof result.agentId === "string" && result.agentId !== "") {
+      addOnce(d.agentIds, result.agentId);
+      addOnce(d.backgroundIds, input.toolUseId);
+    }
+    if (typeof result.backgroundTaskId === "string" && result.backgroundTaskId !== "") {
+      addOnce(d.taskIds, result.backgroundTaskId);
+      addOnce(d.backgroundIds, input.toolUseId);
+    }
+  }
+
+  /**
+   * `agent.spawn` resolved. Ours if spawned inside one of our subagents, or
+   * from the main loop while one of our Agent calls is running (the main loop's
+   * calls during our turn are ours). A plugin's own spawn is never ours.
+   */
+  agentSpawned(input: { agentId?: string; parentAgentId?: string; engine: boolean }): void {
+    const d = this.running();
+    if (!d || !input.agentId || !input.engine) return;
+    const ours =
+      input.parentAgentId !== undefined ? d.agentIds.includes(input.parentAgentId) : this.agentCallsInFlight.size > 0 && this.activeTurnId === d.turnId;
+    if (ours) addOnce(d.agentIds, input.agentId);
+  }
+
+  /** A task-notification row: maps a task id to the call that started it. */
+  taskRow(task: { id?: string; toolUseId?: string }): void {
+    for (const d of this.deliveries.values()) {
+      if (d.phase === "submitted") continue;
+      if (task.id && task.toolUseId && d.toolUseIds.includes(task.toolUseId)) addOnce(d.taskIds, task.id);
     }
   }
 
   /**
    * A request whose turn is over but started background work that may still
-   * report: a later notification naming one of its calls is a follow-up the
-   * agent should send with `comms reply`.
+   * report: a later notification naming that work is a follow-up the agent
+   * should send with `comms reply`.
    */
   followUpFor(notificationText: string): Tracked | undefined {
+    const tasks = parseTaskNotification(notificationText);
+    if (tasks.length === 0) return undefined;
     let found: Tracked | undefined;
     for (const d of this.deliveries.values()) {
-      if (d.phase !== "done" || d.kind !== "request" || d.backgroundIds === undefined) continue;
-      const ids = [...d.backgroundIds, ...d.agentIds];
-      if (ids.some((id) => id !== "" && notificationText.includes(id))) found = d;
+      if (d.phase !== "done" || d.kind !== "request") continue;
+      const background = (t: { taskId?: string; toolUseId?: string }) =>
+        t.toolUseId !== undefined ? d.backgroundIds.includes(t.toolUseId) : t.taskId !== undefined && (d.agentIds.includes(t.taskId) || d.taskIds.includes(t.taskId));
+      if (tasks.some(background)) found = d;
     }
     return found;
-  }
-
-  /** A subagent's id, from wherever it's seen (an Agent tool result, its turns). */
-  agentSeen(agentId: string): void {
-    const d = this.running();
-    if (d && !d.agentIds.includes(agentId)) d.agentIds.push(agentId);
-  }
-
-  /** A task-notification row, while our turn runs: linked if it names work our turn started. */
-  taskRow(task: { id?: string; toolUseId?: string }): void {
-    const d = this.running();
-    if (!d) return;
-    const linked =
-      (task.toolUseId !== undefined && d.toolUseIds.includes(task.toolUseId)) ||
-      (task.id !== undefined && d.agentIds.includes(task.id));
-    const key = task.id ?? task.toolUseId;
-    d.linkedTasks ??= [];
-    if (linked && key !== undefined && !d.linkedTasks.includes(key)) {
-      d.linkedTasks.push(key);
-      d.linkedTaskRows += 1;
-    }
   }
 
   turnComplete(input: {
@@ -191,43 +222,28 @@ export class Tracker {
     answer: string;
     at: number;
   }): Action[] {
-    if (input.agentId) {
-      this.agentSeen(input.agentId);
-      return [];
-    }
+    // A subagent's turn is never ours to collect, and says nothing about whose it is.
+    if (input.agentId) return [];
     if (this.activeTurnId === input.turnId) this.activeTurnId = undefined;
     const d = this.running();
     if (!d || d.turnId !== input.turnId) return [];
     d.completion = { reason: input.reason, answer: input.answer, at: input.at };
-    if (d.maybeQueued.length > 0) {
-      d.phase = "settling";
-      d.settleUntil = input.at + SETTLE_MS;
-      return [];
-    }
-    return this.finish(d, input.at);
+    return this.finish(d);
   }
 
-  /** Settles deliveries whose wait for a queued prompt's own turn has passed. */
-  tick(now: number): Action[] {
-    const actions: Action[] = [];
-    for (const d of this.deliveries.values()) {
-      if (d.phase === "settling" && d.settleUntil !== undefined && now >= d.settleUntil) actions.push(...this.finish(d, now));
-    }
-    return actions;
-  }
-
-  private finish(d: Tracked, at: number): Action[] {
+  private finish(d: Tracked): Action[] {
     const completion = d.completion!;
-    const entered = [
-      ...d.entered,
-      ...d.maybeQueued.map((q) => ({ origin: q.origin, at: q.at })),
-      ...Array.from({ length: Math.max(0, d.taskNotices - d.linkedTaskRows) }, () => ({ origin: "task-notification", at })),
-    ];
-    d.maybeQueued = [];
+    const entered: EnteredInput[] = [...d.entered];
+    for (const notice of d.notices) {
+      const ours = notice.tasks.length > 0 && notice.tasks.every((t) => isOurTask(d, t));
+      if (!ours) entered.push({ origin: "task-notification", at: notice.at });
+    }
+    for (const h of d.handBacks) if (!d.agentIds.includes(h.agentId)) entered.push({ origin: "peer", at: h.at });
+    entered.sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
     d.phase = "done";
-    delete d.settleUntil;
+    this.agentCallsInFlight.clear();
     let outcome: OutcomeBody;
-    if (entered.length > 0) outcome = { outcome: "ambiguous", entered };
+    if (entered.length > 0) outcome = { outcome: "ambiguous", entered: capEntered(entered) };
     else if (completion.reason === "answer" && completion.answer.trim() !== "") outcome = { outcome: "replied", answer: completion.answer };
     else if (completion.reason === "answer") outcome = { outcome: "failed", reason: "error", detail: "the turn produced no answer" };
     else outcome = { outcome: "failed", reason: completion.reason };
@@ -237,6 +253,49 @@ export class Tracker {
       { type: "done", deliveryId: d.deliveryId },
     ];
   }
+}
+
+function addOnce(list: string[], value: string): void {
+  if (!list.includes(value)) list.push(value);
+}
+
+function isOurTask(d: Tracked, t: { taskId?: string; toolUseId?: string }): boolean {
+  if (t.toolUseId !== undefined) return d.toolUseIds.includes(t.toolUseId);
+  if (t.taskId !== undefined) return d.agentIds.includes(t.taskId) || d.taskIds.includes(t.taskId);
+  return false;
+}
+
+/** Within the protocol's cap: the first ones, then one entry saying how many more. */
+export function capEntered(entered: EnteredInput[]): EnteredInput[] {
+  if (entered.length <= MAX_ENTERED) return entered;
+  const kept = entered.slice(0, MAX_ENTERED - 1);
+  const rest = entered.length - kept.length;
+  return [...kept, { origin: `+${rest} more`, at: entered[MAX_ENTERED - 1]!.at }];
+}
+
+const TASK_BLOCK = /<task-notification>([\s\S]*?)(?:<\/task-notification>|$)/g;
+
+/** The tasks a task-notification prompt names, one per block (2.1.286: `<task-id>`, `<tool-use-id>`). */
+export function parseTaskNotification(text: string): { taskId?: string; toolUseId?: string }[] {
+  const tasks: { taskId?: string; toolUseId?: string }[] = [];
+  for (const block of text.matchAll(TASK_BLOCK)) {
+    const body = block[1] ?? "";
+    const taskId = /<task-id>\s*([^<\s]+)\s*<\/task-id>/.exec(body)?.[1];
+    const toolUseId = /<tool-use-id>\s*([^<\s]+)\s*<\/tool-use-id>/.exec(body)?.[1];
+    tasks.push({ ...(taskId ? { taskId } : {}), ...(toolUseId ? { toolUseId } : {}) });
+  }
+  // A block that names nothing can't be linked.
+  return tasks.some((t) => !t.taskId && !t.toolUseId) ? [{}] : tasks;
+}
+
+const HAND_BACK = /^<agent-message from="([A-Za-z0-9_-]{1,128})">\n\[Subagent hand-back\]/;
+
+/** The subagent a hand-back prompt comes from: exactly one frame, at the start. */
+export function parseHandBack(text: string): string | undefined {
+  const match = HAND_BACK.exec(text);
+  if (!match) return undefined;
+  if ((text.match(/<agent-message /g) ?? []).length !== 1) return undefined;
+  return match[1];
 }
 
 // Claude Code's framing around a plugin's prompt (2.1.286). Anything else in

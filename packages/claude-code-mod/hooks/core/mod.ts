@@ -24,6 +24,8 @@ export interface Host {
   /** `$.prompt.submit`. Resolves `{ dropped }` when a hook refused the prompt. */
   submit(text: string): Promise<{ dropped?: string }>;
   now(): number;
+  /** Resolves after `ms` (the engine's `$.clock.sleep`). */
+  sleep?(ms: number): Promise<void>;
   log(line: string): void;
   loadJournal(): Promise<string | null>;
   saveJournal(text: string): Promise<void>;
@@ -43,6 +45,16 @@ export interface ModOptions {
 type Report = { op: "delivered" | "outcome" | "check-result" | "presence"; body: Record<string, unknown> };
 
 const JOURNAL_KEEP = 200;
+/** Delivery ids remembered for restart checks; past this the journal is marked incomplete. */
+const SEEN_KEEP = 5_000;
+
+interface JournalFile {
+  participant?: string;
+  deliveries?: Tracked[];
+  seen?: string[];
+  /** Set once ids were dropped or a journal was lost: absence then proves nothing. */
+  incomplete?: boolean;
+}
 
 export class CommsMod {
   readonly tracker: Tracker;
@@ -54,11 +66,13 @@ export class CommsMod {
   private presenceSent: "idle" | "busy" | undefined;
   private reports: Report[] = [];
   private flushing = false;
-  /** Checks we can't answer yet (our prompt is queued, or its turn is settling). */
+  /** Checks we can't answer yet (our prompt is queued). */
   private deferredChecks = new Map<string, DeliveryCheck>();
   /** Every delivery id seen, including ones from earlier sessions of this participant. */
   private seen = new Set<string>();
   private journalLoaded = false;
+  /** False when a journal on disk couldn't be read: absence from it then proves nothing. */
+  private journalComplete = true;
 
   private readonly host: Host;
   private readonly options: ModOptions;
@@ -138,7 +152,6 @@ export class CommsMod {
   /** Called on every clock tick: settle, flush reports, keep one poll outstanding. */
   async tick(): Promise<void> {
     if (this.stopped) return;
-    this.apply(this.tracker.tick(this.host.now()));
     if (!this.registered && !(await this.register())) return;
     void this.flush();
     if (!this.polling) void this.poll();
@@ -190,7 +203,17 @@ export class CommsMod {
       seq: delivery.message.seq,
     });
     // Journal before submitting: after a crash, an entry means "maybe submitted".
-    await this.saveJournal();
+    // If it can't be written, a later restart check couldn't know: don't submit.
+    if (!(await this.saveJournal())) {
+      const d = this.tracker.deliveries.get(delivery.id)!;
+      d.phase = "done";
+      this.host.log(`${d.deliveryId}: journal not writable, not submitted`);
+      if (d.kind === "request") {
+        d.outcome = { outcome: "failed", reason: "rejected", detail: "the mod could not write its journal, so it did not submit the delivery" };
+        this.queue({ op: "outcome", body: { sessionId: this.options.sessionId, deliveryId: d.deliveryId, ...d.outcome } });
+      }
+      return;
+    }
     let result: { dropped?: string };
     try {
       result = await this.host.submit(rendered);
@@ -223,6 +246,17 @@ export class CommsMod {
     this.tracker.promptSubmit({ ...input, at: this.host.now() });
   }
 
+  onToolResult(input: { toolUseId?: string; result?: unknown }): void {
+    this.tracker.toolResult(input);
+  }
+
+  onAgentSpawned(input: { agentId?: string; parentAgentId?: string; engine: boolean }): void {
+    const running = [...this.tracker.deliveries.values()].find((d) => d.phase === "running");
+    const before = running?.agentIds.length ?? 0;
+    this.tracker.agentSpawned(input);
+    if (running) this.host.log(`${running.deliveryId}: subagent ${input.agentId ?? "?"} spawned (parent ${input.parentAgentId ?? "main"}) ${running.agentIds.length > before ? "ours" : "not ours"}`);
+  }
+
   onToolCall(input: { toolUseId?: string; agentId?: string; background?: boolean; tool?: string }): void {
     const running = [...this.tracker.deliveries.values()].find((d) => d.phase === "running");
     if (running) {
@@ -247,10 +281,7 @@ export class CommsMod {
   }
 
   onTaskRow(task: { id?: string; toolUseId?: string }): void {
-    const running = [...this.tracker.deliveries.values()].find((d) => d.phase === "running");
-    const before = running?.linkedTaskRows ?? 0;
     this.tracker.taskRow(task);
-    if (running) this.host.log(`${running.deliveryId}: task row id=${task.id ?? "-"} toolUseId=${task.toolUseId ?? "-"} ${running.linkedTaskRows > before ? "linked" : "not linked"}`);
   }
 
   onTurnComplete(input: { turnId: string; agentId?: string; reason: "answer" | "aborted" | "refusal" | "error"; answer: string }): void {
@@ -314,7 +345,7 @@ export class CommsMod {
     const base = { sessionId: this.options.sessionId, deliveryId: check.deliveryId };
     const d = this.tracker.deliveries.get(check.deliveryId);
     if (d && d.sessionId === this.options.sessionId) {
-      if (d.phase === "submitted" || d.phase === "settling") {
+      if (d.phase === "submitted") {
         this.deferredChecks.set(check.deliveryId, check);
         return;
       }
@@ -338,7 +369,15 @@ export class CommsMod {
         body: { ...base, found: "unknown", detail: `handed to an earlier session (${d.sessionId}); its turn wasn't seen to finish` },
       });
     }
-    // Never journaled here. If this session's transcript shows it anyway, we can't say what happened.
+    // Not in memory: another session of this participant may have journaled it since we loaded.
+    if (await this.reloadJournal()) {
+      const fresh = this.tracker.deliveries.get(check.deliveryId);
+      if (fresh) return this.check(check);
+    }
+    if (!this.journalComplete || this.seen.has(check.deliveryId)) {
+      return this.queue({ op: "check-result", body: { ...base, found: "unknown", detail: "the mod's journal can't rule it out" } });
+    }
+    // A compacted transcript can't prove absence; it can only show presence.
     const header = `delivery=${check.deliveryId} message=${check.messageId}`;
     let inTranscript = false;
     try {
@@ -347,6 +386,7 @@ export class CommsMod {
       return this.queue({ op: "check-result", body: { ...base, found: "unknown", detail: `transcript unreadable: ${String(error)}`.slice(0, 2000) } });
     }
     if (inTranscript) return this.queue({ op: "check-result", body: { ...base, found: "unknown", detail: "in the transcript but not in the mod's journal" } });
+    // The journal is written before every submission and was read whole: never submitted.
     this.queue({ op: "check-result", body: { ...base, found: "no" } });
   }
 
@@ -394,29 +434,69 @@ export class CommsMod {
   private async loadJournal(): Promise<void> {
     if (this.journalLoaded) return;
     this.journalLoaded = true;
+    await this.reloadJournal();
+  }
+
+  /** Reads the journal and merges it in. False (and the journal counts as incomplete) if it can't be read. */
+  private async reloadJournal(): Promise<boolean> {
+    const file = await this.readJournalFile();
+    if (file === undefined) return false;
+    this.merge(file);
+    return true;
+  }
+
+  private async readJournalFile(): Promise<JournalFile | null | undefined> {
+    let text: string | null;
     try {
-      const text = await this.host.loadJournal();
-      if (!text) return;
-      const parsed = JSON.parse(text) as { deliveries?: Tracked[]; seen?: string[] };
-      for (const id of parsed.seen ?? []) this.seen.add(id);
-      for (const d of parsed.deliveries ?? []) {
-        // A turn from an earlier session can't be watched any more: keep it for checks only.
-        if (d.sessionId !== this.options.sessionId && d.phase !== "done") d.phase = "done";
-        this.tracker.deliveries.set(d.deliveryId, d);
-        this.seen.add(d.deliveryId);
-      }
+      text = await this.host.loadJournal();
     } catch (error) {
-      this.host.log(`journal unreadable, starting empty: ${String(error)}`);
+      this.host.log(`journal unreadable: ${String(error)}`);
+      this.journalComplete = false;
+      return undefined;
+    }
+    if (!text) return null;
+    try {
+      return JSON.parse(text) as JournalFile;
+    } catch (error) {
+      this.host.log(`journal unreadable: ${String(error)}`);
+      this.journalComplete = false;
+      return undefined;
     }
   }
 
-  private async saveJournal(): Promise<void> {
+  private merge(file: JournalFile | null): void {
+    if (!file) return;
+    if (file.incomplete) this.journalComplete = false;
+    for (const id of file.seen ?? []) this.seen.add(id);
+    for (const d of file.deliveries ?? []) {
+      this.seen.add(d.deliveryId);
+      const mine = this.tracker.deliveries.get(d.deliveryId);
+      if (mine && mine.sessionId === this.options.sessionId) continue;
+      // A turn from another session can't be watched from here: keep it for checks only.
+      if (d.sessionId !== this.options.sessionId && d.phase !== "done") d.phase = "done";
+      this.tracker.deliveries.set(d.deliveryId, d);
+    }
+  }
+
+  /** Merges with what's on disk (another session may have written), then writes. False if it couldn't write. */
+  private async saveJournal(): Promise<boolean> {
+    const onDisk = await this.readJournalFile();
+    if (onDisk !== undefined) this.merge(onDisk);
     const deliveries = [...this.tracker.deliveries.values()].slice(-JOURNAL_KEEP);
-    const seen = [...this.seen].slice(-JOURNAL_KEEP * 5);
+    const seen = [...this.seen];
+    if (seen.length > SEEN_KEEP) this.journalComplete = false;
+    const file: JournalFile = {
+      participant: this.options.participant,
+      deliveries,
+      seen: seen.slice(-SEEN_KEEP),
+      ...(this.journalComplete ? {} : { incomplete: true }),
+    };
     try {
-      await this.host.saveJournal(JSON.stringify({ participant: this.options.participant, deliveries, seen }));
+      await this.host.saveJournal(JSON.stringify(file));
+      return true;
     } catch (error) {
       this.host.log(`journal not saved: ${String(error)}`);
+      return false;
     }
   }
 }

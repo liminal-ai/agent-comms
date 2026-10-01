@@ -109,9 +109,19 @@ export function register(on: any) {
     return note ? next({ ...e, context: [...(e.context ?? []), note] }) : next(e);
   });
 
-  on("tool.call", ($: Dollar, e: any, next: any) => {
+  // Our work, by identity: the call, then its result (an Agent call names its
+  // subagent, a background shell its task).
+  on("tool.call", async ($: Dollar, e: any, next: any) => {
     mod?.onToolCall({ toolUseId: e.tool_use_id, agentId: e.agentId, background: e.run_in_background === true, tool: e.tool });
-    return next(e);
+    const result = await next(e);
+    mod?.onToolResult({ toolUseId: e.tool_use_id, result: result?.result });
+    return result;
+  });
+
+  on("agent.spawn", async ($: Dollar, e: any, next: any) => {
+    const result = await next(e);
+    mod?.onAgentSpawned({ agentId: result?.agentId, parentAgentId: e.parentAgentId, engine: e.provider?.plugin === "engine" });
+    return result;
   });
 
   on("turn.complete", async ($: Dollar, e: any, next: any) => {

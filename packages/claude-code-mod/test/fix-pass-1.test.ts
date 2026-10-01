@@ -35,10 +35,10 @@ function ourTurn() {
 /** Our main turn starts a background shell and a background helper (results as 2.1.286 reports them). */
 function startOurWork(t: Tracker) {
   t.toolCall({ toolUseId: "toolu_bash", tool: "Bash", background: true });
-  t.toolResult?.({ toolUseId: "toolu_bash", result: { stdout: "", backgroundTaskId: "bshell1" } });
+  t.toolResult({ toolUseId: "toolu_bash", result: { stdout: "", backgroundTaskId: "bshell1" } });
   t.toolCall({ toolUseId: "toolu_agent", tool: "Agent" });
-  t.agentSpawned?.({ agentId: "a_ours", engine: true });
-  t.toolResult?.({ toolUseId: "toolu_agent", result: { isAsync: true, status: "async_launched", agentId: "a_ours" } });
+  t.agentSpawned({ agentId: "a_ours", engine: true });
+  t.toolResult({ toolUseId: "toolu_agent", result: { isAsync: true, status: "async_launched", agentId: "a_ours" } });
 }
 
 const outcomeOf = (actions: ReturnType<Tracker["turnComplete"]>) => {
@@ -84,8 +84,8 @@ describe("1.6 only helpers our turn started", () => {
     // Lee's turn starts a background helper.
     t.turnStart("t0", "run a long helper in the background", 0);
     t.toolCall({ toolUseId: "toolu_lee_agent", tool: "Agent" });
-    t.agentSpawned?.({ agentId: "a_lee", engine: true });
-    t.toolResult?.({ toolUseId: "toolu_lee_agent", result: { agentId: "a_lee", status: "async_launched" } });
+    t.agentSpawned({ agentId: "a_lee", engine: true });
+    t.toolResult({ toolUseId: "toolu_lee_agent", result: { agentId: "a_lee", status: "async_launched" } });
     t.turnComplete({ turnId: "t0", reason: "answer", answer: "started", at: 1 });
     // Our delivery runs; Lee's helper keeps working and finishes inside our turn.
     t.submitted({ deliveryId: "d_1", messageId: "m_1", kind: "request", rendered: RENDERED, sessionId: "s", at: 2 });
@@ -103,8 +103,8 @@ describe("1.6 only helpers our turn started", () => {
     startOurWork(t);
     // Inside our helper: a nested Agent call spawning a child.
     t.toolCall({ toolUseId: "toolu_nested", tool: "Agent", agentId: "a_ours" });
-    t.agentSpawned?.({ agentId: "a_child", parentAgentId: "a_ours", engine: true });
-    t.toolResult?.({ toolUseId: "toolu_nested", result: { agentId: "a_child" } });
+    t.agentSpawned({ agentId: "a_child", parentAgentId: "a_ours", engine: true });
+    t.toolResult({ toolUseId: "toolu_nested", result: { agentId: "a_child" } });
     t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: notification({ taskId: "a_child" }), at: 2 });
     t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: notification({ taskId: "a_ours" }), at: 3 });
     const outcome = outcomeOf(t.turnComplete({ turnId: "t1", reason: "answer", answer: "ok", at: 4 }));
