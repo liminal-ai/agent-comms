@@ -9,7 +9,7 @@ import { api } from "../../../convex/_generated/api.js";
 import type { Check, HandOff, HarnessAdapter, Outcome, Target } from "../src/adapter.ts";
 import { ADMIN, type Convex, type Running, sleep, startConnector, until, world } from "./harness.ts";
 
-type Gate = { confirm: (cursor?: string) => Promise<boolean>; signal: AbortSignal };
+type Gate = { confirm: (cursor?: string) => Promise<boolean>; signal?: AbortSignal };
 
 /** A scripted harness: what each call returns is set by the test. */
 class Scripted {
@@ -28,8 +28,8 @@ class Scripted {
         this.handOffs += 1;
         // The courtesy wait, in which the claim can be lost.
         const end = Date.now() + this.handOffWaitMs;
-        while (Date.now() < end && !signal.aborted && !gate?.signal.aborted) await sleep(20);
-        if (signal.aborted || gate?.signal.aborted) return { _tag: "lost", detail: "aborted" } as HandOff;
+        while (Date.now() < end && !signal.aborted && !gate?.signal?.aborted) await sleep(20);
+        if (signal.aborted || gate?.signal?.aborted) return { _tag: "lost", detail: "aborted" } as HandOff;
         if (gate && !(await gate.confirm("100"))) return { _tag: "lost", detail: "claim not held" } as HandOff;
         this.sent += 1;
         return this.onHandOff();
@@ -82,8 +82,8 @@ describe("fix pass section 2: dispatcher", () => {
     await until("handoff started", async () => s.handOffs > 0);
     // Another connector takes the claim while we're in the courtesy wait.
     await w.t.run(async (ctx) => {
-      const d = await ctx.db.get(sent.deliveries[0]!.id as never);
-      await ctx.db.patch((d as { _id: never })._id, { claim: { machine: "box", claimId: "someone-else", leaseExpiresAt: Date.now() + 600_000 } } as never);
+      const id = ctx.db.normalizeId("deliveries", sent.deliveries[0]!.id)!;
+      await ctx.db.patch(id, { claim: { machine: "box", claimId: "someone-else", leaseExpiresAt: Date.now() + 600_000 } });
     });
     await sleep(3_000);
     expect(s.sent).toBe(0);

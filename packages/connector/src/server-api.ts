@@ -34,6 +34,7 @@ export interface WorkItem {
   collect: boolean;
   claim?: Claim;
   turnId?: string;
+  cursor?: string;
   createdAt: number;
 }
 
@@ -50,6 +51,7 @@ export interface ServerApiShape {
   readonly work: Stream.Stream<WorkItem[], Unavailable>;
   readonly claim: (deliveryId: string, leaseMs: number) => Effect.Effect<ClaimResult, ApiError>;
   readonly renew: (deliveryId: string, claimId: string, leaseMs: number) => Effect.Effect<{ claim: Claim }, ApiError>;
+  readonly prepare: (deliveryId: string, claimId: string, cursor?: string) => Effect.Effect<unknown, ApiError>;
   readonly delivered: (deliveryId: string, claimId: string, turnId: string, cursor?: string) => Effect.Effect<StateResult, ApiError>;
   readonly collect: (deliveryId: string, claimId: string, turnId: string, answer: string) => Effect.Effect<Responses["outcome"], ApiError>;
   readonly ambiguous: (deliveryId: string, claimId: string, turnId: string, entered: EnteredInput[]) => Effect.Effect<StateResult, ApiError>;
@@ -122,6 +124,10 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
       call("claim", () => transport.mutation(api.connector.claim, { machine, deliveryId, leaseMs })) as Effect.Effect<ClaimResult, ApiError>,
     renew: (deliveryId, claimId, leaseMs) =>
       call("renew", () => transport.mutation(api.connector.renew, { machine, deliveryId, claimId, leaseMs })),
+    prepare: (deliveryId, claimId, cursor) =>
+      call("prepare", () =>
+        transport.mutation(api.connector.prepare, { machine, deliveryId, claimId, ...(cursor !== undefined ? { cursor } : {}) }),
+      ),
     delivered: (deliveryId, claimId, turnId, cursor) =>
       call("delivered", () =>
         transport.mutation(api.connector.delivered, { machine, deliveryId, claimId, turnId, ...(cursor !== undefined ? { cursor } : {}) }),

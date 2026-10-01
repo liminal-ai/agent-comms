@@ -8,14 +8,14 @@
 //   aren't working on is recovered through the adapter's check.
 // - Writes retry while the server is unreachable; nothing here blocks a harness.
 
-import { type Claim, clipAnswer, type Delivery } from "@agent-comms/protocol";
+import { type Claim, clipAnswer, type Delivery, type DeliveryState } from "@agent-comms/protocol";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
-import { Adapters, type Check, type HarnessAdapter, type Outcome, Poke, type Target } from "./adapter.ts";
+import { Adapters, type Check, type Gate, type HarnessAdapter, type Outcome, Poke, type Target } from "./adapter.ts";
 import { type ApiError, ServerApi, type WorkItem } from "./server-api.ts";
 
 export interface DispatcherOptions {
@@ -146,8 +146,33 @@ export const runDispatcher = (options: DispatcherOptions) =>
         yield* release(h);
       });
 
+    /** Records `delivered`, and keeps our copy of the delivery current: recovery decides from it (2.1). */
     const markDelivered = (h: Held, turnId: string, cursor?: string) =>
-      write("delivered", h.delivery.id, api.delivered(h.delivery.id, h.claim.claimId, turnId, cursor));
+      write("delivered", h.delivery.id, api.delivered(h.delivery.id, h.claim.claimId, turnId, cursor)).pipe(
+        Effect.tap((ok) =>
+          Effect.sync(() => {
+            if (!ok) return;
+            const status = { ...h.delivery.status, state: "delivered" as const, turnId, ...(cursor !== undefined ? { cursor } : {}) };
+            h.delivery = { ...h.delivery, status };
+          }),
+        ),
+      );
+
+    /** Right before the adapter sends: the claim compare-and-set, recording home and cursor (2.2, 2.5). */
+    const gateFor = (h: Held): Gate => ({
+      confirm: (cursor) =>
+        Effect.runPromise(
+          api.prepare(h.delivery.id, h.claim.claimId, cursor).pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                if (cursor !== undefined) h.delivery = { ...h.delivery, status: { ...h.delivery.status, cursor } };
+              }),
+            ),
+            Effect.as(true),
+            Effect.catch((e) => Effect.sync(() => (log(`${h.delivery.id}: not sending (${e.message})`), false))),
+          ),
+        ),
+    });
 
     const handOffAndFollow = (adapter: HarnessAdapter, h: Held) =>
       Effect.gen(function* () {
@@ -161,8 +186,11 @@ export const runDispatcher = (options: DispatcherOptions) =>
           return log(`${h.delivery.id}: can't confirm the claim (${cas.failure.message}); will retry`);
         }
         h.claim = cas.success.claim;
-        const result = yield* withLease(h, adapter.handOff(h.target, h.delivery));
+        const result = yield* withLease(h, adapter.handOff(h.target, h.delivery, gateFor(h)));
         switch (result._tag) {
+          case "aborted":
+            log(`${h.delivery.id}: not sent (${result.detail})`);
+            return yield* release(h);
           case "rejected":
             yield* write("failed", h.delivery.id, api.failed(h.delivery.id, h.claim.claimId, undefined, "rejected", result.detail));
             return yield* release(h);
@@ -219,7 +247,16 @@ export const runDispatcher = (options: DispatcherOptions) =>
             if (r.failure._tag === "ProtocolFailure") held.delete(item.id);
             return;
           }
-          h = { ...mine, claim: r.success.claim };
+          // Our copy may be behind what's recorded (or the other way round): take the further state (2.1).
+          const recorded: DeliveryState =
+            item.state === "delivered" || mine.delivery.status.state === "delivered" ? "delivered" : mine.delivery.status.state;
+          const status = {
+            ...mine.delivery.status,
+            state: recorded,
+            ...((item.turnId ?? mine.delivery.status.turnId) !== undefined ? { turnId: item.turnId ?? mine.delivery.status.turnId } : {}),
+            ...((mine.delivery.status.cursor ?? item.cursor) !== undefined ? { cursor: mine.delivery.status.cursor ?? item.cursor } : {}),
+          };
+          h = { ...mine, claim: r.success.claim, delivery: { ...mine.delivery, status } };
           takeover = true;
         } else {
           const r = yield* Effect.result(api.claim(item.id, options.leaseMs));

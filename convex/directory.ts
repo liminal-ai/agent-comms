@@ -69,7 +69,9 @@ export const rebind = mutation({
 
 /**
  * Pause, resume or retire. Paused: deliveries are created and wait as pending.
- * Retired: no new deliveries, and pending ones fail. In-flight ones finish.
+ * Retired: no new deliveries, and pending ones fail. In-flight ones (claimed or
+ * delivered) finish on the machine they were handed to, and a request's
+ * answer is still collected (fix pass 2.4).
  */
 export const setState = mutation({
   args: { adminToken: v.string(), name: v.string(), state: v.union(v.literal("active"), v.literal("paused"), v.literal("retired")) },

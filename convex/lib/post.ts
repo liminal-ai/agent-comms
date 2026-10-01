@@ -13,6 +13,8 @@ export interface PostInput {
   kind: "request" | "answer";
   inReplyTo?: Id<"messages">;
   collectedFrom?: Id<"deliveries">;
+  /** A collected answer to a request accepted earlier: posted even if the sender has since been retired or left (2.4). */
+  inFlight?: boolean;
   text: string;
   attachments?: AttachmentRef[];
   origin: Origin;
@@ -20,7 +22,7 @@ export interface PostInput {
 
 export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResult> {
   const { sender, conversation, recipients } = input;
-  if (sender.state === "retired") fail("conflict", `@${sender.name} is retired`);
+  if (sender.state === "retired" && !input.inFlight) fail("conflict", `@${sender.name} is retired`);
   if (input.text.length > MAX_TEXT_CHARS) {
     fail("bad_request", `message text is ${input.text.length} characters; the limit is ${MAX_TEXT_CHARS}. Shorten it, or put the long part in a file and send a reference.`);
   }
@@ -33,7 +35,7 @@ export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResu
   if (input.kind === "request" && input.inReplyTo) fail("bad_request", "a request can't have inReplyTo");
   if (new Set(recipients.map((r) => r._id)).size !== recipients.length) fail("bad_request", "a recipient is named twice");
   if (recipients.some((r) => r._id === sender._id)) fail("bad_request", "can't address yourself");
-  await membership(ctx, conversation._id, sender);
+  if (!input.inFlight) await membership(ctx, conversation._id, sender);
   for (const r of recipients) await membership(ctx, conversation._id, r);
 
   const now = Date.now();
@@ -52,7 +54,7 @@ export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResu
     createdAt: now,
   });
   await ctx.db.patch(conversation._id, { lastSeq: seq, lastAt: now });
-  await advanceRead(ctx, conversation._id, sender._id, seq);
+  await advanceRead(ctx, conversation._id, sender._id, seq); // no-op for a sender who has left
 
   const result: SendResult = {
     message: await envelope(ctx, (await ctx.db.get(messageId))!),

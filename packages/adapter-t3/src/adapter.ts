@@ -37,7 +37,15 @@ export interface Target {
 export type HandOff =
   | { _tag: "accepted"; turnId: string; cursor?: string }
   | { _tag: "rejected"; detail: string }
+  /** Never sent: the gate said no or the handoff was cancelled before sending. */
+  | { _tag: "aborted"; detail: string }
   | { _tag: "lost"; detail: string };
+
+/** The last check before sending (2.2): `confirm` re-checks the claim and records the cursor; `signal` cancels a waiting handoff. */
+export interface Gate {
+  confirm(cursor?: string): Promise<boolean>;
+  signal: AbortSignal;
+}
 export type Outcome =
   | { _tag: "replied"; answer: string }
   | { _tag: "ambiguous"; entered: EnteredInput[] }
@@ -64,7 +72,7 @@ export interface T3AdapterOptions {
 
 export interface T3Adapter {
   ready(target: Target): Promise<boolean>;
-  handOff(target: Target, delivery: Delivery): Promise<HandOff>;
+  handOff(target: Target, delivery: Delivery, gate?: Gate): Promise<HandOff>;
   awaitOutcome(target: Target, delivery: Delivery, turnId: string): Promise<Outcome | { _tag: "lost"; detail: string }>;
   check(target: Target, delivery: Delivery, turnId: string | undefined): Promise<Check>;
   notifyUnmatched(target: Target, delivery: Delivery): Promise<void>;
@@ -257,7 +265,7 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
   return {
     ready: () => client.connected(),
 
-    async handOff(target, delivery) {
+    async handOff(target, delivery, gate) {
       const threadId = target.locator;
       const messageId = messageIdFor(delivery.id);
       try {
@@ -269,11 +277,17 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
           if (c._tag === "running" || c._tag === "completed") return { _tag: "accepted", turnId: c.turnId };
           return { _tag: "lost", detail: `message ${messageId} is in the thread but its turn is unclear (${c._tag})` };
         }
+        if (gate?.signal.aborted) return { _tag: "aborted", detail: "cancelled before sending" };
         const tracker = new TurnTracker(messageId);
         const f = await follow(threadId, tracker);
-        // Courtesy wait until idle, from the live session state.
-        await f.wait(() => (f.snapshot && !tracker.sessionBusy ? true : undefined));
+        // Courtesy wait until idle, from the live session state; a cancelled handoff stops waiting.
+        await f.wait(() => (gate?.signal.aborted || (f.snapshot && !tracker.sessionBusy) ? true : undefined));
         const cursor = String(tracker.lastSequence);
+        // The last check before sending: the claim is still ours, and the cursor is recorded (2.2).
+        if (gate && (gate.signal.aborted || !(await gate.confirm(encodeCursor(Number(cursor)))) || gate.signal.aborted)) {
+          f.stop();
+          return { _tag: "aborted", detail: "claim not held, or cancelled, before sending" };
+        }
         try {
           await client.startTurn(threadId, {
             messageId,
@@ -282,9 +296,11 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
             interactionMode: f.snapshot?.interactionMode ?? before.interactionMode,
           });
         } catch (error) {
+          // A definite refusal (HTTP 4xx) never ran. Anything else (5xx, socket, timeout) may have been
+          // accepted: lost, so recovery looks for our message in the thread (2.3).
           f.stop();
           if (error instanceof T3Rejected) return { _tag: "rejected", detail: error.message };
-          throw error;
+          return { _tag: "lost", detail: `turn start may or may not have reached T3: ${error instanceof Error ? error.message : String(error)}` };
         }
         const r = await f.wait(() => (tracker.startFailed ? "failed" : tracker.turnId ? "turn" : undefined), acceptTimeoutMs);
         if (r === "failed") {

@@ -268,12 +268,15 @@ export class ClaudeCodeSessions {
   readonly adapter: HarnessAdapter = {
     harness: "claude-code",
     ready: (target) => Effect.sync(() => this.session(target) !== undefined),
-    handOff: (target, delivery) =>
-      Effect.promise(async (): Promise<HandOff> => {
+    handOff: (target, delivery, gate) =>
+      Effect.promise(async (signal): Promise<HandOff> => {
         const known = this.reports.get(delivery.id)?.turnId;
         if (known !== undefined) return { _tag: "accepted", turnId: known };
         const s = this.session(target);
         if (!s) return { _tag: "lost", detail: `no session for @${target.participant}` };
+        // Last check before the delivery leaves for the session (2.2).
+        if (signal.aborted || !(await gate.confirm())) return { _tag: "aborted", detail: "claim not held" };
+        if (signal.aborted) return { _tag: "aborted", detail: "cancelled" };
         const accepted = this.wait(this.handOffs, delivery.id, s.id);
         this.enqueue(s, { type: "deliver", delivery });
         return accepted;

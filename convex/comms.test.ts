@@ -144,14 +144,14 @@ describe("fix pass 2.4-2.6", () => {
     await t.mutation(api.conversations.removeMember, { adminToken: ADMIN, conversationId: g, name: "b" });
     const r = await t.mutation(api.connector.collect, { machine: m1, deliveryId: id, claimId: claim.claimId, turnId: "t1", answer: "done" });
     expect(["replied", "failed"]).toContain(r.delivery.state);
-    expect(await work(t)).toEqual([]);
+    expect((await work(t)).map((w) => w.id)).not.toContain(id);
   });
 
   it("2.5 a delivery handed to a home stays with that home through a rebind", async () => {
     const t = await setup();
     const { id, claimId } = await claimed(t);
     // Record where it's going before the handoff.
-    await t.mutation((api.connector as Record<string, never>).prepare, { machine: m1, deliveryId: id, claimId, cursor: "17" } as never);
+    await t.mutation(api.connector.prepare, { machine: m1, deliveryId: id, claimId, cursor: "17" });
     await t.mutation(api.directory.rebind, { adminToken: ADMIN, name: "b", home: { machine: "m2", harness: "t3", locator: "new-thread" } });
     const mine = await work(t, m1);
     expect(mine.map((w) => [w.id, w.locator, w.harness])).toEqual([[id, "loc-b", "claude-code"]]);

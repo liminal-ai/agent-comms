@@ -132,16 +132,19 @@ export function makeT3Client(options: T3ClientOptions): T3Client {
         interactionMode: turn.interactionMode,
         createdAt: new Date().toISOString(),
       };
+      // Only an HTTP 4xx is a refusal (the command was rejected and never ran). A 5xx, a dropped
+      // connection or a timeout may follow acceptance: thrown as a plain error, never T3Rejected (2.3).
       const response = await fetch(`${baseUrl}/api/orchestration/dispatch`, {
         method: "POST",
         headers: { ...authHeaders(), "content-type": "application/json" },
         body: JSON.stringify(command),
         signal: AbortSignal.timeout(30_000),
       });
-      if (!response.ok) {
+      if (response.status >= 400 && response.status < 500) {
         const reason = await response.text().then((t) => t.slice(0, 300), () => "");
         throw new T3Rejected(`thread.turn.start refused: HTTP ${response.status} ${reason}`);
       }
+      if (!response.ok) throw new Error(`thread.turn.start: HTTP ${response.status}; it may or may not have been accepted`);
     },
 
     subscribe: async (threadId, options, onItem) => {
