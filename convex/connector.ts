@@ -186,15 +186,16 @@ export const claim = mutation({
     const now = Date.now();
     const claim = { machine: machine.machineId, claimId: crypto.randomUUID(), leaseExpiresAt: now + leaseMs(args.leaseMs) };
     let takeover = false;
+    const claimCount = (d.claimCount ?? 0) + 1;
     if (d.state === "pending") {
       if (recipient.state !== "active") fail("conflict", `@${recipient.name} is ${recipient.state}`);
-      await ctx.db.patch(d._id, { state: "claimed", at: now, claim });
+      await ctx.db.patch(d._id, { state: "claimed", at: now, claim, claimCount });
     } else if (d.state === "claimed" || (d.state === "delivered" && d.collect)) {
       if (d.claim && d.claim.leaseExpiresAt > now) {
         fail("conflict", `delivery ${d._id} is claimed by ${d.claim.machine} until ${new Date(d.claim.leaseExpiresAt).toISOString()}`);
       }
       takeover = true;
-      await ctx.db.patch(d._id, { claim });
+      await ctx.db.patch(d._id, { claim, claimCount });
     } else {
       fail("conflict", `delivery ${d._id} is ${d.state}`);
     }

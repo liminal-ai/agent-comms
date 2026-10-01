@@ -1,0 +1,7 @@
+[31m     [31m×[31m an uncertain delivery alerts its recipient's owner once, with the delivery and its conversation; it resolves when completed[39m[32m 171[2mms[22m[39m
+[31m     [31m×[31m a silent connector alerts once per incident: down, recovered, down gives two alerts[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m a reminder blocked past the threshold alerts the target's owner; an expired one alerts once[39m[32m 12[2mms[22m[39m
+[31m     [31m×[31m counts claims, and a delivery claimed more than maxClaims times alerts[39m[32m 12[2mms[22m[39m
+[31m     [31m×[31m an agent with no owner (impossible after the migration) and a retired one raise nothing; no system participant gets a delivery[39m[32m 5[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 5 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[90m (5)[39m

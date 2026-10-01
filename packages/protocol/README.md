@@ -184,6 +184,20 @@ Participant `kind` gains `system`. `reminders` and `alerts` are created at deplo
 - **Who may change one:** its creator, its target, and the target's owner (`conflict` otherwise); anyone may view one. `reminders` lists those the caller created or is the target of (or owns the target of).
 - CLI: `comms remind @agent "text" (--every <d> | --at <time>) [--name] [--idle-for <d>] [--watch @x] [--max n] [--report-to @x] [--expires <d>]`, `comms reminders`, `comms reminder <id>`, `comms reminder pause|resume|done|cancel <id>`, `comms reminder blocked <id> "why"`.
 
+### Alerts (R4)
+
+A minute cron (`alerts.scan`) checks each condition, and opens an incident keyed by (cause, subject, owner) when one starts, posting one alert from `@alerts` to the owner (`renderAlert`, `meta.type: "alert"`; owners are people, so it lands in their inbox). An incident resolves when its condition clears; a recurrence is a new incident and a new alert (down, recovered, down: two). Recovery isn't announced.
+
+| Cause | Holds while | Owner |
+|---|---|---|
+| `uncertain-delivery` | a delivery is `uncertain` | the recipient's |
+| `connector-silent` | a machine with homed, unretired agents hasn't heartbeated for `connectorSilentMs` (10 min) | each owner of those agents |
+| `reminder-blocked` | a reminder has been `blocked` for `reminderBlockedMs` (60 min) | the target's |
+| `reminder-expired` | a one-off: alerted once when a reminder expires | the target's |
+| `delivery-reclaimed` | an in-flight delivery has been claimed more than `maxClaims` (5) times (`claimCount`, counted by `claim`) | the recipient's |
+
+Thresholds are the one `alertConfig` row (`alerts.setConfig`), defaults otherwise.
+
 ### The CLI: JSON and exit codes
 
 `CLI_EXIT`, shared by the CLI and anything wrapping it:

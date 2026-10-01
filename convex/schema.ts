@@ -115,7 +115,9 @@ export default defineSchema({
     // `delivered` work is only collectable deliveries; finished answers stay out of the scan (2.6).
     .index("by_recipient_state_collect", ["recipientId", "state", "collect"])
     .index("by_target_state_collect", ["target.machine", "state", "collect"])
-    .index("by_message", ["messageId"]),
+    .index("by_message", ["messageId"])
+    // Alerts: uncertain deliveries, and in-flight ones claimed too often.
+    .index("by_state", ["state"]),
 
   // -------------------------------------------------------------------------
   // Capabilities pass (docs/04-capabilities.md)

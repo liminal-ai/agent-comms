@@ -1,0 +1,3 @@
+machine lim-builder: last seen 0 min ago; 18 unretired agents homed
+uncertain deliveries: 0; claimed/delivered: 31; conversations: 59
+(claimCount is absent on every existing delivery: counted from R4 on)

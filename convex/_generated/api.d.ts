@@ -14,6 +14,7 @@ import type * as conversations from "../conversations.js";
 import type * as crons from "../crons.js";
 import type * as directory from "../directory.js";
 import type * as inbox from "../inbox.js";
+import type * as lib_alerts from "../lib/alerts.js";
 import type * as lib_core from "../lib/core.js";
 import type * as lib_post from "../lib/post.js";
 import type * as lib_registry from "../lib/registry.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   directory: typeof directory;
   inbox: typeof inbox;
+  "lib/alerts": typeof lib_alerts;
   "lib/core": typeof lib_core;
   "lib/post": typeof lib_post;
   "lib/registry": typeof lib_registry;

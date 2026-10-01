@@ -1,0 +1,12 @@
+2026-10-01T18:25:57Z
+$ comms remind --as cedar-demo @t3-native "R3 live check from Cedar: reply with exactly: reminder ok" --every 1m --max 1 --name r3-live --report-to @lee
+reminder k97b5964trd9g3ra18zsvebcd58feqpt "r3-live" for @t3-native: every 1m, from 2026-10-01 18:26 UTC; at most 1 time; reports to @lee; expires 2026-10-08 18:25 UTC
+exit 0
+--- 2026-10-01T18:29:00Z
+$ comms reminder --as cedar-demo k97b5964trd9g3ra18zsvebcd58feqpt
+k97b5964trd9g3ra18zsvebcd58feqpt done (fired 1 time (--max 1)) "r3-live" → @t3-native every 1m; 1 fire
+  text: R3 live check from Cedar: reply with exactly: reminder ok
+  set by @cedar-demo; expires 2026-10-08 18:25 UTC
+  fire 2026-10-01 18:27 UTC: replied · answered: reminder ok
+lee's inbox from @reminders: [{"text":"Reminder r3-live (k97b5964trd9g3ra18zsvebcd58feqpt): @t3-native answered:\n> reminder ok","meta":{"fireMessageId":"jn7cbz3vm3fsw826g9xpzvjk198ff81r","name":"r3-live","reminderId":"k97b5964trd9g3ra18zsvebcd58feqpt","target":"t3-native","type":"reminder-report"},"readAt":null}]
+markRead (cleanup): {"marked":1,"unread":0}
