@@ -1,0 +1,11 @@
+2026-10-01T10:19:21-04:00 lim-builder systemd[1805]: Stopping agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms)...
+2026-10-01T10:19:21-04:00 lim-builder node[541358]: 2026-10-01T14:19:21.506Z SIGTERM: stopping
+2026-10-01T10:19:21-04:00 lim-builder node[541358]: 2026-10-01T14:19:21.508Z server connection lost; retrying
+2026-10-01T10:19:21-04:00 lim-builder systemd[1805]: Stopped agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms).
+2026-10-01T10:19:21-04:00 lim-builder systemd[1805]: agent-comms-connector.service: Consumed 1.619s CPU time.
+2026-10-01T10:19:26-04:00 lim-builder systemd[1805]: Started agent-comms-connector.service - agent-comms: this machine's connector (from main in /srv/work/agent-comms).
+2026-10-01T10:19:26-04:00 lim-builder node[551769]: 2026-10-01T14:19:26.413Z T3 adapter: http://127.0.0.1:3780
+2026-10-01T10:19:26-04:00 lim-builder node[551769]: 2026-10-01T14:19:26.430Z machine lim-builder: listening on /run/user/1000/agent-comms/connector.sock
+2026-10-01T10:20:25-04:00 lim-builder node[551769]: 2026-10-01T14:20:25.600Z decision j971wfrvj1mmbnnympfk7hfdhd8fe99j recover state=claimed participant=term-a
+2026-10-01T10:20:25-04:00 lim-builder node[551769]: 2026-10-01T14:20:25.600Z decision j971wfrvj1mmbnnympfk7hfdhd8fe99j check-completed recorded=claimed turn=76ae30be-af39-4f1c-a403-9f51c8aeba42
+2026-10-01T10:20:25-04:00 lim-builder node[551769]: 2026-10-01T14:20:25.639Z decision j971wfrvj1mmbnnympfk7hfdhd8fe99j outcome replied turn=76ae30be-af39-4f1c-a403-9f51c8aeba42

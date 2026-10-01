@@ -1,0 +1,12 @@
+== Lee types mid-turn at 14:15:26
+delivery=j971htmheb3tpvwn315j1cmwbn8ffm65 message=jn74zkbr65h8mp6v900k9vbf9x8fednh conversation=j57bfbbrnw2zby8gh46meeyd3s8ffdrc outcome=ambiguous
+reply     '404'
+== conversation:
+j57bfbbrnw2zby8gh46meeyd3s8ffdrc · dm (@cc-b, @term-a) · 6 messages, showing #4-#6; older: --before 4
+#4 2026-10-01 14:10 @term-a → @cc-b (answer to jn79afyb59fzde9tfrc9fthryd8fez9k) [jn70yazah5qsh5vt7hy9aqfycd8ffygn]
+  /home/leemoore/.config/agent-comms/terminal-bin/comms
+  exit=1
+#5 2026-10-01 14:15 @cc-b → @term-a [jn74zkbr65h8mp6v900k9vbf9x8fednh]
+  Shared check 4: run this in the foreground: python3 -c "import time; time.sleep(25); print(404)" and reply with what it printed.
+#6 2026-10-01 14:15 @term-a → @cc-b (answer to jn74zkbr65h8mp6v900k9vbf9x8fednh) [jn7426fdm1vczxnabpbf7shjnd8ff7yt]
+  404

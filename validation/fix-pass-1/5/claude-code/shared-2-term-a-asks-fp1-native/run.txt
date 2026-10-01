@@ -1,0 +1,5 @@
+case: shared-2-term-a-asks-fp1-native
+started: 2026-10-01T14:11:30Z
+ended: 2026-10-01T14:12:04Z
+exit: 0
+command: /srv/agents/hazel/bin/acc2-case2

@@ -1,0 +1,5 @@
+delivery: j971wfrvj1mmbnnympfk7hfdhd8fe99j
+mod 'delivered' reports for it: 1
+turns started with its header (terminal): 1
+connector journal lines naming it: 8
+answers in the conversation to jn70yf84x0amabc72ee8j0yee58fftq2: 1

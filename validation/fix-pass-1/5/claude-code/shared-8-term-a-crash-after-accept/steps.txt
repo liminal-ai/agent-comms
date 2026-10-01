@@ -1,0 +1,9 @@
+2026-10-01T14:19:21.502Z stop agent-comms-connector
+2026-10-01T14:19:21.520Z start fault unit hazel-fp1-faulty (AGENT_COMMS_FAULT=crash-after-accept)
+2026-10-01T14:19:22.818Z fault connector up; waiting for term-a to re-register
+2026-10-01T14:19:24.832Z term-a re-registered
+2026-10-01T14:19:25.052Z request sent: delivery=j971wfrvj1mmbnnympfk7hfdhd8fe99j message=jn70yf84x0amabc72ee8j0yee58fftq2
+2026-10-01T14:19:26.105Z fault connector is failed (exit: 9)
+2026-10-01T14:19:26.111Z start agent-comms-connector
+2026-10-01T14:19:27.156Z mod outcome: j971wfrvj1mmbnnympfk7hfdhd8fe99j: outcome replied
+2026-10-01T14:20:31.181Z connector recorded: recover check-completed outcome 
