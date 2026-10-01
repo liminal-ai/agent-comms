@@ -7,7 +7,7 @@
 // over only through `claim`, which says `takeover: true` so the new holder
 // checks the harness before running anything.
 
-import { DEFAULT_READ_LIMIT, type Responses } from "@agent-comms/protocol";
+import { clipAnswer, DEFAULT_READ_LIMIT, type Responses } from "@agent-comms/protocol";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query, type QueryCtx } from "./_generated/server";
@@ -231,7 +231,7 @@ export const collect = mutation({
       kind: "answer",
       inReplyTo: request._id,
       collectedFrom: d._id,
-      text: args.answer,
+      text: clipAnswer(args.answer),
       origin: { via: recipient.home!.harness === "t3" ? "t3" : "claude-code" },
     });
     await ctx.db.patch(d._id, {

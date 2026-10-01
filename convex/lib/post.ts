@@ -1,7 +1,7 @@
 // Posting a message: the one path every send, reply, collected answer and web
 // post goes through. Creates the addressed deliveries.
 
-import type { AttachmentRef, Origin, SendResult } from "@agent-comms/protocol";
+import { type AttachmentRef, MAX_TEXT_CHARS, type Origin, type SendResult } from "@agent-comms/protocol";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { advanceRead, envelope, fail, membership, stateRef } from "./core";
@@ -21,6 +21,14 @@ export interface PostInput {
 export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResult> {
   const { sender, conversation, recipients } = input;
   if (sender.state === "retired") fail("conflict", `@${sender.name} is retired`);
+  if (input.text.length > MAX_TEXT_CHARS) {
+    fail("bad_request", `message text is ${input.text.length} characters; the limit is ${MAX_TEXT_CHARS}. Shorten it, or put the long part in a file and send a reference.`);
+  }
+  const attachments = input.attachments ?? [];
+  if (attachments.length > 20) fail("bad_request", `${attachments.length} attachments; the limit is 20`);
+  for (const a of attachments) {
+    if (a.name.length > 512 || a.url.length > 4096) fail("bad_request", "an attachment's name (512) or url (4096) is too long");
+  }
   if (input.kind === "answer" && !input.inReplyTo) fail("bad_request", "an answer needs inReplyTo");
   if (input.kind === "request" && input.inReplyTo) fail("bad_request", "a request can't have inReplyTo");
   if (new Set(recipients.map((r) => r._id)).size !== recipients.length) fail("bad_request", "a recipient is named twice");

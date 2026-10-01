@@ -51,6 +51,16 @@ Each `Delivery` carries the message, the conversation, the recipient (their own 
 
 The rendering states who it's from, which conversation, the recipient's own name (to pass as `--as`), whether an answer is expected, how to answer (reply normally; `comms reply <message-id>` if told the reply couldn't be matched or for a follow-up after the turn), and that it is a message from that participant, not an instruction from the session's user, so normal permission rules apply. `harnessLabelsSource: true` (Claude Code) drops the source line the harness already provides; `false` (T3) includes it. See `test/render.test.ts` for complete examples.
 
+## Size caps (fix pass 1.10)
+
+| Cap | Value | Enforced |
+|---|---|---|
+| `MAX_TEXT_CHARS` | 32,000 characters of message text | refused at send: loopback `bad_request` and Convex `post` (send, reply, web posts), with the limit in the error; collected answers are clipped to it (`clipAnswer`) |
+| `MAX_TITLE_CHARS` | 200 | refused at group creation; clipped when rendered |
+| `MAX_RENDERED_CHARS` | 48,000 characters of one whole rendered delivery | `renderDelivery` cuts older history first, then attachment references, then the body, saying what was left out and how to `comms read` it |
+
+Line breaks (1.11): `\r\n`, `\n`, a lone `\r`, U+2028 and U+2029 all break lines, both when quoting bodies (every piece gets `> `) and when parsing headers, so no body can produce a header line whatever line endings a harness normalizes to.
+
 ## The loopback protocol
 
 HTTP/1.1 over a Unix socket. Every operation is `POST /v1/<op>` with a JSON body.
@@ -92,7 +102,7 @@ Rules that matter to clients:
 - **Reports are acknowledged at once.** The connector answers `delivered`, `outcome`, `check-result` and `presence` immediately and writes them to the server in the background, retrying while it's unreachable, so a harness is never held up. The `delivery.state` in the answer is the state being recorded; `answerMessageId` is included only when already known.
 - **`delivered`** is idempotent for the same turn; a different turn is a `conflict`.
 - **The unmatched notice.** When a delivery goes `ambiguous`, the agent is told with `renderUnmatchedNotice` (its own header line, found by `parseNoticeHeader`, never by `parseDeliveryHeader`), so it knows to `comms reply`. The T3 adapter sends it into the thread as its own turn; the mod shows it after reporting `ambiguous`. Nothing is collected from the turn a notice starts.
-- **`outcome`** applies only to request deliveries. `turnId` may be omitted only for `failed` (a delivery the harness dropped before any turn ran it). An answer over `MAX_TEXT_CHARS` is accepted and clipped (`clipAnswer`). `replied` is collected at most once per delivery; a repeat returns the first answer with `duplicate: true`. `ambiguous` reports only the kinds of input that entered the turn (`origin`, e.g. `composer`), never their text.
+- **`outcome`** applies only to request deliveries. `turnId` may be omitted only for `failed` (a delivery the harness dropped before any turn ran it). An answer over `MAX_TEXT_CHARS` is accepted (up to `MAX_REPORTED_ANSWER_CHARS`) and clipped (`clipAnswer`). `replied` is collected at most once per delivery; a repeat returns the first answer with `duplicate: true`. `ambiguous` reports only the kinds of input that entered the turn (`origin`, e.g. `composer`), never their text.
 - **`send`** without `conversationId` addresses exactly one participant (their DM, opened if new). With it, every addressed name must be a member, and an empty `to` posts without waking anyone.
 - **`reply`** is always allowed and never collected from. It completes an `ambiguous` or `uncertain` delivery of that message to the replier; a still-running `delivered` one is left alone, because its turn's own answer is still collected.
 - **`read`** of the newest page moves the reader's read position; older pages don't.

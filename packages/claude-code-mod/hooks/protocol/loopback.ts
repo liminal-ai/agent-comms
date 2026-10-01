@@ -48,7 +48,12 @@ export const MAX_POLL_WAIT_MS = 25_000;
 
 export const DEFAULT_READ_LIMIT = 20;
 export const MAX_READ_LIMIT = 100;
-export const MAX_TEXT_CHARS = 100_000;
+/**
+ * The most characters of message text: refused above this at send (loopback and
+ * Convex), and collected answers are clipped to it (`clipAnswer`). Kept well
+ * below MAX_RENDERED_CHARS so one message plus framing fits one injection.
+ */
+export const MAX_TEXT_CHARS = 32_000;
 /** What a client may report as an answer; anything over MAX_TEXT_CHARS is clipped on collection. */
 export const MAX_REPORTED_ANSWER_CHARS = 1_000_000;
 

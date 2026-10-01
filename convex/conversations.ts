@@ -1,3 +1,4 @@
+import { MAX_TITLE_CHARS } from "@agent-comms/protocol";
 // Conversations, membership and Lee's posts. Admin only (the web view).
 
 import { v } from "convex/values";
@@ -11,6 +12,7 @@ export const createGroup = mutation({
   handler: async (ctx, args) => {
     requireAdmin(args.adminToken);
     if (!args.title.trim()) fail("bad_request", "a group needs a title");
+    if (args.title.length > MAX_TITLE_CHARS) fail("bad_request", `the title is ${args.title.length} characters; the limit is ${MAX_TITLE_CHARS}`);
     const people = [];
     for (const name of new Set(args.members)) people.push(await participantByName(ctx, name));
     if (people.length < 2) fail("bad_request", "a group needs at least two members");
