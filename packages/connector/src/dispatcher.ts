@@ -102,9 +102,17 @@ export const runDispatcher = (options: DispatcherOptions) =>
       Schedule.spaced(Duration.millis(options.retryMaxMs ?? 30_000)),
     ]);
 
+    /** The state the server reported after our last write for a delivery. */
+    const lastState = new Map<string, string>();
     /** Retry while unreachable. A protocol refusal ends it: logged, and reported as false. */
     const write = <A>(what: string, deliveryId: string, effect: Effect.Effect<A, ApiError>) =>
       effect.pipe(
+        Effect.tap((r) =>
+          Effect.sync(() => {
+            const state = (r as { delivery?: { state?: string } } | null)?.delivery?.state;
+            if (state) lastState.set(deliveryId, state);
+          }),
+        ),
         Effect.tapError((e: ApiError) =>
           Effect.sync(() => e._tag === "Unavailable" && log(`${what} ${deliveryId}: ${e.message}; retrying`)),
         ),
@@ -141,6 +149,11 @@ export const runDispatcher = (options: DispatcherOptions) =>
           return write("ambiguous", id, api.ambiguous(id, claimId, turnId, outcome.entered)).pipe(
             Effect.tap((ok) => {
               const notify = adapters.get(h.harness)?.notifyUnmatched;
+              // No notice if Convex found the agent had already answered with comms reply.
+              if (ok && lastState.get(id) === "replied") {
+                decide(id, "outcome", "already answered by comms reply during the turn; no notice");
+                return Effect.void;
+              }
               return ok && notify
                 ? notify(h.target, h.delivery).pipe(
                     Effect.catchCause(() => Effect.sync(() => log(`${id}: couldn't send the unmatched notice`))),
