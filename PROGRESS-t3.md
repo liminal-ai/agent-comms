@@ -88,3 +88,10 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
   now derived from the T3 home in code.
 - Depends on Cedar 3.1: the mod's start deadline only surfaces as `uncertain` if the connector sends a
   check for a Claude Code delivery that never reports `delivered`. Asked (relay ff7d6d1b).
+
+### Section 4.2 and section 5 (Claude Code side) — done 2026-10-01
+- 4.2: term-a by the documented procedure, option A (own CLAUDE_CONFIG_DIR), plus Reed's safety
+  defaults (permission mode default, PATH with only comms). Evidence `validation/fix-pass-1/4.2/`.
+- Section 5, Claude Code side, in `validation/fix-pass-1/5/claude-code/`: 1.6 concurrent helper,
+  1.7 typed mid-turn, ten requests each on Sonnet and Opus (model view per request), crash window
+  with the fault hook on cc-a and on term-a (one turn, one answer each), shared rerun 2b, 4, 5, 8.
