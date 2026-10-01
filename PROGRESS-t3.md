@@ -68,3 +68,14 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
   CLAUDE.md and tried lhc-agent (nothing sent). Test terminals now run in /tmp/hazel-mod-work
   with a PATH holding only comms and node.
 - Next: M6 cloud checkpoint, waiting on Lee.
+
+## Fix pass 1 (docs/03-fix-pass.md)
+
+### Section 1, mod items 1.5-1.9 — done 2026-10-01
+- Failing tests first: 12c9bd3 (`test/fix-pass-1.test.ts`, `test/fix-pass-1-mod.test.ts`, named by item;
+  12 of 13 failed on that commit). Fixes: a280186. 35 tests pass, typecheck clean, plugin validates.
+- Linking by identity uses shapes captured live on 2.1.286: notification `<task-id>`/`<tool-use-id>`,
+  Bash `backgroundTaskId` and Agent `agentId` in tool results, `agent.spawn` `parentAgentId`.
+- Found while doing it: a background helper's hand-back arrives as a `peer` prompt
+  (`<agent-message from="<agentId>">`). It's linked to our turn only if that agent is ours; otherwise other input.
+- 1.9 needed no protocol change: the report keeps 49 entries plus `+N more`.
