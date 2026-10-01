@@ -75,6 +75,8 @@ header .as select { width: auto; margin: 0; }
 .dot.idle { background: var(--ok); }
 .dot.busy { background: var(--warn); }
 .dot.offline { background: transparent; border: 1.5px solid var(--muted); }
+.dot.stale { background: transparent; border: 1.5px dotted var(--bad); }
+.dot.unconnected { background: transparent; border: 1.5px dashed var(--warn); }
 .dot.person { background: var(--accent); }
 .convs li { padding: 8px; border-radius: 6px; cursor: pointer; display: flex; flex-direction: column; }
 .convs li.on, .convs li:hover { background: var(--panel); outline: 1px solid var(--line); }
