@@ -1,0 +1,78 @@
+{
+  "session": {
+    "threadId": "thr-382e76cb-58b5-47f1-99e2-1f61290f8873",
+    "status": "ready",
+    "providerName": "claudeAgent",
+    "providerInstanceId": "claudeAgent",
+    "runtimeMode": "full-access",
+    "activeTurnId": null,
+    "lastError": null,
+    "updatedAt": "2026-10-01T17:39:31.320Z"
+  },
+  "latestTurn": {
+    "turnId": "503ea9a3-a9fe-497d-a5a7-8c71691e17bc",
+    "state": "completed",
+    "requestedAt": "2026-10-01T17:39:31.291Z",
+    "startedAt": "2026-10-01T17:39:31.291Z",
+    "completedAt": "2026-10-01T17:39:31.320Z",
+    "assistantMessageId": "assistant:fe40fe88-98aa-41e5-9134-581d888079f4"
+  },
+  "messages": [
+    {
+      "id": "msg-909a5020-67e8-4f8b-81b3-409617ae67b5",
+      "role": "user",
+      "turnId": null,
+      "streaming": false,
+      "text": "This is a measurement of your shell tool's time limits. Run exactly one shell command, once, with your shell tool, with default settings: don't set a timeout and don't run it in the background:\n\ndate "
+    },
+    {
+      "id": "assistant:52592760-1e42-4285-a583-e685c1d1fa3d",
+      "role": "assistant",
+      "turnId": "f791cc73-d645-42b0-8ae4-b3459ee61416",
+      "streaming": false,
+      "text": "1. **Tool and parameters:** `mcp__tray_movie__suspect_Bash` with\n   - `command`: `date +%s > /tmp/hazel-h0/marks/T3C-1-start; sleep 150; date +%s > /tmp/hazel-h0/marks/T3C-1-end; echo FINISHED`\n   - `"
+    },
+    {
+      "id": "msg-8acfed38-6184-456f-b200-9ce3e2c88bda",
+      "role": "user",
+      "turnId": null,
+      "streaming": false,
+      "text": "This is a measurement of your shell tool's time limits. Run exactly one shell command, once, with your shell tool, in the foreground with the timeout set to 300000 ms (5 minutes):\n\ndate +%s > /tmp/haz"
+    },
+    {
+      "id": "reasoning:summary:a3f30d5e-e4c0-4a76-8e81-433fea8b4b17",
+      "role": "system",
+      "turnId": "a3f30d5e-e4c0-4a76-8e81-433fea8b4b17",
+      "streaming": false,
+      "text": "This notification is just a system-level update about the earlier background task completing, not a prompt injection. I should acknowledge that task finished and address the three items being asked fo"
+    },
+    {
+      "id": "assistant:8b6d7181-4f84-4a54-8eae-103c3f821dd9",
+      "role": "assistant",
+      "turnId": "a3f30d5e-e4c0-4a76-8e81-433fea8b4b17",
+      "streaming": false,
+      "text": "1. **Tool and parameters:** `mcp__tray_movie__suspect_Bash` with\n   - `command`: `date +%s > /tmp/hazel-h0/marks/T3C-2-start; sleep 150; date +%s > /tmp/hazel-h0/marks/T3C-2-end; echo FINISHED`\n   - `"
+    },
+    {
+      "id": "msg-fd511efc-aaa4-4795-b313-611e43e89474",
+      "role": "user",
+      "turnId": null,
+      "streaming": false,
+      "text": "This is a measurement of your shell tool's time limits. Run exactly one shell command, once, with your shell tool, in the foreground with the timeout set to 900000 ms (15 minutes):\n\ndate +%s > /tmp/ha"
+    },
+    {
+      "id": "assistant:d765872b-b73b-456f-8a77-11f900ac46eb",
+      "role": "assistant",
+      "turnId": "6103cafe-6751-42ab-8137-06671ea7fc89",
+      "streaming": false,
+      "text": "1. **Tool and parameters:** `mcp__tray_movie__suspect_Bash` with\n   - `command`: `date +%s > /tmp/hazel-h0/marks/T3C-3-start; sleep 660; date +%s > /tmp/hazel-h0/marks/T3C-3-end; echo FINISHED`\n   - `"
+    },
+    {
+      "id": "assistant:fe40fe88-98aa-41e5-9134-581d888079f4",
+      "role": "assistant",
+      "turnId": "503ea9a3-a9fe-497d-a5a7-8c71691e17bc",
+      "streaming": false,
+      "text": "The background command `btdzeb84t` (the 660s sleep) completed with exit code 0, so it did run to the end. The timestamps are in `/tmp/hazel-h0/marks/T3C-3-start` and `T3C-3-end`. I haven't read the ou"
+    }
+  ]
+}

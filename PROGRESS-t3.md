@@ -95,3 +95,25 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
 - Section 5, Claude Code side, in `validation/fix-pass-1/5/claude-code/`: 1.6 concurrent helper,
   1.7 typed mid-turn, ten requests each on Sonnet and Opus (model view per request), crash window
   with the fault hook on cc-a and on term-a (one turn, one answer each), shared rerun 2b, 4, 5, 8.
+
+## Capabilities pass (docs/04-capabilities.md)
+
+### H0: shell time limits — done 2026-10-01
+- `docs/t3-api-notes.md` section 10; raw evidence `validation/capabilities/h0/` (9 runs: T3 Claude, terminal, T3 Codex).
+- Claude Code: 120 s default and 600 s cap confirmed in T3 and a terminal; at the limit the command is
+  moved to the background (not killed), and its completion is a task notification (new turn if idle).
+- Codex (T3): no limit; `exec_command` returns after 10 s (yield capped at 30 s) with the command still
+  running; the agent must poll `write_stdin`; unpolled commands finish unread after the turn ends.
+- Recommendation: keep DEFAULT_WAIT_MS 100 s; count `ack` only while the waiter's turn runs (to Cedar).
+
+### R0 review — sent 2026-10-01 (relay bf9e1e84 to Cedar)
+- Approved; one change before R2 (an ack counts only while the waiter's turn runs) and six small items.
+
+### W: web view — built against R0 2026-10-01 (b99409b)
+- Failing tests first (9610657, 1526452); 16 pass. Registry, inbox with unread count, reminders, alerts in
+  `apps/web` (`src/Capabilities.tsx`, `src/lib/view.ts`). Live check `validation/capabilities/w/`.
+- R1 live check passed (system participants, owners, promote with owner, inbox unread and read marking).
+- Waiting on Cedar: alerts (R4); reminders firing (R3). Done from review: alert conversationId and
+  reminders' last fire/skip (review items 5, 6).
+- Mod: protocol already synced by Cedar in R0 (check passes, 44 tests). Still to do: the reminder render
+  check in term-a once R3 fires reminders, then bump to 0.1.3 and update term-a.

@@ -25,6 +25,9 @@ fresh install at `http://127.0.0.1:3780` on 2026-09-30. Raw event recordings are
    real result of a request can arrive in such a turn after ours has ended.
 6. You can do everything over plain HTTP except live events: `POST /api/orchestration/dispatch`,
    `GET /api/orchestration/threads/:threadId`. Events need the WebSocket `subscribeThread`.
+7. **Shell limits (section 10, H0).** Claude Code moves a foreground command to the background at
+   120 s (600 s at most with a raised timeout) instead of killing it. Codex never kills one, but hands
+   control back after 10 s (30 s at most) and the agent has to poll the session for the result.
 
 ## 1. Connecting and authenticating from an outside process
 
@@ -197,8 +200,8 @@ Live (`runs/interrupt-{native,lhc,codex}.jsonl`): A running, B steered in, inter
 
 ## 7. Claude turns with no user message
 
-When Claude Code backgrounds a long command (it does so on its own after ~3 s, as a `local_bash`
-task), the turn can end first; when the task finishes, Claude wakes and runs a **new turn with no
+When Claude Code backgrounds a long command (the model asked for it, or the command hit its
+timeout: see section 10), the turn can end first; when the task finishes, Claude wakes and runs a **new turn with no
 user message** (live: native `58654a40…`, LHC `1744a279…` and `032be7aa…`, in
 `runs/steer-*` first attempts). The real result of a request can arrive there, after our turn's
 answer was collected. Treat such turns as not ours (they are the follow-up case: the agent should
@@ -226,6 +229,86 @@ answer was collected. Treat such turns as not ours (they are the follow-up case:
    pull-request tools). Identity stays `--as` (confirmed).
 5. A way to insert a message "for the next turn": every send while busy is a steer.
 6. The web client's queued messages are invisible to the server until they are sent.
+
+## 10. Shell time limits: Claude Code and Codex (H0, capabilities pass)
+
+Measured 2026-10-01 on 3780 (Claude Code 2.1.286, Codex 0.154.0, model `gpt-6-astra`) and in a
+Claude Code 2.1.286 terminal, for the send-and-wait default (`docs/04-capabilities.md`). Raw
+evidence: `validation/capabilities/h0/` (per case: the prompt, the T3 event recording or the
+terminal scrollback, the agent's report of the exact tool call and verbatim tool result, and
+timestamp marks the command itself wrote, which show whether it was killed).
+
+**Method.** One shell command per turn, `date +%s > <mark>-start; sleep N; date +%s > <mark>-end;
+echo FINISHED`, with the tool settings named in the prompt, no other command allowed. T3 turns via
+`validation/probe/cli.ts turn` on a fresh project in `/tmp/hazel-h0/t3`; the terminal in
+`/tmp/hazel-h0/term` (tmux). Scripts in `h0/scripts/`.
+
+### Claude Code (same in T3 and in a terminal)
+
+| Case | Tool settings | Result |
+|---|---|---|
+| T3C-1, TERM-1 | default, `sleep 150` | at 120 s: **moved to the background, not killed**; the command ran to 150 s |
+| T3C-2, TERM-2 | `timeout: 300000`, `sleep 150` | finished in the foreground; the tool returned `FINISHED` |
+| T3C-3, TERM-3 | `timeout: 900000`, `sleep 660` | capped at 600 s, then moved to the background; ran to 660 s |
+
+What the agent sees when the limit is hit (verbatim, T3C-1):
+
+> Command did not complete within its 120s timeout and was moved to the background (ID: bjpz4mqc5).
+> Output is being written to: /tmp/claude-1000/…/tasks/bjpz4mqc5.output. You will be notified when
+> it completes. If it is still running after 30m in the background, it will be stopped and you will
+> be notified. To check interim output, use Read on that file path.
+
+So the 120 s default and the 600 s foreground maximum hold, but **the limit isn't a timeout in the
+failing sense**: the tool call returns, the turn goes on (and usually ends), and the command keeps
+running in the background for up to 30 minutes more. Its completion arrives as a task notification:
+
+- inside the running turn if there is one (T3C-2's turn mentions T3C-1's completion);
+- otherwise as a **new turn with no user message** (T3: turn `503ea9a3…` after T3C-3,
+  `T3C-thread-messages.txt`; terminal: "Background command … completed (exit code 0)" after TERM-1
+  and TERM-3). The notification says the task completed; the agent has to read the output file
+  to see what it printed.
+
+### Codex in T3
+
+| Case | Tool settings | Result |
+|---|---|---|
+| T3X-1 | default, `sleep 150` | `exec_command` returned after **10 s** with the command still running in a session (`session_id`); the agent stopped as told; the turn ended; the command ran to 150 s anyway |
+| T3X-2 | default, `sleep 660` | the same; ran to 660 s after the turn had ended, output never read |
+| T3X-3 | `yield_time_ms: 600000`, `sleep 150` | returned after **30 s** (the yield is capped at 30 s), still running |
+| T3X-4 | default, then keep waiting | the agent polled the same session with `write_stdin` (empty input, `yield_time_ms` 60000: each poll held 60 s) and got `FINISHED` and `exit_code: 0` inside the same turn |
+| T3X-5 | default, `sleep 660`, keep waiting | 13 polls of 50 s each; finished at 660 s inside the same turn; nothing stopped it |
+
+What the agent sees after the yield (verbatim, T3X-1):
+
+```text
+Script completed
+Wall time 10.2 seconds
+Output:
+{"chunk_id":"740b60","wall_time_seconds":10.001589308,"session_id":82254,"original_token_count":0,"output":""}
+```
+
+Codex has **no shell time limit** in these runs: a command is never killed or failed for running
+long. Instead `exec_command` hands control back after 10 s (at most 30 s) with a session id, and
+the agent must keep polling the session to see the result. If it doesn't, the turn ends and the
+command keeps running to completion with **nobody reading its output** (T3X-1, T3X-2). There's no
+notification and no new turn for it.
+
+### What this means for send-and-wait
+
+1. **Default bound: keep 100 s.** It's under Claude Code's 120 s, the only hard limit measured.
+   Codex sets no lower one.
+2. **Past the bound in Claude Code, the CLI isn't killed.** At 120 s (or 600 s with a raised
+   timeout) it moves to the background and keeps waiting. Its output then reaches the agent only
+   through a task notification (often a new turn) and a file the agent must read.
+3. **In Codex, a waiting `comms send` looks unfinished after 10 s.** The answer is returned in the
+   same turn only if the agent keeps polling the session. The usage text should tell Codex agents
+   that plainly ("if the tool returns with the command still running, poll that session until it
+   exits").
+4. **"Printed" doesn't mean "seen".** In Codex (an agent that stops polling) and in Claude Code
+   past the limit, the CLI can print the answer and `ack` it while nobody reads it. With R0's
+   contract that answer gets no fallback, since it was acknowledged. Proposed to Cedar: count an
+   `ack` only while the waiter's turn is still running (the T3 adapter and the mod both know).
+   Otherwise let the fallback deliver it. That's at most a duplicate, which the brief allows.
 
 ## Test fixtures on 3780
 

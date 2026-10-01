@@ -1,0 +1,11 @@
+import { chromium } from "/srv/work/chess-train-mvp/node_modules/playwright-core/index.mjs";
+const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome", headless: true });
+const p = await b.newPage({ viewport: { width: 1400, height: 900 } });
+await p.goto("http://127.0.0.1:3791"); await p.waitForSelector(".registry li");
+const f = p.locator("form.card", { hasText: "Promote an agent" });
+console.log("owner options:", (await f.locator("select").nth(1).locator("option").allTextContents()).join(","), "selected:", await f.locator("select").nth(1).inputValue());
+await f.locator('input[placeholder="cedar"]').fill("reminders");
+await f.getByRole("button", { name: "Promote" }).click();
+console.log("reserved name:", await f.locator(".error").innerText());
+await f.screenshot({ path: process.argv[2] });
+await b.close();

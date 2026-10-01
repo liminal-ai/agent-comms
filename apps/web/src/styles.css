@@ -48,7 +48,7 @@ h3 { font-size: 14px; margin: 0 0 6px; }
 
 .app {
   display: grid;
-  grid-template-columns: 300px 280px 1fr;
+  grid-template-columns: 360px 280px 1fr;
   grid-template-rows: auto 1fr;
   height: 100vh;
 }
@@ -103,14 +103,50 @@ form.inline input { width: auto; padding: 1px 6px; }
 .composer { padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
 .send-row { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
 
+/* The side pane: agent registry, inbox, reminders, alerts. */
+.side-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+.side-tabs button { padding: 2px 8px; font-size: 13px; }
+.unread-pill { border-color: var(--accent); color: var(--accent); font-size: 12.5px; padding: 1px 9px; border-radius: 12px; }
+h3.group { margin-top: 14px; color: var(--muted); font-weight: 600; }
+.registry .profile, .registry .profile-edit { grid-column: 2 / -1; }
+.registry .description { margin-top: 2px; }
+.registry .duties { margin: 2px 0 0; padding-left: 18px; color: var(--muted); }
+.registry .duties li { display: list-item; border: 0; padding: 0; }
+.dot.system { background: var(--muted); border-radius: 2px; }
+.inbox, .reminders, .alerts, .history { list-style: none; margin: 0; padding: 0; }
+.inbox li { display: flex; flex-direction: column; padding: 7px 8px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.inbox li:hover { background: var(--panel); }
+.inbox li.unread { border-left: 3px solid var(--accent); }
+.inbox li.unread .head { font-weight: 600; }
+.inbox .head { overflow-wrap: anywhere; }
+.tag { margin-left: 6px; font-size: 11.5px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); }
+.tag.alert { color: var(--bad); border-color: var(--bad); }
+.reminders li, .alerts li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.reminders .badge { margin-left: 6px; }
+.badge.r-active { color: var(--ok); border-color: var(--ok); }
+.badge.r-blocked { color: var(--bad); border-color: var(--bad); }
+.badge.r-paused { color: var(--warn); border-color: var(--warn); }
+.reminder .text { white-space: pre-wrap; margin: 3px 0; overflow-wrap: anywhere; }
+.reminder .actions { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.reminder.state-done, .reminder.state-cancelled, .reminder.state-expired { opacity: 0.65; }
+.history { margin: 6px 0 0 8px; border-left: 2px solid var(--line); padding-left: 8px; }
+.history li { padding: 2px 0; }
+.alerts li.open strong { color: var(--bad); }
+.alerts li.resolved { opacity: 0.7; }
+.alerts .actions { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.row { display: flex; gap: 8px; }
+.row label { flex: 1; }
+details summary { cursor: pointer; margin: 6px 0; }
+
 /* Phones: one pane at a time, picked in the header. */
 @media (max-width: 820px) {
-  .app { grid-template-columns: 1fr; }
+  .app { grid-template-columns: minmax(0, 1fr); }
   header { flex-wrap: wrap; }
-  header nav { display: flex; }
+  header nav { display: flex; flex-wrap: wrap; }
   header .as { margin-left: 0; }
+  .side-tabs { display: none; }
   .app .pane { display: none; border-right: 0; }
-  .app[data-tab="directory"] .pane.directory,
+  .app[data-tab="side"] .pane.side,
   .app[data-tab="conversations"] .pane.conversations { display: block; }
   .app[data-tab="conversation"] .pane.conversation { display: flex; }
 }

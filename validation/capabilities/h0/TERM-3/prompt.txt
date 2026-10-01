@@ -1,0 +1,5 @@
+This is a measurement of your shell tool's time limits. Run exactly one shell command, once, with your shell tool, in the foreground with the timeout set to 900000 ms (15 minutes):
+
+date +%s > /tmp/hazel-h0/marks/TERM-3-start; sleep 660; date +%s > /tmp/hazel-h0/marks/TERM-3-end; echo FINISHED
+
+Don't run any other command, before or after, and don't retry. When the tool returns, reply with: (1) the name of the tool you used and the exact parameters you passed, (2) the full text the tool returned to you, quoted verbatim, (3) whether the command finished, timed out, or was moved to the background, as far as you can tell.

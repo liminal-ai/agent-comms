@@ -1,0 +1,26 @@
+2026-10-01T18:03:00.980Z title: agent comms
+2026-10-01T18:03:00.985Z registry groups: People
+2026-10-01T18:03:00.987Z no system participants deployed yet (R1/R3)
+2026-10-01T18:03:00.989Z term-a row: @term-a claude-code · lim-builder · idle for 6m Edit Pause Retire Test terminal for the Claude Code mod (Hazel's live checks). Answers requests from the mod's live checks Runs in manual permission mode
+2026-10-01T18:03:01.089Z PASS term-a shows its description and two duties after saving
+2026-10-01T18:03:01.179Z PASS an over-long description is refused in the form
+2026-10-01T18:03:01.327Z inbox heading: Inbox for @lee 0 unread
+2026-10-01T18:03:01.329Z inbox items: 1 unread: 0
+2026-10-01T18:03:01.482Z PASS a 30s interval is refused in the form
+2026-10-01T18:03:01.704Z created: Reminder "w-live-check" set for @term-a.
+2026-10-01T18:03:01.706Z reminder row: w-live-check → @term-aactive every 45m, at most 3 fires active · 0 of 3 fires · next in 45m · set by @lee · expires 10/8/26, 2:03 PM W live check: this reminder is cancelled before it can fire. Pause Blocked… Done Cancel History
+2026-10-01T18:03:01.708Z PASS the schedule reads every 45m, at most 3 fires
+2026-10-01T18:03:01.755Z PASS paused
+2026-10-01T18:03:01.892Z dialog: prompt "Why is \"w-live-check\" blocked? It stops firing until resumed."
+2026-10-01T18:03:01.926Z blocked row: w-live-check → @term-ablocked every 45m, at most 3 fires blocked: waiting on a test · 0 of 3 fires · set by @lee · expires 10/8/26, 2:03 PM W live check: this reminder is cancelled before it can fire. Resume Done Cancel History
+2026-10-01T18:03:01.927Z PASS blocked with its reason
+2026-10-01T18:03:01.991Z history: Not fired yet.
+2026-10-01T18:03:02.076Z dialog: confirm "Cancel reminder \"w-live-check\"? It won't fire again. A turn already running from it finishes."
+2026-10-01T18:03:02.149Z PASS a cancelled reminder offers no controls, only its history
+2026-10-01T18:03:02.271Z alerts listed: 0 connector silent threshold: 10 min
+2026-10-01T18:03:02.318Z PASS a 1-minute connector threshold is refused in the form
+2026-10-01T18:03:02.389Z PASS threshold saved through alerts.setConfig
+2026-10-01T18:03:02.932Z threshold restored to 10
+2026-10-01T18:03:03.319Z PASS phone: the reminders pane shows from the header
+2026-10-01T18:03:03.320Z PASS phone: conversations hidden meanwhile
+2026-10-01T18:03:03.417Z ALL PASS
