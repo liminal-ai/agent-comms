@@ -33,3 +33,7 @@ Counts over the whole run (`summary-t3.json`): 15 request deliveries in 19 conve
 Found and fixed during the run: the Convex client printed server errors itself, which could echo a call's arguments; its logging now goes through the same redaction (commit on main).
 
 Still to do with Hazel: the Claude Code side (crash window, 1.6 background helper, 1.7 typed text, ten requests on Opus and Sonnet) and the eight shared checks on the real installation with her terminal from 4.2.
+
+## Rerun after the 1.2 follow-up (13:57 UTC)
+
+After the change requiring a turn's `starting` step (Reed's Q1, `validation/fix-pass-1/1`), `baseline` (replied), `crashWindow` (claimed at the crash, then replied, one turn) and `typedIn` (ambiguous) were rerun on the redeployed connector; they're the last lines of `results-t3.jsonl`, and the summary and dump above include them.

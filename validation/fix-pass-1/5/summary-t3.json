@@ -1,20 +1,21 @@
 {
- "conversations": 19,
- "requestDeliveries": 15,
+ "conversations": 22,
+ "requestDeliveries": 18,
  "requestStates": {
-  "replied": 14,
+  "ambiguous": 1,
+  "replied": 16,
   "failed": 1
  },
  "answerDeliveriesBeyondDelivered": 0,
  "messagesAppendedInT3": {
-  "deliveriesSeen": 15,
+  "deliveriesSeen": 18,
   "appendedMoreThanOnce": []
  },
  "t3Dispatches": {
-  "deliveries": 15,
+  "deliveries": 19,
   "dispatchedMoreThanOnce": []
  },
- "collectedAnswers": 8,
+ "collectedAnswers": 10,
  "deliveriesWithMoreThanOneCollectedAnswer": [],
  "scenarios": {
   "baseline": "replied",

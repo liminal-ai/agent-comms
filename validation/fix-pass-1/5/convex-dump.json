@@ -1,6 +1,354 @@
 [
  {
   "conversation": {
+   "id": "j571ddgnzyj615cgnjeq5wn92d8ff65t",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+     "kind": "agent",
+     "name": "fp1-native"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 typed-in 13:59:03",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+    "kind": "agent",
+    "name": "fp1-native"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790863168136,
+      "detail": "other input entered the turn: t3-user-message",
+      "id": "j976zr7nv6hg1b4b2n1darmg5d8fesz2",
+      "recipient": "fp1-native",
+      "state": "ambiguous"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j571ddgnzyj615cgnjeq5wn92d8ff65t",
+     "createdAt": 1790863143964,
+     "id": "jn74yjrf1rp39adt56b339artd8fes16",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+       "kind": "agent",
+       "name": "fp1-native"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass typed-in check: run `sleep 15` in the foreground, then reply with exactly FP1-TYPED"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790863163078,
+      "id": "j97a2gs2txp6528ammdp42xzd18ffeb3",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j571ddgnzyj615cgnjeq5wn92d8ff65t",
+     "createdAt": 1790863163078,
+     "id": "jn797abv57adptm3qvefgapayd8fe7ym",
+     "inReplyTo": "jn74yjrf1rp39adt56b339artd8fes16",
+     "kind": "answer",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js7560s7pdkhs3w4195ktcv6218feb5v",
+      "kind": "agent",
+      "name": "fp1-native"
+     },
+     "seq": 2,
+     "text": "FP1-TYPED"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j57cg3bfwfvbr44x0shhrfrdj58fe3j3",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+     "kind": "agent",
+     "name": "fp1-codex"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 crash-window 13:57:55",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+    "kind": "agent",
+    "name": "fp1-codex"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790863142861,
+      "id": "j970p4pj4hb7vrrzxe2fdesmf58ffq0d",
+      "recipient": "fp1-codex",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j57cg3bfwfvbr44x0shhrfrdj58fe3j3",
+     "createdAt": 1790863077789,
+     "id": "jn7afbmht40jzepst0nhfb82ts8feew4",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+       "kind": "agent",
+       "name": "fp1-codex"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass crash-window check: without tools, write the numbers one to forty in words, one per line, then a final line FP1-CRASH-DONE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790863142861,
+      "id": "j9743kt85kdq92a0p4pk0304vh8fff83",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j970p4pj4hb7vrrzxe2fdesmf58ffq0d",
+     "conversationId": "j57cg3bfwfvbr44x0shhrfrdj58fe3j3",
+     "createdAt": 1790863142861,
+     "id": "jn78neqeb73zd80fh8peq7qbgs8ffman",
+     "inReplyTo": "jn7afbmht40jzepst0nhfb82ts8feew4",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+      "kind": "agent",
+      "name": "fp1-codex"
+     },
+     "seq": 2,
+     "text": "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nnineteen\ntwenty\ntwenty-one\ntwenty-two\ntwenty-three\ntwenty-four\ntwenty-five\ntwenty-six\ntwenty-seven\ntwenty-eight\ntwenty-nine\nthirty\nthirty-one\nthirty-two\nthirty-three\nthirty-four\nthirty-five\nthirty-six\nthirty-seven\nthirty-eight\nthirty-nine\nforty\nFP1-CRASH-DONE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
+   "id": "j574mm92ddtpgtgcdbwcg70nbs8fepq7",
+   "kind": "group",
+   "lastSeq": 2,
+   "members": [
+    {
+     "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+     "kind": "human",
+     "name": "lee"
+    },
+    {
+     "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+     "kind": "agent",
+     "name": "fp1-req"
+    },
+    {
+     "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+     "kind": "agent",
+     "name": "fp1-codex"
+    }
+   ],
+   "readSeq": 2,
+   "title": "fp1 baseline 13:57:46",
+   "unread": 0
+  },
+  "members": [
+   {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+   },
+   {
+    "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+    "kind": "agent",
+    "name": "fp1-req"
+   },
+   {
+    "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+    "kind": "agent",
+    "name": "fp1-codex"
+   }
+  ],
+  "messages": [
+   {
+    "deliveries": [
+     {
+      "at": 1790863073885,
+      "id": "j9791mk7fn5egfyeq80h8zv8m98fe166",
+      "recipient": "fp1-codex",
+      "state": "replied"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "conversationId": "j574mm92ddtpgtgcdbwcg70nbs8fepq7",
+     "createdAt": 1790863066808,
+     "id": "jn71xbscx4pmvh5h3fwx5gp2cs8ffjw0",
+     "kind": "request",
+     "origin": {
+      "via": "cli"
+     },
+     "recipients": [
+      {
+       "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+       "kind": "agent",
+       "name": "fp1-codex"
+      }
+     ],
+     "sender": {
+      "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+      "kind": "agent",
+      "name": "fp1-req"
+     },
+     "seq": 1,
+     "text": "Fix pass check: reply with exactly FP1-BASELINE"
+    }
+   },
+   {
+    "deliveries": [
+     {
+      "at": 1790863073885,
+      "id": "j978ve6za1aqcdft8hgs44sv518fegp3",
+      "recipient": "fp1-req",
+      "state": "pending"
+     }
+    ],
+    "message": {
+     "attachments": [],
+     "collectedFrom": "j9791mk7fn5egfyeq80h8zv8m98fe166",
+     "conversationId": "j574mm92ddtpgtgcdbwcg70nbs8fepq7",
+     "createdAt": 1790863073885,
+     "id": "jn7a19ahn1x7a56askf5kfv7fd8ffpeh",
+     "inReplyTo": "jn71xbscx4pmvh5h3fwx5gp2cs8ffjw0",
+     "kind": "answer",
+     "origin": {
+      "via": "t3"
+     },
+     "recipients": [
+      {
+       "id": "js79ggcbk3wf1zx5s5htqsy6758few7a",
+       "kind": "agent",
+       "name": "fp1-req"
+      }
+     ],
+     "sender": {
+      "id": "js729nz67wc0k6yk02xec2ddxx8fe7rn",
+      "kind": "agent",
+      "name": "fp1-codex"
+     },
+     "seq": 2,
+     "text": "FP1-BASELINE"
+    }
+   }
+  ]
+ },
+ {
+  "conversation": {
    "id": "j57a8zbsm0hbjwy4hjt2x8ncd18ff5n7",
    "kind": "group",
    "lastSeq": 2,
