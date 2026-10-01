@@ -1,0 +1,4 @@
+ [32m✓[39m [30m[45m connector [49m[39m packages/connector/test/connector.test.ts [2m([22m[2m20 tests[22m[2m | [22m[33m19 skipped[39m[2m)[22m[33m 1662[2mms[22m[39m
+   [32m✓[39m capabilities acceptance 7a': the connector dies while the CLI waits [2m(1)[22m
+     [33m[2m✓[22m[39m the CLI keeps waiting through a restart (the held await's connection is cut) and prints the answer[33m 1661[2mms[22m[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[2m | [22m[33m21 skipped[39m[90m (22)[39m

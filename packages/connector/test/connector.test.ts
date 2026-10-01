@@ -429,3 +429,38 @@ describe("capabilities R3: reminders through the connector and the CLI", () => {
     expect(bad.code).toBe(EXIT.refused);
   });
 });
+
+describe("capabilities acceptance 7a': the connector dies while the CLI waits", () => {
+  it("the CLI keeps waiting through a restart (the held await's connection is cut) and prints the answer", async () => {
+    const w = await world();
+    const first = await startConnector(w.api, w.socket);
+    const b = new Mod(w.socket, "b");
+    await b.register();
+    let stdout = "";
+    let stderr = "";
+    const run = comms(["--socket", w.socket, "send", "--as", "a", "--wait", "60s", "@b", "survive a restart"], {
+      env: {},
+      stdout: (t) => (stdout += t),
+      stderr: (t) => (stderr += t),
+      readStdin: async () => "",
+    });
+    const d = await b.nextDelivery();
+    await b.ok("delivered", { deliveryId: d.id, turnId: "t1" } as never);
+    await sleep(300); // the CLI is in a held await
+    await first.stop();
+    const second = await start(w.api, w.socket);
+    expect(second).toBeDefined();
+    await b.register();
+    await until("b's check answered", async () => {
+      const items = await b.poll(300);
+      const c = items.find((i) => i.type === "check");
+      if (!c) return false;
+      await b.ok("check-result", { deliveryId: d.id, found: "yes", turnId: "t1", turn: "running" } as never);
+      return true;
+    });
+    await b.ok("outcome", { deliveryId: d.id, turnId: "t1", outcome: "replied", answer: "still here" } as never);
+    const code = await run;
+    expect(code, stderr).toBe(EXIT.ok);
+    expect(stdout).toMatch(/^@b answered \(\S+\):\n  still here$/m);
+  });
+});

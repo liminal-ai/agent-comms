@@ -16,6 +16,12 @@ import {
 
 export class ConnectorUnreachable extends Error {}
 
+/**
+ * The connection dropped mid-request (the connector stopped or restarted). For
+ * a send or reply it may or may not have been posted: retry with the same key.
+ */
+export class ConnectionLost extends ConnectorUnreachable {}
+
 export function resolveSocketPath(explicit?: string): string {
   const path =
     explicit ??
@@ -50,6 +56,8 @@ export function call<K extends Op>(socket: string, op: K, body: Requests[K]): Pr
     req.on("error", (error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT" || error.code === "ECONNREFUSED" || error.code === "EACCES") {
         reject(new ConnectorUnreachable(`no connector at ${socket} (${error.code}); is it running?`));
+      } else if (error.code === "ECONNRESET" || error.code === "EPIPE") {
+        reject(new ConnectionLost(`the connection to the connector at ${socket} dropped (${error.code}); it may have restarted`));
       } else reject(error);
     });
     req.end(payload);

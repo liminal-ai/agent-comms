@@ -1,0 +1,8 @@
+[31m     [31m×[31m the CLI keeps waiting through a restart (the held await's connection is cut) and prints the answer[39m[33m 1649[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[31m[1mError[22m: socket hang up[39m
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Unhandled Errors [49m[22m[31m⎯⎯⎯⎯⎯⎯[39m
+[31m[1mError[22m: socket hang up[39m
+[31m[1mSerialized Error:[22m[39m [90m{ code: 'ECONNRESET' }[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m21 skipped[39m[90m (22)[39m
+[2m     Errors [22m [1m[31m1 error[39m[22m
