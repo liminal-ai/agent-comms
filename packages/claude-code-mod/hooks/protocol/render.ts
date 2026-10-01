@@ -29,7 +29,7 @@ export interface DeliveryHeader {
 export const HEADER_PREFIX = "[agent-comms v1]";
 
 const HEADER_LINE =
-  /^\[agent-comms v1\] delivery=([A-Za-z0-9_-]{1,128}) message=([A-Za-z0-9_-]{1,128}) kind=(request|answer)$/;
+  /^\[agent-comms v1\] delivery=([A-Za-z0-9_-]{1,128}) message=([A-Za-z0-9_-]{1,128}) kind=(request|answer|notice)$/;
 
 export function renderHeader(header: DeliveryHeader): string {
   return `${HEADER_PREFIX} delivery=${header.deliveryId} message=${header.messageId} kind=${header.kind}`;
@@ -161,6 +161,12 @@ function build(delivery: Delivery, options: RenderOptions, budget: Budget): stri
         `This is a reminder from @${reminder.setBy}, sent by @reminders. If what it asks for is finished for good, stop it with \`comms reminder done ${reminder.reminderId} --as ${me}\`. If you can't proceed, pause it with \`comms reminder blocked ${reminder.reminderId} "<why>" --as ${me}\`; it stops firing until resumed.`,
       );
     }
+  } else if (message.kind === "notice") {
+    lines.push(`Notice #${message.seq} from ${who(message.sender)}:`);
+    lines.push(...quote(body));
+    lines.push(...attachments);
+    lines.push("");
+    lines.push("No reply is expected, and nothing you write now is sent anywhere automatically.");
   } else {
     const request = delivery.inReplyTo;
     if (request) {
@@ -210,7 +216,7 @@ function describeConversation(delivery: Delivery): string {
 
 function routeLine(message: MessageEnvelope): string {
   const to = message.recipients.map((r) => `@${r.name}`).join(", ");
-  const kind = message.kind === "answer" ? " (answer)" : "";
+  const kind = message.kind === "request" ? "" : ` (${message.kind})`;
   return to ? `@${message.sender.name} → ${to}${kind}` : `@${message.sender.name}${kind}`;
 }
 

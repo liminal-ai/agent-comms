@@ -237,3 +237,24 @@ describe("R3 system participants", () => {
     expect(toSystem).toEqual([]);
   });
 });
+
+describe("R3 notices to agents", () => {
+  it("a report to an agent and an ended notice to an agent creator wake it with a notice, which is never collected", async () => {
+    const t = await setup();
+    const r = await t.mutation(api.connector.remind, { machine: m1, as: "c", target: "a", text: "x", everyMs: MIN, max: 1, reportTo: "b", name: "n" });
+    at(MIN);
+    await tick(t);
+    const [fire] = await pendingFor(t, "a");
+    await answerFire(t, fire!.id, "fine");
+    const [report] = await pendingFor(t, "b");
+    const [ended] = await pendingFor(t, "c");
+    for (const n of [report!, ended!]) {
+      expect(n.collect).toBe(false);
+      const { delivery, claim } = await t.mutation(api.connector.claim, { machine: m1, deliveryId: n.id });
+      expect(delivery.message).toMatchObject({ kind: "notice", sender: { name: "reminders" } });
+      await t.mutation(api.connector.delivered, { machine: m1, deliveryId: n.id, claimId: claim.claimId, turnId: `t-${n.id}` });
+    }
+    expect((await t.query(api.connector.work, { machine: m1 })).deliveries).toEqual([]);
+    expect(r.reminder.state).toBe("active");
+  });
+});

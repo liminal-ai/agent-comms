@@ -1,0 +1,4 @@
+    not ok 1 - renders a notice: its own header kind, no reply expected, no comms reply line
+not ok 5 - R3 notices (agreed with Hazel)
+# pass 49
+# fail 1

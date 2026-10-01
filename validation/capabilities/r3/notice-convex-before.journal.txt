@@ -1,0 +1,16 @@
+   [32m✓[39m R3 firing [2m(4)[22m
+     [32m✓[39m fires a due reminder as a request from @reminders, labelled with its creator, and records the fire[32m 240[2mms[22m[39m
+     [32m✓[39m skips a fire while the previous one isn't final, then fires on schedule once it is; the answer is recorded and reported[32m 25[2mms[22m[39m
+     [32m✓[39m an ambiguous fire blocks the next for one interval only[32m 13[2mms[22m[39m
+     [32m✓[39m --idle-for waits for the target (or --watch participant) to be idle long enough, and never trusts stale presence[32m 17[2mms[22m[39m
+   [32m✓[39m R3 stopping [2m(3)[22m
+     [32m✓[39m --max stops after n fires and tells the creator; a one-time reminder is done after it fires[32m 11[2mms[22m[39m
+     [32m✓[39m expires (active or paused), telling the creator; paused and blocked reminders don't fire; done and cancel tell the creator[32m 14[2mms[22m[39m
+     [32m✓[39m a running fire's turn finishes after a cancel, and its answer is still recorded[32m 10[2mms[22m[39m
+   [32m✓[39m R3 reminders over the connector [2m(1)[22m
+     [32m✓[39m an agent creates, lists and updates reminders; only the creator, the target and the target's owner may change one[32m 9[2mms[22m[39m
+   [32m✓[39m R3 system participants [2m(1)[22m
+     [32m✓[39m never get a delivery: the answer to a fire addresses no one[32m 12[2mms[22m[39m
+[31m     [31m×[31m a report to an agent and an ended notice to an agent creator wake it with a notice, which is never collected[39m[32m 16[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m9 passed[39m[22m[90m (10)[39m

@@ -1,3 +1,5 @@
 machine lim-builder: last seen 0 min ago; 18 unretired agents homed
 uncertain deliveries: 0; claimed/delivered: 31; conversations: 59
 (claimCount is absent on every existing delivery: counted from R4 on)
+2026-10-01T18:31:12.662Z alerts after the first scans on live data: 0 []
+config: {"connectorSilentMs":600000,"maxClaims":5,"reminderBlockedMs":3600000}

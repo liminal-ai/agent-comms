@@ -52,7 +52,7 @@ async function open(ctx: MutationCtx, c: Condition, now: number): Promise<boolea
   const from = await alertsParticipant(ctx);
   const conversation = await openDm(ctx, from, owner);
   const text = renderAlert({ cause: c.cause, subject: { kind: c.subjectKind, id: c.subjectId }, ...(c.detail ? { detail: c.detail } : {}) });
-  const sent = await post(ctx, { sender: from, conversation, recipients: [owner], kind: "request", text, origin: { via: "system" } });
+  const sent = await post(ctx, { sender: from, conversation, recipients: [owner], kind: "notice", text, origin: { via: "system" } });
   const messageId = sent.message.id as Id<"messages">;
   const alertId = await ctx.db.insert("alerts", {
     cause: c.cause,

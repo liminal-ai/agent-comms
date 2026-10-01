@@ -10,7 +10,7 @@ export interface PostInput {
   sender: Doc<"participants">;
   conversation: Doc<"conversations">;
   recipients: Doc<"participants">[];
-  kind: "request" | "answer";
+  kind: "request" | "answer" | "notice";
   inReplyTo?: Id<"messages">;
   collectedFrom?: Id<"deliveries">;
   idempotencyKey?: string;
@@ -35,7 +35,8 @@ export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResu
     if (a.name.length > 512 || a.url.length > 4096) fail("bad_request", "an attachment's name (512) or url (4096) is too long");
   }
   if (input.kind === "answer" && !input.inReplyTo) fail("bad_request", "an answer needs inReplyTo");
-  if (input.kind === "request" && input.inReplyTo) fail("bad_request", "a request can't have inReplyTo");
+  if (input.kind !== "answer" && input.inReplyTo) fail("bad_request", `a ${input.kind} can't have inReplyTo`);
+  if (input.kind === "notice" && sender.kind !== "system") fail("bad_request", "only system participants post notices");
   if (new Set(recipients.map((r) => r._id)).size !== recipients.length) fail("bad_request", "a recipient is named twice");
   if (recipients.some((r) => r._id === sender._id)) fail("bad_request", "can't address yourself");
   const system = recipients.find((r) => r.kind === "system");

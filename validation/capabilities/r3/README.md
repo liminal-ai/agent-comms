@@ -8,4 +8,6 @@
 | `pnpm-check.journal.txt` | whole repo: exit 0 (94 vitest tests plus every node suite) |
 | `live-reminder.journal.txt` | on the installed services: `comms remind --as cedar-demo @t3-native … --every 1m --max 1 --report-to @lee` fired at the next minute, @t3-native answered "reminder ok", the fire recorded it, `--max 1` ended the reminder, and the report reached @lee's inbox (marked read afterwards) |
 
-Notices from @reminders to an agent (a report, or "reminder ended" to an agent creator) are posted in its DM without waking it until the `notice` kind is agreed with Hazel.
+
+
+**Notices (after Hazel agreed, 18:19):** `notice-protocol-before.journal.txt` and `notice-convex-before.journal.txt` show the rendering and the agent-notice tests failing first; `notice-pnpm-check.journal.txt` is the whole repo after (exit 0, 100 vitest tests). Reports and ending notices to agents, and alerts, are now `kind: "notice"`: delivered, never collected.

@@ -89,7 +89,11 @@ export interface AttachmentRef {
  * itself collected from: whatever the requester does after receiving an answer
  * stays with the requester. That's what stops agents looping.
  */
-export type MessageKind = "request" | "answer";
+/**
+ * `notice`: from a system participant (a reminder's report or ending, an alert).
+ * Like an answer it ends at `delivered` and is never collected; it answers nothing.
+ */
+export type MessageKind = "request" | "answer" | "notice";
 
 export interface MessageEnvelope {
   id: MessageId;

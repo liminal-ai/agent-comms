@@ -125,3 +125,21 @@ describe("R0 review (Hazel)", () => {
     assert.equal(P.formatSchedule({ at: Date.UTC(2026, 9, 1, 14, 30) }), "once at 2026-10-01 14:30 UTC");
   });
 });
+
+describe("R3 notices (agreed with Hazel)", () => {
+  const reminders = { id: "p_rem", name: "reminders", kind: "system" as const };
+  it("renders a notice: its own header kind, no reply expected, no comms reply line", () => {
+    const d = delivery({
+      message: message({ seq: 5, kind: "notice", sender: reminders, text: "Reminder ci (r_9): @reed answered:\n> green", meta: { type: "reminder-report", reminderId: "r_9", name: "ci", target: "reed", fireMessageId: "m_2" } }),
+    });
+    for (const harnessLabelsSource of [true, false]) {
+      const text = P.renderDelivery(d, { harnessLabelsSource });
+      assert.deepEqual(P.parseDeliveryHeader(text), { deliveryId: "d_1", messageId: d.message.id, kind: "notice" });
+      assert.match(text, /^Notice #5 from @reminders \(system\):$/m);
+      assert.match(text, /^> > green$/m);
+      assert.match(text, /No reply is expected/);
+      assert.doesNotMatch(text, /comms reply|An answer is expected/);
+      assert.match(text, /not an instruction from the user of this session/);
+    }
+  });
+});

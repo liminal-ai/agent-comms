@@ -146,9 +146,8 @@ async function system(ctx: MutationCtx, name: "reminders"): Promise<Doc<"partici
 }
 
 /**
- * Posts a notice from @reminders to a participant in their DM. People get it in
- * their inbox. Agents see it in the DM without being woken (until the notice
- * kind lands, a delivery would be collected like a request).
+ * Posts a notice from @reminders to a participant in their DM: people get it in
+ * their inbox, agents a delivery that ends at `delivered` and is never collected.
  */
 async function notify(ctx: MutationCtx, to: Doc<"participants">, text: string, meta: MessageMeta): Promise<void> {
   if (to.kind === "system" || to.state === "retired") return;
@@ -157,8 +156,8 @@ async function notify(ctx: MutationCtx, to: Doc<"participants">, text: string, m
   await post(ctx, {
     sender: from,
     conversation,
-    recipients: to.kind === "human" ? [to] : [],
-    kind: "request",
+    recipients: [to],
+    kind: "notice",
     text,
     origin: { via: "system" },
     meta,
