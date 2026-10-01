@@ -55,7 +55,7 @@ Out of scope for this plan: Slack and iMessage bridges, Hermes, a standalone Cod
 Stated plainly, so nobody builds against a promise we don't make:
 
 - **Claims.** A connector claims a delivery with a lease, renews it while working, and checks it still holds the claim immediately before handing the message to the harness. The lease on its own doesn't prevent a double run: it only decides who may act.
-- **`delivered` means the harness accepted our message:** T3 recorded our message id in the thread, or the mod saw a turn start carrying our delivery id.
+- **`delivered` means the harness accepted our message:** T3 recorded our message id in the thread, or the mod saw a turn start carrying our delivery id. One exception (capabilities pass): an answer taken by a waiting `comms send` is `delivered` with detail "returned to the waiting send", without going through the harness.
 - **Taking over a claim, or restarting, never re-runs blind.** For a claimed delivery not yet delivered, the connector looks in the harness for our message or delivery id. Found: mark delivered and carry on. Clearly absent: run it. Can't tell: `uncertain`, surfaced in the web view.
 - **Delivered but not yet answered is recovered too.** If our turn has finished, collect its result. If it's still running, resume watching it. If it can't be found, `uncertain`.
 - **Automatic collection is idempotent:** at most one collected answer per delivery, keyed by delivery id. Explicit follow-ups with `comms reply` are separate messages, each with its own id and the same `inReplyTo`, and are always allowed.
