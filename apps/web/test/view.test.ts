@@ -12,6 +12,7 @@ import {
   liveStale,
   parseAlertConfig,
   parseProfile,
+  parsePromotion,
   parseReminderForm,
   presenceView,
   reminderActions,
@@ -89,6 +90,29 @@ describe("W registry", () => {
     assert.equal(parseProfile("ok", Array.from({ length: 11 }, (_, i) => `duty ${i}`).join("\n")).ok, false);
     assert.equal(parseProfile("ok", "y".repeat(301)).ok, false);
     assert.equal(parseProfile("two\nlines", "").ok, false);
+  });
+});
+
+describe("W registry, promotion (R1 API)", () => {
+  const base = { name: "oak", harness: "t3" as const, machine: "lim-builder", locator: " thr-1 ", owner: "lee" };
+  it("W promote: an agent is promoted with its owner (a person), as R1's directory.promote requires", () => {
+    assert.deepEqual(parsePromotion(base, ["lee"]), {
+      ok: true,
+      value: { name: "oak", kind: "agent", home: { machine: "lim-builder", harness: "t3", locator: "thr-1" }, owner: "lee" },
+    });
+    assert.deepEqual(parsePromotion({ ...base, harness: "claude-code", locator: "" }, ["lee"]), {
+      ok: true,
+      value: { name: "oak", kind: "agent", home: { machine: "lim-builder", harness: "claude-code", locator: "oak" }, owner: "lee" },
+    });
+  });
+
+  it("W promote: reserved names, bad names, a missing thread id or machine, and an owner who isn't a person are refused", () => {
+    for (const name of ["owner", "all", "reminders", "alerts"]) assert.equal(parsePromotion({ ...base, name }, ["lee"]).ok, false, name);
+    assert.equal(parsePromotion({ ...base, name: "Oak" }, ["lee"]).ok, false);
+    assert.equal(parsePromotion({ ...base, locator: " " }, ["lee"]).ok, false);
+    assert.equal(parsePromotion({ ...base, machine: "" }, ["lee"]).ok, false);
+    assert.equal(parsePromotion({ ...base, owner: "cedar" }, ["lee"]).ok, false);
+    assert.equal(parsePromotion({ ...base, owner: "" }, ["lee"]).ok, false);
   });
 });
 
