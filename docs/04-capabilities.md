@@ -119,7 +119,7 @@ It's worth splitting because the web view and the measurements are independent o
 - the new loopback operations and their JSON, including `await`, and the CLI's JSON output and exit codes for `send`, `await` and `status` (a distinct code for "bound reached, still pending"), since the mod and any later MCP wrapper build on them;
 - the reminder and alert renderings in `render.ts`;
 - **every** Convex query and mutation the web view will call: registry edit, inbox, reminders and alerts.
-- the wait contract: per-recipient results (`open`, `answered`, `expired`, `acknowledged`, `fell-back`), `ack`, the acknowledgement window and its single idempotent fallback into the thread, and how long results are kept.
+- the wait contract: per-recipient results (`open`, `answered`, `expired`, `ended` for a recipient whose delivery failed, became uncertain or was retired, `acknowledged`, `fell-back`), `ack`, the acknowledgement window and its single idempotent fallback into the thread, and how long results are kept.
 
 Hazel reviews R0 before R1.
 
