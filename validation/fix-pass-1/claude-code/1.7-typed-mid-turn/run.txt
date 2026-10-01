@@ -1,0 +1,5 @@
+case: 1.7-typed-mid-turn
+started: 2026-10-01T13:44:58Z
+ended: 2026-10-01T13:46:04Z
+exit: 0
+command: /srv/agents/hazel/bin/fp1-case-1.7

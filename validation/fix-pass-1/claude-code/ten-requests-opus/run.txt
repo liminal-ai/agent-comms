@@ -1,0 +1,5 @@
+case: ten-requests-opus
+started: 2026-10-01T13:50:46Z
+ended: 2026-10-01T13:52:04Z
+exit: 0
+command: /srv/agents/hazel/bin/ten-real cca

@@ -1,0 +1,5 @@
+== Lee types: start a background helper (45 s), don't wait
+== typed turn finished at 13:43:10
+== comms request (60 s of work) sent at 13:43:13
+delivery=j97e2c255svht9803nhfwa8z518femcn message=jn7b7z09kpn4ahtzfq6a0hmc3x8ffvpx conversation=j57e9dytw1v4dnhpgnep7gesbn8fczjc outcome=ambiguous
+reply     'Request #46: the command python3 -c "import time; time.sleep(60); print(616)" ran in the foreground and printed: 616'

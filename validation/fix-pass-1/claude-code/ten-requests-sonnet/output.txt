@@ -1,0 +1,10 @@
+1 outcome=replied prompts=0 '12'
+2 outcome=replied prompts=0 'Tokyo'
+3 outcome=replied prompts=0 'Buenos días'
+4 outcome=replied prompts=0 '0 files in my working directory (`/tmp/hazel-mod-work/cca`), checked with `find . -maxdep
+5 outcome=replied prompts=0 'A hash map is a data structure that stores key-value pairs and uses a hash function to tu
+6 outcome=replied prompts=0 'pong'
+7 outcome=replied prompts=0 'Thursday. 2026-01-01 fell on a Thursday.'
+8 outcome=replied prompts=0 'Created `/tmp/hazel-mod-work/cca/notes.txt` containing "hello".'
+9 outcome=replied prompts=0 'Yes'
+10 outcome=replied prompts=0 '10 (2 + 0 + 2 + 6)'

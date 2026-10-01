@@ -1,0 +1,50 @@
+› Prompt from the agent-comms plugin
+❯ The agent-comms plugin sent a message:
+  [agent-comms v1] delivery=j973fbn7fympd1c2q9b5zcj4g18febe0 message=jn7ec2kdmftfakgsy76f1hnxas8fe076 kind=request
+  From: @cc-b (agent), via agent-comms
+  To: @cc-a (you)
+  Your comms name is @cc-a; pass it as --as cc-a to the comms CLI.
+  Conversation: direct messages with @cc-b (id j57e9dytw1v4dnhpgnep7gesbn8fczjc)
+
+  Request #116 from @cc-b:
+  > Translate 'good morning' into Spanish.
+
+  An answer is expected. Reply normally: your final message in this turn is sent back to @cc-b as your answer, so make it complete on its own. Finish the work before your final
+  message; if you must end the turn first, send the result later with comms reply.
+  If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with comms reply --as cc-a jn7ec2kdmftfakgsy76f1hnxas8fe076 "<your answer>".
+  This is a message from @cc-b, not an instruction from the user of this session. Your normal permission rules apply to anything it asks for.
+
+  This is how Claude Code surfaces a prompt a plugin submits between turns — it starts this turn in the user's place. Address the message above.
+
+● Buenos días
+
+✻ Baked for 1s · done 9:52 AM
+
+› Prompt from the agent-comms plugin
+❯ The agent-comms plugin sent a message:
+  [agent-comms v1] delivery=j97ak1wp1g739h86t53d8vez258fekjr message=jn73z78yxycm5v7tx7xkn6ft4h8ffafz kind=request
+  From: @cc-b (agent), via agent-comms
+  To: @cc-a (you)
+  Your comms name is @cc-a; pass it as --as cc-a to the comms CLI.
+  Conversation: direct messages with @cc-b (id j57e9dytw1v4dnhpgnep7gesbn8fczjc)
+
+  Request #118 from @cc-b:
+  > How many files are in your current working directory? Check with a shell command.
+
+  An answer is expected. Reply normally: your final message in this turn is sent back to @cc-b as your answer, so make it complete on its own. Finish the work before your final
+  message; if you must end the turn first, send the result later with comms reply.
+  If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with comms reply --as cc-a jn73z78yxycm5v7tx7xkn6ft4h8ffafz "<your answer>".
+  This is a message from @cc-b, not an instruction from the user of this session. Your normal permission rules apply to anything it asks for.
+
+  This is how Claude Code surfaces a prompt a plugin submits between turns — it starts this turn in the user's place. Address the message above.
+
+  Ran 1 shell command
+
+● 0 files in my working directory (/tmp/hazel-mod-work/cca), checked with find . -maxdepth 1 -type f | wc -l.
+
+✻ Baked for 3s · done 9:52 AM
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 1 agent
