@@ -117,3 +117,8 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
   reminders' last fire/skip (review items 5, 6).
 - Mod: protocol already synced by Cedar in R0 (check passes, 44 tests). Still to do: the reminder render
   check in term-a once R3 fires reminders, then bump to 0.1.3 and update term-a.
+
+### Mod 0.1.3 and acceptance (Hazel's items) — done 2026-10-01
+- 0.1.3: a notice is delivered and never collected (failing tests e736613, fix ee61a0d); term-a updated.
+- Acceptance 2 (both directions), 6, 9 (term-a: fire and notice), 11 web side: pass. Evidence
+  `validation/capabilities/acceptance/hazel/`, `validation/capabilities/mod-0.1.3/` (59b6b81).
