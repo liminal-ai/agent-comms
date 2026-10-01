@@ -71,7 +71,7 @@ All behaviour lives in Convex and the connector. Agents reach it through the `co
   - A `waits` table `{participantId, messageId, until}`, indexed by participant.
   - The check and the insert happen in the same mutation as the send. Convex's serializable transactions then order two simultaneous sends, so the second sees the first's wait.
   - **The rule is "the target is busy waiting", not cycle detection.** A waiting send to a participant that is itself in an active wait, on anyone, doesn't wait: it falls back to `--continue` and tells the agent "@B is waiting on another request; your message is queued, check with `comms status <id>`." That's broader than a cycle, which is fine since B can't answer until its own wait ends, and it closes every cycle, including A→B→C→A, without timing out.
-  - **Waits stop being active, but their results stay.** When every result is final, or at `until`, the wait stops counting as "busy waiting" (so a crashed CLI's wait ends on its own). The wait and its per-recipient results are kept for `comms status` (for the same 30 days as other records, or until a cleanup pass), not deleted.
+  - **Waits stop being active, but their results stay.** When every result is final, or at `until`, the wait stops counting as "busy waiting" (so a crashed CLI's wait ends on its own). The wait and its per-recipient results are kept for `comms status`, not deleted; R0 sets how long.
 - `comms status <message-id>` shows each addressed recipient's delivery state, and the answer text if there is one. `comms status` with no argument keeps showing the connector's own status.
 
 ### 4. Reminders
