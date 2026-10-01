@@ -1,6 +1,6 @@
 import { EXIT, run as comms } from "@agent-comms/comms-cli";
 import { call } from "@agent-comms/comms-cli/client";
-import { parseDeliveryHeader, renderDelivery } from "@agent-comms/protocol";
+import { formatSchedule, parseDeliveryHeader, renderDelivery } from "@agent-comms/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import { api } from "../../../convex/_generated/api.js";
 import { ADMIN, type Convex, Mod, type Running, sleep, startConnector, until, world } from "./harness.ts";
@@ -270,25 +270,6 @@ describe("fix pass 3.1", () => {
   });
 });
 
-describe("capabilities R0", () => {
-  it("answers the capabilities operations unsupported (501) until they're built", async () => {
-    const w = await world();
-    await start(w.api, w.socket);
-    const cases: [string, unknown][] = [
-      ["remind", { as: "a", target: "b", text: "x", everyMs: 60_000 }],
-      ["reminders", { as: "a" }],
-      ["reminder", { as: "a", id: "r_1" }],
-      ["reminder-update", { as: "a", id: "r_1", action: "pause" }],
-    ];
-    for (const [name, body] of cases) {
-      const r = await call(w.socket, name as never, body as never);
-      expect(!r.ok && r.error.code, name).toBe("unsupported");
-    }
-    const list = await call(w.socket, "list", { as: "a" });
-    expect(list.ok && list.conversations).toHaveLength(0);
-  });
-});
-
 describe("capabilities R1", () => {
   it("passes the registry operations through", async () => {
     const w = await world();
@@ -296,7 +277,7 @@ describe("capabilities R1", () => {
     const set = await call(w.socket, "agents-set", { as: "a", name: "a", description: "builds", duties: ["merge"] });
     expect(set.ok && set.agent).toMatchObject({ description: "builds", duties: ["merge"], owner: { name: "lee" } });
     const all = await call(w.socket, "agents", { as: "a" });
-    expect(all.ok && all.agents.map((e) => e.participant.name)).toEqual(["a", "b", "lee", "tee"]);
+    expect(all.ok && all.agents.map((e) => e.participant.name)).toEqual(["a", "alerts", "b", "lee", "reminders", "tee"]);
     const one = await call(w.socket, "agents", { as: "a", name: "tee", long: true });
     expect(one.ok && one.agents[0]!.home).toEqual({ machine: "box", harness: "t3", locator: "thread-1" });
     const other = await call(w.socket, "agents-set", { as: "a", name: "b", description: "x" });
@@ -412,5 +393,39 @@ describe("capabilities R2: send-and-wait through the connector and the CLI", () 
     expect(s.code).toBe(EXIT.ok);
     expect(s.stdout).toMatch(/^@b: replied · answered: here$/m);
     expect(s.stdout).toMatch(/^wait: answered 1 of 1/m);
+  });
+});
+
+describe("capabilities R3: reminders through the connector and the CLI", () => {
+  async function cli(socket: string, args: string[]) {
+    let stdout = "";
+    let stderr = "";
+    const code = await comms(["--socket", socket, ...args], { env: {}, stdout: (t) => (stdout += t), stderr: (t) => (stderr += t), readStdin: async () => "" });
+    return { code, stdout, stderr };
+  }
+
+  it("comms remind creates one, comms reminders lists it, comms reminder shows it, and the target can mark it done", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const made = await cli(w.socket, ["remind", "--as", "a", "@b", "check", "the", "queue", "--every", "30m", "--name", "queue", "--idle-for", "10m", "--report-to", "@a"]);
+    expect(made.code, made.stderr).toBe(EXIT.ok);
+    const id = /^reminder (\S+) "queue" for @b: every 30m, from /m.exec(made.stdout)?.[1];
+    expect(id, made.stdout).toBeDefined();
+    expect(made.stdout).toMatch(/when @b has been idle 10m; reports to @a; expires /);
+    const listed = await cli(w.socket, ["reminders", "--as", "b"]);
+    expect(listed.stdout).toMatch(new RegExp(`^${id} active "queue" → @b every 30m, next `, "m"));
+    const shown = await cli(w.socket, ["reminder", "--as", "a", id!]);
+    expect(shown.stdout).toMatch(/^  text: check the queue$/m);
+    expect(shown.stdout).toMatch(/^  no fires yet$/m);
+    const done = await cli(w.socket, ["reminder", "done", id!, "--as", "b"]);
+    expect(done.code, done.stderr).toBe(EXIT.ok);
+    expect(done.stdout).toMatch(new RegExp(`^${id} done "queue"`, "m"));
+    const blocked = await cli(w.socket, ["reminder", "blocked", "--as", "b", id!]);
+    expect(blocked.code).toBe(EXIT.usage);
+    const when = new Date(Math.floor(Date.now() / 60_000) * 60_000 + 2 * 86_400_000).toISOString().slice(0, 16) + "Z";
+    const at = await cli(w.socket, ["remind", "--as", "a", "@b", "once", "--at", when]);
+    expect(at.stdout, at.stderr).toContain(`: ${formatSchedule({ at: Date.parse(when) })}, from `);
+    const bad = await cli(w.socket, ["remind", "--as", "a", "@b", "x", "--every", "30s"]);
+    expect(bad.code).toBe(EXIT.refused);
   });
 });

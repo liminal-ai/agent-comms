@@ -13,7 +13,7 @@ export const home = v.object({ machine: v.string(), harness, locator: v.string()
 export const presenceStatus = v.union(v.literal("idle"), v.literal("busy"), v.literal("offline"));
 export const conversationKind = v.union(v.literal("dm"), v.literal("group"));
 export const messageKind = v.union(v.literal("request"), v.literal("answer"));
-export const via = v.union(v.literal("t3"), v.literal("claude-code"), v.literal("cli"), v.literal("web"));
+export const via = v.union(v.literal("t3"), v.literal("claude-code"), v.literal("cli"), v.literal("web"), v.literal("system"));
 export const origin = v.object({ via, externalId: v.optional(v.string()) });
 export const attachment = v.object({
   name: v.string(),

@@ -77,6 +77,10 @@ export interface ServerApiShape {
   readonly watchWait: (req: Pick<Requests["await"], "as" | "messageId">, onValue: (value: Responses["await"]) => void) => () => void;
   readonly ack: (req: Requests["ack"]) => Effect.Effect<Responses["ack"], ApiError>;
   readonly messageStatus: (req: Requests["message-status"]) => Effect.Effect<Responses["message-status"], ApiError>;
+  readonly remind: (req: Requests["remind"]) => Effect.Effect<Responses["remind"], ApiError>;
+  readonly reminders: (req: Requests["reminders"]) => Effect.Effect<Responses["reminders"], ApiError>;
+  readonly reminder: (req: Requests["reminder"]) => Effect.Effect<Responses["reminder"], ApiError>;
+  readonly reminderUpdate: (req: Requests["reminder-update"]) => Effect.Effect<Responses["reminder-update"], ApiError>;
   readonly agentsSet: (req: Requests["agents-set"]) => Effect.Effect<Responses["agents-set"], ApiError>;
 }
 
@@ -234,6 +238,10 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
           ...(req.recipients !== undefined ? { recipients: req.recipients } : {}),
         }),
       ),
+    remind: (req) => call("remind", () => transport.mutation(api.connector.remind, { machine, ...req })),
+    reminders: (req) => call("reminders", () => transport.query(api.connector.reminders, { machine, as: req.as })),
+    reminder: (req) => call("reminder", () => transport.query(api.connector.reminder, { machine, as: req.as, id: req.id })),
+    reminderUpdate: (req) => call("reminder-update", () => transport.mutation(api.connector.reminderUpdate, { machine, ...req })),
     messageStatus: (req) => call("message-status", () => transport.query(api.connector.messageStatus, { machine, as: req.as, messageId: req.messageId })),
     agentsSet: (req) =>
       call("agents-set", () =>

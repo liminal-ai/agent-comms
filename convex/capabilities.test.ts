@@ -173,6 +173,7 @@ describe("R0 reminders (web)", () => {
 
   it("lists, shows with fires and skips, and moves through pause, resume, blocked, done", async () => {
     const t = await setup();
+    await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" }); // @reminders tells the creator when it ends
     const { reminder } = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: 60_000 });
     const listed = await t.query(api.reminders.list, { adminToken: ADMIN });
     expect(listed.reminders.map((r) => r.id)).toEqual([reminder.id]);

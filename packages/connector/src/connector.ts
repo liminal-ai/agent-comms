@@ -141,10 +141,10 @@ export const runConnector = (options: ConnectorOptions) =>
       "message-status": (req) => run(api.messageStatus(req)),
       agents: (req) => run(api.agents(req)),
       "agents-set": (req) => run(api.agentsSet(req)),
-      remind: () => Promise.reject(notYet("remind")),
-      reminders: () => Promise.reject(notYet("reminders")),
-      reminder: () => Promise.reject(notYet("reminder")),
-      "reminder-update": () => Promise.reject(notYet("reminder-update")),
+      remind: (req) => run(api.remind(req)),
+      reminders: (req) => run(api.reminders(req)),
+      reminder: (req) => run(api.reminder(req)),
+      "reminder-update": (req) => run(api.reminderUpdate(req)),
     };
 
     const loopback = yield* Effect.acquireRelease(
@@ -208,8 +208,3 @@ export const runConnector = (options: ConnectorOptions) =>
     );
     return { sessions } satisfies RunningConnector;
   });
-
-/** Capabilities-pass operations not built yet (docs/04-capabilities.md, R1 to R4). */
-function notYet(op: string): LoopbackError {
-  return new LoopbackError("unsupported", `${op} isn't supported by this connector yet`);
-}

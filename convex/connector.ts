@@ -28,8 +28,9 @@ import {
 } from "./lib/core";
 import { machineSeen, nextPresence, profilePatch, registryEntry } from "./lib/registry";
 import { acknowledge, endResult, registerWait, requireWait, takeAnswer, touch, waitOn, waitShape } from "./lib/waits";
+import { applyAction, createReminder, mayChange, recordFireAnswer, reminderDetail, reminderShape } from "./lib/reminders";
 import { openDm, post, replayed } from "./lib/post";
-import { attachment, enteredInput, failureReason, machineAuth, via } from "./validators";
+import { attachment, enteredInput, failureReason, machineAuth, reminderAction, via } from "./validators";
 
 export const DEFAULT_LEASE_MS = 60_000;
 const MAX_LEASE_MS = 10 * 60_000;
@@ -313,6 +314,7 @@ export const collect = mutation({
       claim: undefined,
     });
     await takeAnswer(ctx, d, result.message.id as Id<"messages">, Date.now());
+    await recordFireAnswer(ctx, d, result.message.id as Id<"messages">, Date.now());
     return { delivery: await stateRef(ctx, (await ctx.db.get(d._id))!), answerMessageId: result.message.id, duplicate: false };
   },
 });
@@ -381,6 +383,7 @@ export const ambiguous = mutation({
     if (d.state === "ambiguous" && earlier) {
       await ctx.db.patch(d._id, { state: "replied", at: Date.now(), detail: `${d.detail}; completed by comms reply ${earlier._id}, sent during the turn` });
       await takeAnswer(ctx, d, earlier._id, Date.now());
+      await recordFireAnswer(ctx, d, earlier._id, Date.now());
       return { delivery: await stateRef(ctx, (await ctx.db.get(d._id))!) };
     }
     return result;
@@ -527,6 +530,7 @@ export const reply = mutation({
         await ctx.db.patch(open._id, { state: "replied", at: Date.now(), detail: `completed by comms reply ${result.message.id}` });
         result.completed = open._id;
         await takeAnswer(ctx, open, result.message.id as Id<"messages">, Date.now());
+        await recordFireAnswer(ctx, open, result.message.id as Id<"messages">, Date.now());
         break;
       }
     }
@@ -723,5 +727,84 @@ export const messageStatus = query({
       recipients,
       ...(wait ? { wait: await waitShape(ctx, wait) } : {}),
     };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Reminders (capabilities pass §4)
+
+export const remind = mutation({
+  args: {
+    machine: machineAuth,
+    as: v.string(),
+    target: v.string(),
+    text: v.string(),
+    everyMs: v.optional(v.number()),
+    at: v.optional(v.number()),
+    name: v.optional(v.string()),
+    idleForMs: v.optional(v.number()),
+    watch: v.optional(v.string()),
+    max: v.optional(v.number()),
+    reportTo: v.optional(v.string()),
+    expiresMs: v.optional(v.number()),
+  },
+  handler: async (ctx, { machine: auth, as, ...input }): Promise<Responses["remind"]> => {
+    const machine = await requireMachine(ctx, auth);
+    const me = await actingAs(ctx, machine, as);
+    return { reminder: await reminderShape(ctx, await createReminder(ctx, me, input, Date.now())) };
+  },
+});
+
+/** Reminders the caller created, is the target of, or owns the target of; newest first. */
+export const reminders = query({
+  args: { machine: machineAuth, as: v.string() },
+  handler: async (ctx, args): Promise<Responses["reminders"]> => {
+    const machine = await requireMachine(ctx, args.machine);
+    const me = await actingAs(ctx, machine, args.as);
+    const mine = new Map<string, Doc<"reminders">>();
+    for (const r of await ctx.db
+      .query("reminders")
+      .withIndex("by_creator", (q) => q.eq("createdById", me._id))
+      .collect())
+      mine.set(r._id, r);
+    for (const r of await ctx.db
+      .query("reminders")
+      .withIndex("by_target", (q) => q.eq("targetId", me._id))
+      .collect())
+      mine.set(r._id, r);
+    for (const owned of await ctx.db
+      .query("participants")
+      .withIndex("by_owner", (q) => q.eq("ownerId", me._id))
+      .collect()) {
+      for (const r of await ctx.db
+        .query("reminders")
+        .withIndex("by_target", (q) => q.eq("targetId", owned._id))
+        .collect())
+        mine.set(r._id, r);
+    }
+    const rows = [...mine.values()].sort((a, b) => b.createdAt - a.createdAt);
+    return { reminders: await Promise.all(rows.map((r) => reminderShape(ctx, r))) };
+  },
+});
+
+export const reminder = query({
+  args: { machine: machineAuth, as: v.string(), id: v.string() },
+  handler: async (ctx, args): Promise<Responses["reminder"]> => {
+    const machine = await requireMachine(ctx, args.machine);
+    await actingAs(ctx, machine, args.as);
+    return reminderDetail(ctx, await getOr(ctx, "reminders", args.id));
+  },
+});
+
+export const reminderUpdate = mutation({
+  args: { machine: machineAuth, as: v.string(), id: v.string(), action: reminderAction, reason: v.optional(v.string()) },
+  handler: async (ctx, args): Promise<Responses["reminder-update"]> => {
+    const machine = await requireMachine(ctx, args.machine);
+    const me = await actingAs(ctx, machine, args.as);
+    const r = await getOr(ctx, "reminders", args.id);
+    if (!(await mayChange(ctx, r, me))) {
+      fail("conflict", `only the reminder's creator, its target and the target's owner can change it, not @${me.name}`);
+    }
+    return { reminder: await reminderShape(ctx, await applyAction(ctx, r, args.action, args.reason, Date.now(), me)) };
   },
 });

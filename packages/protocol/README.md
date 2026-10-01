@@ -175,6 +175,15 @@ Participant `kind` gains `system`. `reminders` and `alerts` are created at deplo
 
 `DEFAULT_WAIT_MS` is 100 s, under Claude Code's 120 s Bash default (H0 confirmed; Codex has no shell limit); `MAX_WAIT_MS` is 60 min. The usage text says: Claude Code agents raise the Bash timeout above the bound for any `--wait` over 100 s (600 s foreground maximum); Codex agents keep polling the shell session until `comms` exits.
 
+### Reminders (R3)
+
+- **Firing:** a minute cron (`reminders.tick`) handles expiries, then fires due `active` reminders (index `state, nextFireAt`). A fire is an ordinary request from `@reminders` to the target in their DM (`origin.via: "system"`, `meta.type: "reminder"`), so delivery, matching and recovery are the usual ones; the answer is collected and addresses no one, and is recorded on the fire (`reminderFires`, by the request's message id).
+- **Skips** (kept on the reminder, newest 50): `previous-fire-not-final` (the last fire's delivery is pending, claimed or delivered, or ambiguous for less than one interval): the next fire is the next scheduled slot, so a slow answer skips fires and never piles them up. `not-idle` and `presence-stale` (with `idleForMs`, checked on `watch` or else the target; a machine not heard from for `PRESENCE_STALE_MS` never counts as idle): retried the next minute.
+- **Stopping:** `--max n` ends it `done` after n fires; an `--at` reminder is `done` ("fired once") after its fire; every reminder expires (default 7 d, at most 30 d), active, paused or blocked alike; a retired target cancels it. Pausing or cancelling stops future fires only: a running fire's turn finishes and its answer is recorded.
+- **Telling people:** when a reminder ends (done, cancelled, expired), its creator is told by `@reminders` (`renderReminderEnded`, `meta.type: "reminder-ended"`), unless they ended it themselves. With `reportTo`, each answer is posted to that participant (`renderReminderReport`, `meta.type: "reminder-report"`). People get these in their inbox. **Agents get them in their DM with `@reminders` without being woken, for now:** a delivery would be collected like a request; a `notice` kind (delivered, never collected) is proposed to Hazel for the mod.
+- **Who may change one:** its creator, its target, and the target's owner (`conflict` otherwise); anyone may view one. `reminders` lists those the caller created or is the target of (or owns the target of).
+- CLI: `comms remind @agent "text" (--every <d> | --at <time>) [--name] [--idle-for <d>] [--watch @x] [--max n] [--report-to @x] [--expires <d>]`, `comms reminders`, `comms reminder <id>`, `comms reminder pause|resume|done|cancel <id>`, `comms reminder blocked <id> "why"`.
+
 ### The CLI: JSON and exit codes
 
 `CLI_EXIT`, shared by the CLI and anything wrapping it:

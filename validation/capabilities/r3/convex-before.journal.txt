@@ -1,0 +1,11 @@
+[31m     [31m×[31m fires a due reminder as a request from @reminders, labelled with its creator, and records the fire[39m[32m 91[2mms[22m[39m
+[31m     [31m×[31m skips a fire while the previous one isn't final, then fires on schedule once it is; the answer is recorded and reported[39m[32m 10[2mms[22m[39m
+[31m     [31m×[31m an ambiguous fire blocks the next for one interval only[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m --idle-for waits for the target (or --watch participant) to be idle long enough, and never trusts stale presence[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m --max stops after n fires and tells the creator; a one-time reminder is done after it fires[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m expires (active or paused), telling the creator; paused and blocked reminders don't fire; done and cancel tell the creator[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m a running fire's turn finishes after a cancel, and its answer is still recorded[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m an agent creates, lists and updates reminders; only the creator, the target and the target's owner may change one[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m never get a delivery: the answer to a fire addresses no one[39m[32m 4[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 9 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m9 failed[39m[22m[90m (9)[39m

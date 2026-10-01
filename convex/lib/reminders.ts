@@ -3,6 +3,11 @@
 
 import {
   formatDuration,
+  formatSchedule,
+  type MessageMeta,
+  PRESENCE_STALE_MS,
+  renderReminderEnded,
+  renderReminderReport,
   type Reminder,
   type ReminderAction,
   REMINDER_DEFAULT_EXPIRY_MS,
@@ -15,6 +20,7 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { fail, participantByName, refById } from "./core";
+import { openDm, post } from "./post";
 
 /** How many skips a reminder keeps (newest). */
 export const MAX_SKIPS_KEPT = 50;
@@ -101,10 +107,237 @@ export function afterAction(r: Doc<"reminders">, action: ReminderAction, reason:
   }
 }
 
-export async function applyAction(ctx: MutationCtx, r: Doc<"reminders">, action: ReminderAction, reason: string | undefined, now: number) {
+/**
+ * Applies an action. `actor` is who did it (absent from the web view): the
+ * creator is told when a reminder ends, unless they ended it themselves.
+ */
+export async function applyAction(
+  ctx: MutationCtx,
+  r: Doc<"reminders">,
+  action: ReminderAction,
+  reason: string | undefined,
+  now: number,
+  actor?: Doc<"participants">,
+) {
   const next = afterAction(r, action, reason);
-  await ctx.db.patch(r._id, { state: next.state, stateReason: next.stateReason, stateAt: now });
-  return (await ctx.db.get(r._id))!;
+  await ctx.db.patch(r._id, {
+    state: next.state,
+    stateReason: next.stateReason,
+    stateAt: now,
+    ...(next.state === "done" || next.state === "cancelled" ? { nextFireAt: undefined } : {}),
+  });
+  const updated = (await ctx.db.get(r._id))!;
+  if ((next.state === "done" || next.state === "cancelled") && actor?._id !== r.createdById) await tellEnded(ctx, updated);
+  return updated;
+}
+
+// ---------------------------------------------------------------------------
+// Firing (the minute cron)
+
+const MINUTE = 60_000;
+
+async function system(ctx: MutationCtx, name: "reminders"): Promise<Doc<"participants">> {
+  const p = await ctx.db
+    .query("participants")
+    .withIndex("by_name", (q) => q.eq("name", name))
+    .unique();
+  if (!p || p.kind !== "system") throw new Error(`@${name} is missing: run scripts/upgrade.ts after deploying`);
+  return p;
+}
+
+/**
+ * Posts a notice from @reminders to a participant in their DM. People get it in
+ * their inbox. Agents see it in the DM without being woken (until the notice
+ * kind lands, a delivery would be collected like a request).
+ */
+async function notify(ctx: MutationCtx, to: Doc<"participants">, text: string, meta: MessageMeta): Promise<void> {
+  if (to.kind === "system" || to.state === "retired") return;
+  const from = await system(ctx, "reminders");
+  const conversation = await openDm(ctx, from, to);
+  await post(ctx, {
+    sender: from,
+    conversation,
+    recipients: to.kind === "human" ? [to] : [],
+    kind: "request",
+    text,
+    origin: { via: "system" },
+    meta,
+  });
+}
+
+async function tellEnded(ctx: MutationCtx, r: Doc<"reminders">): Promise<void> {
+  if (r.state !== "done" && r.state !== "cancelled" && r.state !== "expired") return;
+  const creator = (await ctx.db.get(r.createdById))!;
+  const input = { reminderName: r.name, reminderId: r._id, state: r.state, ...(r.stateReason ? { reason: r.stateReason } : {}) };
+  await notify(ctx, creator, renderReminderEnded(input), {
+    type: "reminder-ended",
+    reminderId: r._id,
+    name: r.name,
+    state: r.state,
+    ...(r.stateReason ? { reason: r.stateReason } : {}),
+  });
+}
+
+async function skip(ctx: MutationCtx, r: Doc<"reminders">, entry: ReminderSkip, nextFireAt: number): Promise<void> {
+  const skips = [...r.skips, entry].slice(-MAX_SKIPS_KEPT);
+  await ctx.db.patch(r._id, { skips, nextFireAt });
+}
+
+/** The next scheduled slot after `now` (repeating reminders keep their rhythm through skips). */
+function nextSlot(r: Doc<"reminders">, now: number): number {
+  let next = r.nextFireAt ?? now;
+  while (next <= now) next += r.everyMs!;
+  return next;
+}
+
+/** Final for the no-pile-up rule: not pending, claimed or delivered; ambiguous only after one interval. */
+async function previousFireFinal(ctx: QueryCtx, r: Doc<"reminders">, now: number): Promise<boolean> {
+  const last = await ctx.db
+    .query("reminderFires")
+    .withIndex("by_reminder", (q) => q.eq("reminderId", r._id))
+    .order("desc")
+    .first();
+  if (!last) return true;
+  const d = await ctx.db.get(last.deliveryId);
+  if (!d) return true;
+  if (d.state === "pending" || d.state === "claimed" || d.state === "delivered") return false;
+  if (d.state === "ambiguous") return now - d.at >= (r.everyMs ?? MINUTE);
+  return true;
+}
+
+/** Why the idle condition blocks a fire now, if it does. */
+async function idleBlock(ctx: QueryCtx, r: Doc<"reminders">, now: number): Promise<ReminderSkip | null> {
+  if (r.idleForMs === undefined) return null;
+  const watched = (await ctx.db.get(r.watchId ?? r.targetId))!;
+  const machine = watched.home
+    ? await ctx.db
+        .query("machines")
+        .withIndex("by_machineId", (q) => q.eq("machineId", watched.home!.machine))
+        .unique()
+    : null;
+  if (machine?.lastSeenAt === undefined || now - machine.lastSeenAt >= PRESENCE_STALE_MS) {
+    return { at: now, reason: "presence-stale", detail: `@${watched.name}'s connector hasn't been heard from` };
+  }
+  const p = watched.presence;
+  const since = p.status === "idle" ? (p.idleSince ?? p.at) : undefined;
+  if (since === undefined || now - since < r.idleForMs) {
+    return { at: now, reason: "not-idle", detail: `@${watched.name} is ${p.status}${since !== undefined ? ` for ${formatDuration(now - since)}` : ""}` };
+  }
+  return null;
+}
+
+async function fire(ctx: MutationCtx, r: Doc<"reminders">, target: Doc<"participants">, now: number): Promise<void> {
+  const from = await system(ctx, "reminders");
+  const creator = (await ctx.db.get(r.createdById))!;
+  const conversation = await openDm(ctx, from, target);
+  const fireNumber = r.fires + 1;
+  const schedule = r.everyMs !== undefined ? { everyMs: r.everyMs } : { at: r.at! };
+  const result = await post(ctx, {
+    sender: from,
+    conversation,
+    recipients: [target],
+    kind: "request",
+    text: r.text,
+    origin: { via: "system" },
+    meta: { type: "reminder", reminderId: r._id, name: r.name, setBy: creator.name, schedule: formatSchedule(schedule), fire: fireNumber },
+  });
+  const delivery = result.deliveries[0];
+  if (delivery) {
+    await ctx.db.insert("reminderFires", {
+      reminderId: r._id,
+      messageId: result.message.id as Id<"messages">,
+      deliveryId: delivery.id as Id<"deliveries">,
+      firedAt: now,
+    });
+  }
+  const maxed = r.max !== undefined && fireNumber >= r.max;
+  if (r.everyMs === undefined) {
+    await ctx.db.patch(r._id, { fires: fireNumber, nextFireAt: undefined, state: "done", stateReason: "fired once", stateAt: now });
+  } else if (maxed) {
+    await ctx.db.patch(r._id, {
+      fires: fireNumber,
+      nextFireAt: undefined,
+      state: "done",
+      stateReason: `fired ${fireNumber} time${fireNumber === 1 ? "" : "s"} (--max ${r.max})`,
+      stateAt: now,
+    });
+    await tellEnded(ctx, (await ctx.db.get(r._id))!);
+  } else {
+    await ctx.db.patch(r._id, { fires: fireNumber, nextFireAt: nextSlot(r, now) });
+  }
+}
+
+/** The minute cron: expiries first, then due reminders (bounded per run). */
+export async function tick(ctx: MutationCtx, now: number): Promise<{ fired: number; skipped: number; expired: number }> {
+  let expired = 0;
+  const ending = await ctx.db
+    .query("reminders")
+    .withIndex("by_expires", (q) => q.lte("expiresAt", now))
+    .take(200);
+  for (const r of ending) {
+    if (r.state !== "active" && r.state !== "paused" && r.state !== "blocked") continue;
+    await ctx.db.patch(r._id, { state: "expired", stateAt: now, nextFireAt: undefined });
+    await tellEnded(ctx, (await ctx.db.get(r._id))!);
+    expired++;
+  }
+  let fired = 0;
+  let skipped = 0;
+  const due = await ctx.db
+    .query("reminders")
+    .withIndex("by_state_next", (q) => q.eq("state", "active").lte("nextFireAt", now))
+    .take(50);
+  for (const r of due) {
+    if (r.nextFireAt === undefined) continue;
+    const target = (await ctx.db.get(r.targetId))!;
+    if (target.state === "retired") {
+      await ctx.db.patch(r._id, { state: "cancelled", stateReason: `@${target.name} was retired`, stateAt: now, nextFireAt: undefined });
+      await tellEnded(ctx, (await ctx.db.get(r._id))!);
+      continue;
+    }
+    if (!(await previousFireFinal(ctx, r, now))) {
+      await skip(ctx, r, { at: now, reason: "previous-fire-not-final" }, r.everyMs !== undefined ? nextSlot(r, now) : now + MINUTE);
+      skipped++;
+      continue;
+    }
+    const blocked = await idleBlock(ctx, r, now);
+    if (blocked) {
+      await skip(ctx, r, blocked, now + MINUTE);
+      skipped++;
+      continue;
+    }
+    await fire(ctx, r, target, now);
+    fired++;
+  }
+  return { fired, skipped, expired };
+}
+
+/** A fire's request was answered (collected, or completed with `comms reply`): record it, and report it. */
+export async function recordFireAnswer(ctx: MutationCtx, requestDelivery: Doc<"deliveries">, answerId: Id<"messages">, now: number): Promise<void> {
+  const f = await ctx.db
+    .query("reminderFires")
+    .withIndex("by_message", (q) => q.eq("messageId", requestDelivery.messageId))
+    .first();
+  if (!f || f.answerMessageId) return;
+  await ctx.db.patch(f._id, { answerMessageId: answerId, answeredAt: now });
+  const r = await ctx.db.get(f.reminderId);
+  if (!r?.reportToId) return;
+  const reportTo = (await ctx.db.get(r.reportToId))!;
+  const target = (await ctx.db.get(r.targetId))!;
+  const answer = (await ctx.db.get(answerId))!;
+  await notify(ctx, reportTo, renderReminderReport({ reminderName: r.name, reminderId: r._id, target: target.name, answer: answer.text }), {
+    type: "reminder-report",
+    reminderId: r._id,
+    name: r.name,
+    target: target.name,
+    fireMessageId: f.messageId,
+  });
+}
+
+/** Who may change a reminder: its creator, its target, and the target's owner. */
+export async function mayChange(ctx: QueryCtx, r: Doc<"reminders">, who: Doc<"participants">): Promise<boolean> {
+  if (who._id === r.createdById || who._id === r.targetId) return true;
+  const target = await ctx.db.get(r.targetId);
+  return target?.ownerId === who._id;
 }
 
 export async function reminderShape(ctx: QueryCtx, r: Doc<"reminders">): Promise<Reminder> {

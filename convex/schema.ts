@@ -189,6 +189,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_state_next", ["state", "nextFireAt"])
+    .index("by_expires", ["expiresAt"])
     .index("by_target", ["targetId"])
     .index("by_creator", ["createdById"]),
 

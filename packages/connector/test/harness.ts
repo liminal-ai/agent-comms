@@ -82,6 +82,7 @@ export async function world() {
     owner: "lee",
     home: { machine: machine.id, harness: "t3", locator: "thread-1" },
   });
+  await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
   const tr = transport(t);
   const serverApi = makeServerApi(tr, { machine, callTimeout: "2 seconds" });
   const dir = await mkdtemp(join(tmpdir(), "connector-test-"));

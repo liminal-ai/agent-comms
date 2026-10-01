@@ -1,0 +1,4 @@
+ [32m✓[39m [30m[42m convex [49m[39m convex/reminders.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 245[2mms[22m[39m
+[2m      Tests [22m [1m[32m9 passed[39m[22m[90m (9)[39m
+ [32m✓[39m [30m[45m connector [49m[39m packages/connector/test/connector.test.ts [2m([22m[2m19 tests[22m[2m | [22m[33m18 skipped[39m[2m)[22m[32m 158[2mms[22m[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[2m | [22m[33m20 skipped[39m[90m (21)[39m

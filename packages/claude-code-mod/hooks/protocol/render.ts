@@ -262,7 +262,7 @@ export function renderReminderEnded(input: {
   state: "done" | "cancelled" | "expired";
   reason?: string;
 }): string {
-  const reason = input.reason ? `: ${clip(oneLine(input.reason), 500)}` : ".";
+  const reason = input.reason ? `: ${clip(oneLine(input.reason), 500)}.` : ".";
   return `Reminder ${input.reminderName} (${input.reminderId}) ${ENDED[input.state]}${reason} It won't fire again.`;
 }
 

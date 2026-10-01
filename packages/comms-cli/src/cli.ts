@@ -8,14 +8,17 @@ import {
   type ConversationSummary,
   DEFAULT_WAIT_MS,
   formatDuration,
+  formatSchedule,
   MAX_POLL_WAIT_MS,
   MAX_WAIT_MS,
   type MessageEnvelope,
   type MessageStatus,
+  parseAt,
   parseDuration,
   type Op,
   PARTICIPANT_ENV,
   type RegistryEntry,
+  type Reminder,
   type Wait,
   type Requests,
   type Responses,
@@ -35,6 +38,12 @@ export const USAGE = `usage:
   comms reply --as <me> <message-id> "text"                  answer a message (sets inReplyTo)
   comms read  --as <me> <conversation-id> [--before <seq>] [--limit <n>]
   comms list  --as <me>                                      my conversations
+  comms remind --as <me> @agent "text" (--every <duration> | --at <time>) [--name <n>] [--idle-for <d>]
+               [--watch @x] [--max <n>] [--report-to @x] [--expires <d>]   a reminder (--at: ISO 8601 or HH:MM)
+  comms reminders --as <me>                                  reminders I created, or that target me
+  comms reminder --as <me> <id>                              one, with its fires and skips
+  comms reminder pause|resume|done|cancel --as <me> <id>     (creator, target, or the target's owner)
+  comms reminder blocked --as <me> <id> "why"
   comms agents --as <me> [@name] [--long]                    the agent registry (one with its duties; --long adds homes)
   comms agents set --as <me> @me [--description "…"] [--duty "…"]…   set your registry entry
                                                              ("" clears the description; any --duty replaces the list)
@@ -83,6 +92,14 @@ const OPTIONS = {
   wait: { type: "string" },
   continue: { type: "boolean" },
   long: { type: "boolean" },
+  every: { type: "string" },
+  at: { type: "string" },
+  name: { type: "string" },
+  "idle-for": { type: "string" },
+  watch: { type: "string" },
+  max: { type: "string" },
+  "report-to": { type: "string" },
+  expires: { type: "string" },
   description: { type: "string" },
   duty: { type: "string", multiple: true },
   socket: { type: "string" },
@@ -344,6 +361,73 @@ export async function run(argv: string[], io: Io): Promise<number> {
         }
         return finish(me, wait, Math.max(0, wait.until - wait.createdAt));
       }
+      case "remind": {
+        const [target, ...words] = rest;
+        if (!target?.startsWith("@")) throw new UsageError("comms remind needs an @agent first");
+        if ((values.every === undefined) === (values.at === undefined)) throw new UsageError("give exactly one of --every and --at");
+        const duration = (flag: string, value: string | undefined) => {
+          if (value === undefined) return undefined;
+          const ms = parseDuration(value);
+          if (ms === null) throw new UsageError(`${flag} takes a duration like 90s, 30m, 2h or 7d`);
+          return ms;
+        };
+        const atMs = values.at === undefined ? undefined : parseAt(values.at, Date.now());
+        if (values.at !== undefined && atMs === null) throw new UsageError("--at takes ISO 8601 with a time (2026-10-02T09:00Z) or HH:MM");
+        const handle = (flag: string, value: string | undefined) => {
+          if (value === undefined) return undefined;
+          if (!value.startsWith("@")) throw new UsageError(`${flag} takes an @name`);
+          return value.slice(1);
+        };
+        const everyMs = duration("--every", values.every);
+        const idleForMs = duration("--idle-for", values["idle-for"]);
+        const expiresMs = duration("--expires", values.expires);
+        const watch = handle("--watch", values.watch);
+        const reportTo = handle("--report-to", values["report-to"]);
+        const max = values.max === undefined ? undefined : integerOption("--max", values.max);
+        const r = await request("remind", {
+          as: as(),
+          target: target.slice(1),
+          text: await text(words),
+          ...(everyMs !== undefined ? { everyMs } : {}),
+          ...(atMs != null ? { at: atMs } : {}),
+          ...(values.name !== undefined ? { name: values.name } : {}),
+          ...(idleForMs !== undefined ? { idleForMs } : {}),
+          ...(watch !== undefined ? { watch } : {}),
+          ...(max !== undefined ? { max } : {}),
+          ...(reportTo !== undefined ? { reportTo } : {}),
+          ...(expiresMs !== undefined ? { expiresMs } : {}),
+        });
+        if (!r) return EXIT.refused;
+        if (!values.json) io.stdout(describeNewReminder(r.reminder));
+        return EXIT.ok;
+      }
+      case "reminders": {
+        if (rest.length > 0) throw new UsageError("comms reminders takes no arguments");
+        const r = await request("reminders", { as: as() });
+        if (!r) return EXIT.refused;
+        if (!values.json) io.stdout(r.reminders.length === 0 ? "no reminders\n" : r.reminders.map(describeReminderLine).join(""));
+        return EXIT.ok;
+      }
+      case "reminder": {
+        const actions = ["pause", "resume", "done", "cancel", "blocked"] as const;
+        const action = actions.find((x) => x === rest[0]);
+        if (!action) {
+          const [id, extra] = rest;
+          if (!id || extra) throw new UsageError("comms reminder needs exactly one reminder id");
+          const r = await request("reminder", { as: as(), id });
+          if (!r) return EXIT.refused;
+          if (!values.json) io.stdout(describeReminderDetail(r));
+          return EXIT.ok;
+        }
+        const [, id, ...why] = rest;
+        if (!id) throw new UsageError(`comms reminder ${action} needs a reminder id`);
+        if (action === "blocked" && why.join(" ").trim() === "") throw new UsageError('comms reminder blocked needs a reason: comms reminder blocked <id> "why"');
+        if (action !== "blocked" && why.length > 0) throw new UsageError(`comms reminder ${action} takes only the id`);
+        const r = await request("reminder-update", { as: as(), id, action, ...(action === "blocked" ? { reason: why.join(" ") } : {}) });
+        if (!r) return EXIT.refused;
+        if (!values.json) io.stdout(describeReminderLine(r.reminder));
+        return EXIT.ok;
+      }
       case "agents": {
         if (rest[0] === "set") {
           const [, target, extra] = rest;
@@ -402,6 +486,38 @@ export async function run(argv: string[], io: Io): Promise<number> {
     }
     throw error;
   }
+}
+
+const clock = (ms: number) => new Date(ms).toISOString().replace("T", " ").slice(0, 16) + " UTC";
+
+function scheduleOf(r: Reminder): string {
+  return formatSchedule(r.schedule);
+}
+
+function describeNewReminder(r: Reminder): string {
+  const conditions = [
+    r.idleForMs !== undefined ? `when @${(r.watch ?? r.target).name} has been idle ${formatDuration(r.idleForMs)}` : undefined,
+    r.max !== undefined ? `at most ${r.max} time${r.max === 1 ? "" : "s"}` : undefined,
+    r.reportTo ? `reports to @${r.reportTo.name}` : undefined,
+    `expires ${clock(r.expiresAt)}`,
+  ].filter(Boolean);
+  return `reminder ${r.id} "${r.name}" for @${r.target.name}: ${scheduleOf(r)}, from ${r.nextFireAt !== undefined ? clock(r.nextFireAt) : "now"}; ${conditions.join("; ")}\n`;
+}
+
+function describeReminderLine(r: Reminder): string {
+  const next = r.state === "active" && r.nextFireAt !== undefined ? `, next ${clock(r.nextFireAt)}` : "";
+  const why = r.stateReason ? ` (${r.stateReason})` : "";
+  const skip = r.lastSkip ? `; last skipped ${clock(r.lastSkip.at)}: ${r.lastSkip.reason}` : "";
+  return `${r.id} ${r.state}${why} "${r.name}" → @${r.target.name} ${scheduleOf(r)}${next}; ${r.fires} fire${r.fires === 1 ? "" : "s"}${skip}\n`;
+}
+
+function describeReminderDetail(d: Responses["reminder"]): string {
+  const r = d.reminder;
+  const lines = [describeReminderLine(r).trimEnd(), `  text: ${r.text.split("\n")[0]}`, `  set by @${r.createdBy.name}; expires ${clock(r.expiresAt)}`];
+  if (d.fires.length === 0) lines.push("  no fires yet");
+  for (const f of d.fires) lines.push(`  fire ${clock(f.firedAt)}: ${f.deliveryState}${f.answer ? ` · answered: ${f.answer.text.split("\n")[0]!.slice(0, 200)}` : ""}`);
+  for (const s of d.skips.slice(0, 10)) lines.push(`  skipped ${clock(s.at)}: ${s.reason}${s.detail ? ` (${s.detail})` : ""}`);
+  return lines.join("\n") + "\n";
 }
 
 function describeStatus(s: MessageStatus): string {

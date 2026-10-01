@@ -4,9 +4,9 @@
 // through the connector.
 
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { fail, getOr, participantByName, requireAdmin } from "./lib/core";
-import { applyAction, createReminder, reminderDetail, reminderShape } from "./lib/reminders";
+import { applyAction, createReminder, reminderDetail, reminderShape, tick as fireDue } from "./lib/reminders";
 import { reminderAction, reminderState } from "./validators";
 
 /** Every reminder, or those in one state, newest first. */
@@ -66,4 +66,10 @@ export const update = mutation({
     const r = await getOr(ctx, "reminders", args.id);
     return { reminder: await reminderShape(ctx, await applyAction(ctx, r, args.action, args.reason, Date.now())) };
   },
+});
+
+/** The minute cron (crons.ts): expiries, then due reminders. */
+export const tick = internalMutation({
+  args: {},
+  handler: async (ctx) => fireDue(ctx, Date.now()),
 });

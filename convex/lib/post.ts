@@ -1,7 +1,7 @@
 // Posting a message: the one path every send, reply, collected answer and web
 // post goes through. Creates the addressed deliveries.
 
-import { type AttachmentRef, MAX_TEXT_CHARS, type Origin, type SendResult } from "@agent-comms/protocol";
+import { type AttachmentRef, MAX_TEXT_CHARS, type MessageMeta, type Origin, type SendResult } from "@agent-comms/protocol";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { advanceRead, envelope, fail, membership, stateRef } from "./core";
@@ -19,6 +19,8 @@ export interface PostInput {
   text: string;
   attachments?: AttachmentRef[];
   origin: Origin;
+  /** A system participant's message: what it is (reminder fire, report, notice, alert). */
+  meta?: MessageMeta;
 }
 
 export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResult> {
@@ -55,6 +57,7 @@ export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResu
     attachments: input.attachments ?? [],
     origin: input.origin,
     ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
+    ...(input.meta ? { meta: input.meta } : {}),
     createdAt: now,
   });
   await ctx.db.patch(conversation._id, { lastSeq: seq, lastAt: now });

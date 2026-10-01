@@ -62,7 +62,8 @@ export interface ConversationRef {
 // Messages
 
 /** Where a message entered the system. */
-export type Via = "t3" | "claude-code" | "cli" | "web";
+/** `system`: posted by a system participant (a reminder fire, a report, an alert). */
+export type Via = "t3" | "claude-code" | "cli" | "web" | "system";
 
 export interface Origin {
   via: Via;
