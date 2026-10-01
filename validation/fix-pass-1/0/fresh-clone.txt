@@ -1,0 +1,19 @@
+fresh clone of branch cedar at edaf2c3 into /tmp/agent-comms-fresh-1790860387
+pnpm install --frozen-lockfile; pnpm check -> exit 0
+symlinks into /srv in the clone: 0
+ℹ tests 32
+ℹ pass 32
+ℹ fail 0
+ℹ tests 14
+ℹ pass 14
+ℹ fail 0
+ℹ tests 19
+ℹ pass 19
+ℹ fail 0
+ℹ tests 23
+ℹ pass 23
+ℹ fail 0
+ℹ tests 10
+ℹ pass 10
+ℹ fail 0
+[2m      Tests [22m [1m[32m33 passed[39m[22m[90m (33)[39m
