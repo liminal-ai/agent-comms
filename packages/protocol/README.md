@@ -8,6 +8,7 @@ The agent-comms contract, and its single source of truth. Plain TypeScript: no d
 | [`src/history.ts`](src/history.ts) | `boundHistory`: the capped recent history a delivery carries |
 | [`src/render.ts`](src/render.ts) | `renderDelivery` (how a delivery is shown to a model) and `parseDeliveryHeader` |
 | [`src/loopback.ts`](src/loopback.ts) | The connector's local protocol: socket path, operations, request decoders, response types, errors |
+| [`src/capabilities.ts`](src/capabilities.ts) | The capabilities pass: registry entries, waits and their results, CLI exit codes, reminders, alerts, the inbox, durations |
 
 The types and the comments on them are the specification. This page is the tour.
 
@@ -92,6 +93,17 @@ Request shapes and their validation are in `requestDecoders` (loopback.ts); resp
 | `reply` | CLI | `as`, `messageId`, `text`, `attachments?` | as `send`, plus `completed?` |
 | `read` | CLI | `as`, `conversationId`, `before?`, `limit?` (≤ 100) | `conversation`, `messages` (oldest first), `hasMore` |
 | `list` | CLI | `as` | `conversations` (most recent first) |
+| `await` | CLI | `as`, `messageId`, `waitMs?` (≤ 25000) | `wait` (see [The wait contract](#the-wait-contract)) |
+| `ack` | CLI | `as`, `messageId`, `recipients?` | `wait` |
+| `message-status` | CLI | `as`, `messageId` | `MessageStatus`: each recipient's delivery and answer, people's read state, the caller's wait |
+| `agents` | CLI | `as`, `name?`, `long?` | `agents`: `RegistryEntry[]` (homes only with `long`) |
+| `agents-set` | CLI | `as`, `name`, `description?`, `duties?` | `agent` |
+| `remind` | CLI | `as`, `target`, `text`, exactly one of `everyMs` (≥ 60000) and `at`, `name?`, `idleForMs?`, `watch?`, `max?`, `reportTo?`, `expiresMs?` (≤ 30 d) | `reminder` |
+| `reminders` | CLI | `as` | `reminders` the caller created, is the target of, or owns the target of |
+| `reminder` | CLI | `as`, `id` | `reminder`, `fires` (newest first), `skips` (newest first) |
+| `reminder-update` | CLI | `as`, `id`, `action` (`pause` \| `resume` \| `done` \| `cancel` \| `blocked`), `reason?` (required for `blocked`) | `reminder` |
+
+`send` also takes `wait?` and `waitMs?` (1 s to 60 min) and then answers with `wait` (registered in the same Convex mutation as the send) or `noWait` (why it didn't wait). The operations from `await` on, and `send` with `wait`, are the capabilities pass (`docs/04-capabilities.md`). Until each is built (R1 to R4) the connector and the stub answer it `unsupported` (501); a waiting send is refused rather than sent without waiting.
 
 Rules that matter to clients:
 
@@ -118,13 +130,86 @@ Rules that matter to clients:
 | `unknown_participant` | 404 | no participant by that name |
 | `not_homed_here` | 403 | `as`/`participant` is homed on another machine (or, for `register`, isn't a Claude Code home) |
 | `not_member` | 403 | not a member of that conversation |
-| `unknown_conversation`, `unknown_message`, `unknown_delivery` | 404 | no such id |
+| `unknown_conversation`, `unknown_message`, `unknown_delivery`, `unknown_reminder` | 404 | no such id |
 | `unknown_session` | 404 | session not registered here: register again |
 | `session_superseded` | 409 | a newer session took over this participant: stop |
 | `poll_in_progress` | 409 | this session already has a poll outstanding |
 | `conflict` | 409 | the delivery isn't this session's, or the state change doesn't fit |
 | `unavailable` | 503 | the connector can't reach Convex right now: retry later |
+| `unsupported` | 501 | this connector doesn't implement the operation yet |
 | `internal` | 500 | anything else, including a malformed response (`parseResponse`) |
+
+## The capabilities pass
+
+`docs/04-capabilities.md` is the design; this is the contract it builds on (R0).
+
+### System participants and names
+
+Participant `kind` gains `system`. `reminders` and `alerts` are created at deploy; they send and are never addressed, woken or delivered to. `RESERVED_NAMES` (`owner`, `all`, `reminders`, `alerts`) are refused at promotion, and `owner` in a send's `to` resolves to the sending agent's owner (`OWNER_ALIAS`). A system participant's message carries `meta` (`MessageMeta`): a reminder fire, a report, an ending notice, or an alert.
+
+### The wait contract
+
+`send` with `wait: true` registers a wait on the message and returns at once with it; the CLI then calls `await` (held up to 25 s, like `poll`) until every result is final or its own bound passes. A wait has one result per addressed **agent**; people addressed are listed in `inInbox` and never waited on. Each result moves only by compare-and-set:
+
+| From | To | When |
+|---|---|---|
+| `open` | `answered` | the recipient's answer (collected, or a `comms reply` completing the delivery) is returned to the wait; its message is stored on the result |
+| `open` | `expired` | the wait's bound passed first; a later answer goes into the thread as normal |
+| `open` | `ended` | the delivery ended `failed` or `uncertain`, or the recipient was retired: no answer is coming. *Not in the brief's list;* it's what "failed or uncertain: the wait ends for that recipient" needs as a state |
+| `answered` | `acknowledged` | the CLI printed it and called `ack` |
+| `answered` | `fell-back` | not acknowledged within `ACK_WINDOW_MS` (2 min): delivered **once** into the requester's thread, as a delivery with `fallback: true` that renders "may already have been returned to your waiting `comms send`" |
+
+`ambiguous` keeps a result `open` (the agent will finish it with `comms reply`). An `ack` and the fallback race on the same compare-and-set, so a result ends `acknowledged` or `fell-back`, and the fallback is sent at most once. `await` reads answers from the stored results, so a restarted connector serves them. A wait stops counting as busy waiting once every result is final or at `until`; it and its results are kept `WAIT_RETENTION_MS` (7 days) after that for `await` and `comms status`. A waiting send to an agent that is itself in an active wait doesn't wait (`noWait.reason: "busy-waiting"`, naming them); with no agent to wait for it's `"nobody-to-wait-for"`.
+
+`DEFAULT_WAIT_MS` (100 s) is a placeholder until Hazel's H0 measurement; `MAX_WAIT_MS` is 60 min.
+
+### The CLI: JSON and exit codes
+
+`CLI_EXIT`, shared by the CLI and anything wrapping it:
+
+| Code | Name | Meaning |
+|---|---|---|
+| 0 | `ok` | done; for a waiting `send` or `await`, every result `answered` (or nobody to wait for) |
+| 1 | `refused` | the connector refused (the error code and message are on stderr) |
+| 2 | `usage` | bad arguments |
+| 3 | `unreachable` | no connector on the socket |
+| 4 | `pending` | the bound was reached with results still open (or `expired`); the message id is printed and later answers go to the thread |
+| 5 | `endedWithoutAnswer` | every result is final and none is pending, but at least one `ended` (failed, uncertain, retired) without an answer |
+
+With `--json` each command prints exactly one JSON object on stdout, the connector's response (`{"ok": true, ...}`):
+
+- `comms send` (waiting, the default from R2): the `send` result with `wait` replaced by the wait as it stood when the CLI stopped (after its last `await` and `ack`). With `--continue`, the `send` result as today.
+- `comms await <message-id> [--wait <duration>]`: reattach to a wait (after exit 4, or from another shell); prints the final `await` result.
+- `comms status <message-id>`: the `message-status` result. `comms status` with no id is unchanged.
+
+Durations on the command line are `<n>s|m|h|d` (`parseDuration`, `formatDuration`).
+
+### Renderings
+
+- A **reminder fire** is an ordinary request from `@reminders` in the target's DM with it, rendered by `renderDelivery` with a `Reminder: <name> (id …), set by @x, every 30m. Fire n.` line and how to `comms reminder done` or `blocked` it.
+- The **fallback** answer delivery (`fallback: true`) says it may already have been returned to the waiting send.
+- `renderReminderReport`, `renderReminderEnded` and `renderAlert` are the texts `@reminders` and `@alerts` post.
+
+### Convex functions the web view calls
+
+All take `adminToken`. Errors are `ConvexError`s with `{code, message}` as above.
+
+| Function | Args | Returns |
+|---|---|---|
+| `registry.list` | — | `{agents: RegistryEntry[]}`: every participant, any state, with homes |
+| `registry.setProfile` | `name`, `description?`, `duties?` (empty clears) | `{agent}` |
+| `inbox.list` | `human`, `unreadOnly?`, `limit?` (≤ 200) | `{items: InboxItem[], unread}`, newest first |
+| `inbox.unreadCount` | `human` | `{unread}` |
+| `inbox.markRead` | `human`, exactly one of `messageIds` and `conversationId` | `{marked, unread}` |
+| `reminders.list` | `state?` | `{reminders}`, newest first |
+| `reminders.get` | `id` | `{reminder, fires, skips}` |
+| `reminders.create` | `as` (a person), then as `remind` | `{reminder}` |
+| `reminders.update` | `id`, `action`, `reason?` | `{reminder}` |
+| `alerts.list` | `openOnly?`, `limit?` | `{alerts: Alert[]}`, newest first |
+| `alerts.config` | — | `AlertConfig` (defaults until set) |
+| `alerts.setConfig` | any of `connectorSilentMs`, `reminderBlockedMs`, `maxClaims` | `AlertConfig` |
+
+`directory.list` and the conversation functions are unchanged. Presence in a `RegistryEntry` is `null` for people and system participants, and `stale` when the agent's machine hasn't heartbeated for `PRESENCE_STALE_MS` (90 s); `idleSince` moves only on the transition to idle.
 
 ## Not in the contract
 

@@ -122,7 +122,7 @@ export interface MessageEnvelope {
 export type MessageMeta =
   | { type: "reminder"; reminderId: string; name: string; setBy: ParticipantName; schedule: string; fire: number }
   | { type: "reminder-report"; reminderId: string; name: string; target: ParticipantName; fireMessageId: MessageId }
-  | { type: "reminder-ended"; reminderId: string; name: string; state: "expired" | "done" | "cancelled" | "blocked"; reason?: string }
+  | { type: "reminder-ended"; reminderId: string; name: string; state: "expired" | "done" | "cancelled"; reason?: string }
   | { type: "alert"; alertId: string; cause: string; subject: { kind: string; id: string } };
 
 // ---------------------------------------------------------------------------

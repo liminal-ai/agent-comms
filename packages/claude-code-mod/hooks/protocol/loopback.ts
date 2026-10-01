@@ -11,6 +11,7 @@
 
 import {
   array,
+  boolean,
   DecodeError,
   decode,
   type Decoded,
@@ -37,6 +38,21 @@ import type {
   ParticipantState,
 } from "./model.ts";
 import { ID_PATTERN, NAME_PATTERN } from "./model.ts";
+import {
+  MAX_DESCRIPTION_CHARS,
+  MAX_DUTIES,
+  MAX_DUTY_CHARS,
+  MAX_WAIT_MS,
+  type MessageStatus,
+  type NoWait,
+  type RegistryEntry,
+  REMINDER_MAX_EXPIRY_MS,
+  REMINDER_MIN_INTERVAL_MS,
+  type Reminder,
+  type ReminderFire,
+  type ReminderSkip,
+  type Wait,
+} from "./capabilities.ts";
 
 export const PROTOCOL_VERSION = 1;
 export const LOOPBACK_PATH_PREFIX = "/v1/";
@@ -112,11 +128,14 @@ export type ErrorCode =
   | "unknown_conversation"
   | "unknown_message"
   | "unknown_delivery"
+  | "unknown_reminder"
   | "unknown_session"
   | "session_superseded"
   | "poll_in_progress"
   | "conflict"
   | "unavailable"
+  /** The connector doesn't implement this operation (yet): version skew, not a bad request. */
+  | "unsupported"
   | "internal";
 
 export const ERROR_STATUS: Record<ErrorCode, number> = {
@@ -128,11 +147,13 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   unknown_conversation: 404,
   unknown_message: 404,
   unknown_delivery: 404,
+  unknown_reminder: 404,
   unknown_session: 404,
   session_superseded: 409,
   poll_in_progress: 409,
   conflict: 409,
   unavailable: 503,
+  unsupported: 501,
   internal: 500,
 };
 
@@ -307,6 +328,15 @@ const requestDecoders = {
     text,
     attachments: optional(array(attachment, { max: 20 })),
     /**
+     * Wait for the addressed agents' answers (capabilities pass). Registers the
+     * wait in the same Convex mutation as the send, unless an addressed agent is
+     * itself busy waiting, in which case the response says so (`noWait`) and the
+     * send goes ahead without waiting. The CLI then calls `await`.
+     */
+    wait: optional(boolean),
+    /** The wait's bound, default DEFAULT_WAIT_MS. */
+    waitMs: optional(integer({ min: 1_000, max: MAX_WAIT_MS })),
+    /**
      * Idempotency key (fix pass 3.1): a repeat with the same `as` and `key`
      * returns the first send's result instead of posting again. The CLI makes
      * one per invocation and reuses it when it retries after `unavailable`.
@@ -330,6 +360,83 @@ const requestDecoders = {
     attachments: optional(array(attachment, { max: 20 })),
     /** As for `send`. */
     key: optional(idempotencyKey),
+  }),
+
+  // -------------------------------------------------------------------------
+  // Capabilities pass (docs/04-capabilities.md). Types in capabilities.ts.
+
+  /**
+   * Wait for the answers to a request this participant sent with `wait: true`.
+   * Held until any result leaves `open`, or `waitMs` (≤ MAX_POLL_WAIT_MS) passes;
+   * answered with the wait as it stands. Answers are read from the stored
+   * results, so a restarted connector serves them too. The CLI calls it again
+   * until every result is final or its own bound passes; then it `ack`s what it
+   * printed. Errors: `unknown_message`, `conflict` (no wait by this participant on it).
+   */
+  await: object({ as: name, messageId: id, waitMs: optional(integer({ min: 0, max: MAX_POLL_WAIT_MS })) }),
+
+  /**
+   * The CLI printed these answers: `answered` → `acknowledged` (compare-and-set;
+   * a result that already `fell-back` stays so). Without `recipients`, every
+   * answered result. Idempotent.
+   */
+  ack: object({ as: name, messageId: id, recipients: optional(array(name, { max: 50 })) }),
+
+  /** `comms status <message-id>`: each addressed recipient's delivery state and answer. Errors: `unknown_message`, `not_member`. */
+  "message-status": object({ as: name, messageId: id }),
+
+  /** The agent registry: every active participant, or one (`name`), with duties. `long` adds homes. */
+  agents: object({ as: name, name: optional(name), long: optional(boolean) }),
+
+  /** Set a registry entry's description and duties. Allowed for the agent itself and its owner. Errors: `conflict` (not allowed). */
+  "agents-set": object({
+    as: name,
+    name,
+    description: optional(string({ max: MAX_DESCRIPTION_CHARS, label: `a description (at most ${MAX_DESCRIPTION_CHARS} characters)` })),
+    duties: optional(array(string({ min: 1, max: MAX_DUTY_CHARS, label: `a duty (1-${MAX_DUTY_CHARS} characters)` }), { max: MAX_DUTIES })),
+  }),
+
+  /**
+   * Create a reminder for `target`. Exactly one of `everyMs` (≥ REMINDER_MIN_INTERVAL_MS)
+   * and `at`. `expiresMs` defaults to REMINDER_DEFAULT_EXPIRY_MS, at most
+   * REMINDER_MAX_EXPIRY_MS. Errors: `unknown_participant`, `bad_request`.
+   */
+  remind: (value: unknown, path: string) => {
+    const r = object({
+      as: name,
+      target: name,
+      text,
+      everyMs: optional(integer({ min: REMINDER_MIN_INTERVAL_MS, max: REMINDER_MAX_EXPIRY_MS })),
+      at: optional(integer({ min: 0 })),
+      name: optional(string({ min: 1, max: 80 })),
+      idleForMs: optional(integer({ min: 0, max: REMINDER_MAX_EXPIRY_MS })),
+      watch: optional(name),
+      max: optional(integer({ min: 1, max: 10_000 })),
+      reportTo: optional(name),
+      expiresMs: optional(integer({ min: REMINDER_MIN_INTERVAL_MS, max: REMINDER_MAX_EXPIRY_MS })),
+    })(value, path);
+    if ((r.everyMs === undefined) === (r.at === undefined)) {
+      throw new DecodeError(path ? `${path}.everyMs` : "everyMs", "exactly one of everyMs and at");
+    }
+    return r;
+  },
+
+  /** Reminders the caller created, is the target of, or owns the target of. */
+  reminders: object({ as: name }),
+
+  /** One reminder, with its fires and skips. Errors: `unknown_reminder`. */
+  reminder: object({ as: name, id }),
+
+  /**
+   * pause | resume | done | cancel | blocked (with `reason`). Allowed for the
+   * creator, the target and the target's owner. Pausing or cancelling stops
+   * future fires only. Errors: `unknown_reminder`, `conflict` (not allowed, or the state doesn't allow it).
+   */
+  "reminder-update": object({
+    as: name,
+    id,
+    action: literal("pause", "resume", "done", "cancel", "blocked"),
+    reason: optional(string({ max: 2000 })),
   }),
 
   /**
@@ -423,8 +530,22 @@ export interface Responses {
   outcome: { delivery: DeliveryStateRef; answerMessageId?: MessageId; duplicate: boolean };
   "check-result": { delivery: DeliveryStateRef };
   presence: Record<string, never>;
-  send: SendResult;
+  send: SendResult & {
+    /** With `wait: true`: the wait, its results all `open` (humans listed in `inInbox`). */
+    wait?: Wait;
+    /** With `wait: true` but no wait registered: why (an addressed agent is busy waiting, or nobody to wait for). */
+    noWait?: NoWait;
+  };
   reply: SendResult & { completed?: DeliveryId };
+  await: { wait: Wait };
+  ack: { wait: Wait };
+  "message-status": MessageStatus;
+  agents: { agents: RegistryEntry[] };
+  "agents-set": { agent: RegistryEntry };
+  remind: { reminder: Reminder };
+  reminders: { reminders: Reminder[] };
+  reminder: { reminder: Reminder; fires: ReminderFire[]; skips: ReminderSkip[] };
+  "reminder-update": { reminder: Reminder };
   read: { conversation: ConversationSummary; messages: MessageEnvelope[]; hasMore: boolean };
   list: { conversations: ConversationSummary[] };
 }

@@ -46,6 +46,11 @@ export const integer =
     return value;
   };
 
+export const boolean: Decoder<boolean> = (value, path) => {
+  if (typeof value !== "boolean") throw new DecodeError(path, "true or false");
+  return value;
+};
+
 export const literal =
   <const T extends string>(...values: T[]): Decoder<T> =>
   (value, path) => {

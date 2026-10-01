@@ -85,7 +85,7 @@ export async function actingAs(ctx: QueryCtx, machine: Doc<"machines">, name: st
   return p;
 }
 
-export async function getOr<T extends "conversations" | "messages" | "deliveries" | "participants">(
+export async function getOr<T extends "conversations" | "messages" | "deliveries" | "participants" | "reminders">(
   ctx: QueryCtx,
   table: T,
   id: string,
@@ -97,7 +97,9 @@ export async function getOr<T extends "conversations" | "messages" | "deliveries
         ? "unknown_message"
         : table === "deliveries"
           ? "unknown_delivery"
-          : "unknown_participant";
+          : table === "reminders"
+            ? "unknown_reminder"
+            : "unknown_participant";
   const normalized = ctx.db.normalizeId(table, id);
   const doc = normalized ? await ctx.db.get(normalized) : null;
   if (!doc) fail(code, `no ${table.replace(/s$/, "")} ${id}`);
@@ -150,6 +152,7 @@ export async function envelope(ctx: QueryCtx, m: Doc<"messages">): Promise<Messa
     attachments: m.attachments,
     createdAt: m.createdAt,
     origin: m.origin,
+    ...(m.meta ? { meta: m.meta } : {}),
   };
 }
 

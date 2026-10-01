@@ -74,3 +74,20 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - [x] Hazel's mod merged; every part-D check passes on the real connector (her VALIDATION.md)
 - [x] Shared acceptance check (local): every item passes on T3 and Claude Code (`validation/acceptance/README.md`)
 - [ ] Cloud checkpoint: needs Lee (cloud Convex project under his account; the second machine and access to it)
+
+## Capabilities pass (docs/04-capabilities.md, draft 5)
+- [x] R0 contract (`validation/capabilities/r0/`): protocol `capabilities.ts` (system kind, reserved names, registry entries, waits with per-recipient results, `CLI_EXIT`, reminders, alerts, inbox, durations); loopback ops `await`, `ack`, `message-status`, `agents`, `agents-set`, `remind`, `reminders`, `reminder`, `reminder-update`, `send` `wait`/`waitMs`; errors `unsupported` (501), `unknown_reminder`; reminder-fire, fallback, report, ended and alert renderings; README contract section
+- [x] R0 Convex: schema (system kind, ownerId, description, duties, presence.idleSince, message meta, delivery claimCount and fallback; tables inbox, waits, waitResults, reminders, reminderFires, alerts, alertConfig); web functions registry.list/setProfile, inbox.list/unreadCount/markRead, reminders.list/get/create/update, alerts.list/config/setConfig; promotion refuses `system`; idleSince moves only on the transition to idle
+- [x] R0 connector and stub answer the new ops `unsupported` until built; a waiting send is refused, never sent unwaited
+- [ ] Hazel's R0 review
+- [ ] R1 registry, ownerId migration, reserved names, @owner, inbox
+- [ ] R2 send-and-wait
+- [ ] R3 reminders
+- [ ] R4 alerts
+
+### R0 decisions to review
+- A wait result has a sixth state, `ended` (delivery failed or uncertain, or the recipient retired): the brief lists five, but "failed or uncertain: the wait ends for that recipient" needs a state that isn't `expired`.
+- Wait results are their own table (`waitResults`) so the fallback pass can index answered results by age, and each compare-and-set touches one row.
+- Exit 5 (`endedWithoutAnswer`) is separate from 4 (`pending`): "no answer is coming" vs "not yet".
+- The web view creates reminders as a person (`reminders.create` takes `as`); the CLI creates them as the calling agent.
+- `DEFAULT_WAIT_MS` is 100 s until Hazel's H0 numbers.

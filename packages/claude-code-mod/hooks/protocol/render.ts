@@ -4,6 +4,7 @@
 // hands back (Claude Code wraps a plugin's prompt in its own sentences, so the
 // header is found as a complete line anywhere, never at a fixed offset).
 
+import type { AlertCause, ReminderState } from "./capabilities.ts";
 import type { Delivery, DeliveryId, MessageEnvelope, MessageId, MessageKind, ParticipantRef } from "./model.ts";
 
 /**
@@ -120,6 +121,12 @@ function build(delivery: Delivery, options: RenderOptions, budget: Budget): stri
   lines.push(`To: ${addressees(message.recipients, recipient)}`);
   lines.push(`Your comms name is @${me}; pass it as \`--as ${me}\` to the comms CLI.`);
   lines.push(`Conversation: ${describeConversation(delivery)}`);
+  const reminder = message.meta?.type === "reminder" ? message.meta : undefined;
+  if (reminder) {
+    lines.push(
+      `Reminder: ${reminder.name} (id ${reminder.reminderId}), set by @${reminder.setBy}, ${reminder.schedule}. Fire ${reminder.fire}.`,
+    );
+  }
 
   if (shownHistory.length > 0 || omitted > 0) {
     lines.push("");
@@ -149,6 +156,11 @@ function build(delivery: Delivery, options: RenderOptions, budget: Budget): stri
     lines.push(
       `If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with \`comms reply --as ${me} ${message.id} "<your answer>"\`.`,
     );
+    if (reminder) {
+      lines.push(
+        `This is a reminder from @${reminder.setBy}, sent by @reminders. If what it asks for is finished for good, stop it with \`comms reminder done ${reminder.reminderId} --as ${me}\`. If you can't proceed, pause it with \`comms reminder blocked ${reminder.reminderId} "<why>" --as ${me}\`; it stops firing until resumed.`,
+      );
+    }
   } else {
     const request = delivery.inReplyTo;
     if (request) {
@@ -157,6 +169,11 @@ function build(delivery: Delivery, options: RenderOptions, budget: Budget): stri
       lines.push("");
     } else if (message.inReplyTo) {
       lines.push(`This answers message ${message.inReplyTo}.`);
+    }
+    if (delivery.fallback) {
+      lines.push(
+        "This answer may already have been returned to your waiting `comms send`: it's delivered here once because that wasn't acknowledged in time. If you've already seen it, there's nothing more to do.",
+      );
     }
     lines.push(`Answer #${message.seq} from @${message.sender.name}:`);
     lines.push(...quote(body));
@@ -222,6 +239,45 @@ function oneLine(text: string): string {
 
 function clip(text: string, max: number): string {
   return text.length <= max ? text : text.slice(0, max) + " […]";
+}
+
+// ---------------------------------------------------------------------------
+// Texts the system participants post (capabilities pass)
+
+/** Posted by @reminders to a reminder's `reportTo`: the target's answer to a fire. */
+export function renderReminderReport(input: { reminderName: string; reminderId: string; target: string; answer: string }): string {
+  return [`Reminder ${input.reminderName} (${input.reminderId}): @${input.target} answered:`, ...quote(input.answer)].join("\n");
+}
+
+const ENDED: Record<Exclude<ReminderState, "active" | "paused" | "blocked">, string> = {
+  done: "was marked done",
+  cancelled: "was cancelled",
+  expired: "expired",
+};
+
+/** Posted by @reminders to the reminder's creator when it stops for good. */
+export function renderReminderEnded(input: {
+  reminderName: string;
+  reminderId: string;
+  state: "done" | "cancelled" | "expired";
+  reason?: string;
+}): string {
+  const reason = input.reason ? `: ${clip(oneLine(input.reason), 500)}` : ".";
+  return `Reminder ${input.reminderName} (${input.reminderId}) ${ENDED[input.state]}${reason} It won't fire again.`;
+}
+
+const ALERT_LEAD: Record<AlertCause, (id: string) => string> = {
+  "uncertain-delivery": (id) => `delivery ${id} is uncertain: it can't be told whether it ran, and it won't be re-run`,
+  "connector-silent": (id) => `the connector on ${id} hasn't been heard from`,
+  "reminder-blocked": (id) => `reminder ${id} has been blocked`,
+  "reminder-expired": (id) => `reminder ${id} expired before it was marked done`,
+  "delivery-reclaimed": (id) => `delivery ${id} keeps being reclaimed without finishing`,
+};
+
+/** Posted by @alerts to the affected agent's owner, once per incident. */
+export function renderAlert(input: { cause: AlertCause; subject: { kind: string; id: string }; detail?: string }): string {
+  const detail = input.detail ? ` (${clip(oneLine(input.detail), 500)})` : "";
+  return `Alert: ${ALERT_LEAD[input.cause](input.subject.id)}${detail}.`;
 }
 
 // ---------------------------------------------------------------------------

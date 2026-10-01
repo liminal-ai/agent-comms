@@ -4,7 +4,7 @@ import { NAME_PATTERN } from "@agent-comms/protocol";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { fail, participantByName, ref, requireAdmin, sha256Hex } from "./lib/core";
-import { home, participantKind } from "./validators";
+import { home, promotableKind } from "./validators";
 
 /** Create or rotate a machine's connector credential. Only the hash is stored. */
 export const registerMachine = mutation({
@@ -28,7 +28,7 @@ export const promote = mutation({
   args: {
     adminToken: v.string(),
     name: v.string(),
-    kind: participantKind,
+    kind: promotableKind,
     home: v.optional(home),
     owner: v.optional(v.string()),
   },

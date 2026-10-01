@@ -28,7 +28,8 @@ export function isName(value: unknown): value is ParticipantName {
 // ---------------------------------------------------------------------------
 // Participants and conversations
 
-export type ParticipantKind = "human" | "agent";
+/** `system`: the deploy-time senders `reminders` and `alerts`; no home, no presence, never addressed or delivered to. */
+export type ParticipantKind = "human" | "agent" | "system";
 export type ParticipantState = "active" | "paused" | "retired";
 export type Harness = "t3" | "claude-code" | "web";
 
@@ -110,7 +111,20 @@ export interface MessageEnvelope {
   attachments: AttachmentRef[];
   createdAt: number;
   origin: Origin;
+  /** Set on messages from a system participant: what they are, for rendering and the web view. */
+  meta?: MessageMeta;
 }
+
+/**
+ * What a system participant's message is. A reminder fire is a request; the
+ * others are informational (reports and notices to a participant, alerts to an
+ * owner).
+ */
+export type MessageMeta =
+  | { type: "reminder"; reminderId: string; name: string; setBy: ParticipantName; schedule: string; fire: number }
+  | { type: "reminder-report"; reminderId: string; name: string; target: ParticipantName; fireMessageId: MessageId }
+  | { type: "reminder-ended"; reminderId: string; name: string; state: "expired" | "done" | "cancelled"; reason?: string }
+  | { type: "alert"; alertId: string; cause: string; subject: { kind: string; id: string } };
 
 // ---------------------------------------------------------------------------
 // Deliveries
@@ -187,6 +201,12 @@ export interface Delivery {
   inReplyTo?: MessageEnvelope;
   history: BoundedHistory;
   status: DeliveryStatus;
+  /**
+   * An answer delivered into the thread as the one fallback after it was
+   * returned to a waiting send that never acknowledged it: it may already have
+   * been shown (capabilities pass, send-and-wait).
+   */
+  fallback?: boolean;
 }
 
 /** A delivery's output is collected only for requests. */

@@ -1,3 +1,4 @@
+import { CLI_EXIT } from "@agent-comms/protocol";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -98,7 +99,7 @@ describe("comms CLI against the stub", () => {
 
   it("exits 1 with the connector's error code", async () => {
     const r = await comms(["send", "--as", "far", "@cedar", "hi"]);
-    assert.equal(r.code, EXIT.error);
+    assert.equal(r.code, EXIT.refused);
     assert.match(r.stderr, /^comms send: not_homed_here: /);
     const unknown = await comms(["reply", "--as", "cedar", "m_999", "x"]);
     assert.match(unknown.stderr, /unknown_message/);
@@ -153,5 +154,11 @@ describe("fix pass 3.1", () => {
     const b = await comms(["send", "--as", "cedar", "@hazel", "--key", "retry-key-0001", "once only"]);
     assert.equal(a.code, EXIT.ok, a.stderr);
     assert.equal(a.stdout.match(/^sent (m_\d+)/)![1], b.stdout.match(/^sent (m_\d+)/)![1]);
+  });
+});
+
+describe("capabilities R0", () => {
+  it("uses the protocol's exit codes, including the ones send-and-wait adds", () => {
+    assert.deepEqual(EXIT, CLI_EXIT);
   });
 });

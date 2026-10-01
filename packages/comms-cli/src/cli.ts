@@ -4,6 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 import {
+  CLI_EXIT,
   type ConversationSummary,
   type MessageEnvelope,
   type Op,
@@ -14,7 +15,8 @@ import {
 } from "@agent-comms/protocol";
 import { call, ConnectorUnreachable, resolveSocketPath } from "./client.ts";
 
-export const EXIT = { ok: 0, error: 1, usage: 2, unreachable: 3 } as const;
+/** The protocol's exit codes (capabilities.ts): `pending` and `endedWithoutAnswer` come with send-and-wait (R2). */
+export const EXIT = CLI_EXIT;
 
 export const USAGE = `usage:
   comms send  --as <me> @name "text"                         request to one participant (their DM)
@@ -146,7 +148,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
           ...(values.conversation ? { conversationId: values.conversation } : {}),
         };
         const r = await request("send", body);
-        if (!r) return EXIT.error;
+        if (!r) return EXIT.refused;
         if (!values.json) io.stdout(describeSend("sent", r));
         return EXIT.ok;
       }
@@ -154,7 +156,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
         const [messageId, ...words] = rest;
         if (!messageId) throw new UsageError("comms reply needs a message id");
         const r = await request("reply", { as: as(), messageId, key: values.key ?? randomUUID(), text: await text(words) });
-        if (!r) return EXIT.error;
+        if (!r) return EXIT.refused;
         if (!values.json) {
           io.stdout(describeSend(`answered ${messageId} with`, r));
           if (r.completed) io.stdout(`completed delivery ${r.completed}\n`);
@@ -171,7 +173,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
           ...(values.limit ? { limit: integerOption("--limit", values.limit) } : {}),
         };
         const r = await request("read", body);
-        if (!r) return EXIT.error;
+        if (!r) return EXIT.refused;
         if (!values.json) io.stdout(describeRead(r));
         return EXIT.ok;
       }
@@ -179,13 +181,13 @@ export async function run(argv: string[], io: Io): Promise<number> {
         if (rest.length > 0) throw new UsageError("comms list takes no arguments");
         const me = as();
         const r = await request("list", { as: me });
-        if (!r) return EXIT.error;
+        if (!r) return EXIT.refused;
         if (!values.json) io.stdout(describeList(me, r.conversations));
         return EXIT.ok;
       }
       case "status": {
         const r = await request("status", {});
-        if (!r) return EXIT.error;
+        if (!r) return EXIT.refused;
         if (!values.json) {
           io.stdout(`${r.implementation} on ${r.machine}, protocol v${r.protocol}\n`);
           for (const p of r.participants) {

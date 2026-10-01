@@ -24,6 +24,7 @@ import {
   stateRef,
   summary,
 } from "./lib/core";
+import { nextPresence } from "./lib/registry";
 import { openDm, post, replayed } from "./lib/post";
 import { attachment, enteredInput, failureReason, machineAuth, via } from "./validators";
 
@@ -47,7 +48,7 @@ export const presence = mutation({
   handler: async (ctx, args) => {
     const machine = await requireMachine(ctx, args.machine);
     const p = await actingAs(ctx, machine, args.participant);
-    await ctx.db.patch(p._id, { presence: { status: args.status, at: Date.now() } });
+    await ctx.db.patch(p._id, { presence: nextPresence(p.presence, args.status, Date.now()) });
     return {};
   },
 });

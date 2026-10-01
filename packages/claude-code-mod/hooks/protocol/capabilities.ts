@@ -1,3 +1,4 @@
+// Copied from packages/protocol/src by scripts/sync-protocol.ts. Do not edit.
 // The capabilities pass (docs/04-capabilities.md): the agent registry, people
 // and @owner, send-and-wait, reminders and alerts. Shapes shared by Convex, the
 // connector, the CLI, the mod and the web view. The operations that carry them

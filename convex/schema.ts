@@ -8,9 +8,15 @@ import {
   home,
   messageKind,
   origin,
+  alertCause,
+  alertSubjectKind,
+  messageMeta,
   participantKind,
   participantState,
-  presenceStatus,
+  presence,
+  reminderSkip,
+  reminderState,
+  waitResultState,
 } from "./validators";
 
 export default defineSchema({
@@ -18,15 +24,24 @@ export default defineSchema({
     /** Unique, addressable (`@name`). */
     name: v.string(),
     kind: participantKind,
+    /** Legacy owner name. Replaced by `ownerId` (R1: add, backfill, then drop this). */
     owner: v.optional(v.string()),
+    /** Agents: the person who owns them (`@owner` resolves to this; alerts go here). */
+    ownerId: v.optional(v.id("participants")),
     state: participantState,
-    /** Agents have a home; humans read and post in the web view. */
+    /** Agents have a home; humans read and post in the web view; system participants have neither. */
     home: v.optional(home),
-    presence: v.object({ status: presenceStatus, at: v.number() }),
+    /** `idleSince` is set only on the transition to idle. System participants stay `offline`. */
+    presence,
+    /** Agent registry: one line. */
+    description: v.optional(v.string()),
+    /** Agent registry: a few lines. */
+    duties: v.optional(v.array(v.string())),
     createdAt: v.number(),
   })
     .index("by_name", ["name"])
-    .index("by_machine", ["home.machine"]),
+    .index("by_machine", ["home.machine"])
+    .index("by_owner", ["ownerId"]),
 
   conversations: defineTable({
     kind: conversationKind,
@@ -62,6 +77,8 @@ export default defineSchema({
     origin,
     /** The sender's idempotency key, if the send carried one (fix pass 3.1). */
     idempotencyKey: v.optional(v.string()),
+    /** What a system participant's message is (reminder fire, report, notice, alert). */
+    meta: v.optional(messageMeta),
     createdAt: v.number(),
   })
     .index("by_conversation_seq", ["conversationId", "seq"])
@@ -90,6 +107,10 @@ export default defineSchema({
      */
     target: v.optional(home),
     answerMessageId: v.optional(v.id("messages")),
+    /** How many times it has been claimed (alerts: reclaimed too often). Absent means 0 or 1 before R4. */
+    claimCount: v.optional(v.number()),
+    /** The one fallback delivery of an answer already returned to a waiting send, unacknowledged. */
+    fallback: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_recipient_state", ["recipientId", "state"])
@@ -97,6 +118,113 @@ export default defineSchema({
     .index("by_recipient_state_collect", ["recipientId", "state", "collect"])
     .index("by_target_state_collect", ["target.machine", "state", "collect"])
     .index("by_message", ["messageId"]),
+
+  // -------------------------------------------------------------------------
+  // Capabilities pass (docs/04-capabilities.md)
+
+  /** A person's inbox: one row per message addressed to them (people get no deliveries). */
+  inbox: defineTable({
+    humanId: v.id("participants"),
+    messageId: v.id("messages"),
+    conversationId: v.id("conversations"),
+    readAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_human", ["humanId", "createdAt"])
+    .index("by_human_read", ["humanId", "readAt"])
+    .index("by_human_conversation", ["humanId", "conversationId", "readAt"])
+    .index("by_human_message", ["humanId", "messageId"]),
+
+  /** A waiting send. Kept WAIT_RETENTION_MS after it stops being active, for `await` and `comms status`. */
+  waits: defineTable({
+    waiterId: v.id("participants"),
+    messageId: v.id("messages"),
+    until: v.number(),
+    /** Counts as busy waiting: false once every result is final or `until` passed. */
+    active: v.boolean(),
+    /** People addressed by the request: in their inbox, never waited on. */
+    inInboxIds: v.array(v.id("participants")),
+    endedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_waiter_active", ["waiterId", "active"])
+    .index("by_message", ["messageId"])
+    .index("by_active_until", ["active", "until"])
+    .index("by_endedAt", ["endedAt"]),
+
+  /** One addressed agent's result in a wait. Every transition is a compare-and-set (WaitResultState). */
+  waitResults: defineTable({
+    waitId: v.id("waits"),
+    recipientId: v.id("participants"),
+    /** The recipient's delivery of the request. */
+    deliveryId: v.id("deliveries"),
+    state: waitResultState,
+    answerMessageId: v.optional(v.id("messages")),
+    at: v.number(),
+  })
+    .index("by_wait", ["waitId"])
+    .index("by_delivery", ["deliveryId"])
+    // The fallback pass: answered results whose ack window has passed.
+    .index("by_state_at", ["state", "at"]),
+
+  reminders: defineTable({
+    name: v.string(),
+    text: v.string(),
+    targetId: v.id("participants"),
+    createdById: v.id("participants"),
+    everyMs: v.optional(v.number()),
+    at: v.optional(v.number()),
+    idleForMs: v.optional(v.number()),
+    watchId: v.optional(v.id("participants")),
+    max: v.optional(v.number()),
+    reportToId: v.optional(v.id("participants")),
+    state: reminderState,
+    stateReason: v.optional(v.string()),
+    stateAt: v.number(),
+    fires: v.number(),
+    nextFireAt: v.optional(v.number()),
+    expiresAt: v.number(),
+    /** The most recent skips, newest last (capped). */
+    skips: v.array(reminderSkip),
+    createdAt: v.number(),
+  })
+    .index("by_state_next", ["state", "nextFireAt"])
+    .index("by_target", ["targetId"])
+    .index("by_creator", ["createdById"]),
+
+  /** One row per fire, keyed by the fire's request message. */
+  reminderFires: defineTable({
+    reminderId: v.id("reminders"),
+    messageId: v.id("messages"),
+    deliveryId: v.id("deliveries"),
+    firedAt: v.number(),
+    answerMessageId: v.optional(v.id("messages")),
+    answeredAt: v.optional(v.number()),
+  })
+    .index("by_message", ["messageId"])
+    .index("by_reminder", ["reminderId", "firedAt"]),
+
+  /** Alert incidents, keyed by (cause, subject). One alert per incident; a recurrence is a new incident. */
+  alerts: defineTable({
+    cause: alertCause,
+    subjectKind: alertSubjectKind,
+    subjectId: v.string(),
+    ownerId: v.id("participants"),
+    messageId: v.id("messages"),
+    openedAt: v.number(),
+    resolvedAt: v.optional(v.number()),
+    summary: v.string(),
+  })
+    .index("by_subject", ["cause", "subjectId", "resolvedAt"])
+    .index("by_resolved", ["resolvedAt", "openedAt"])
+    .index("by_opened", ["openedAt"]),
+
+  /** The alert thresholds: at most one row; DEFAULT_ALERT_CONFIG when absent. */
+  alertConfig: defineTable({
+    connectorSilentMs: v.number(),
+    reminderBlockedMs: v.number(),
+    maxClaims: v.number(),
+  }),
 
   machines: defineTable({
     machineId: v.string(),

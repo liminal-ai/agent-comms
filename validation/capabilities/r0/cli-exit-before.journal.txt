@@ -1,0 +1,4 @@
+    not ok 1 - uses the protocol's exit codes, including the ones send-and-wait adds
+not ok 4 - capabilities R0
+# pass 12
+# fail 1

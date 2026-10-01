@@ -8,11 +8,17 @@
  * @module
  */
 
+import type * as alerts from "../alerts.js";
 import type * as connector from "../connector.js";
 import type * as conversations from "../conversations.js";
 import type * as directory from "../directory.js";
+import type * as inbox from "../inbox.js";
 import type * as lib_core from "../lib/core.js";
 import type * as lib_post from "../lib/post.js";
+import type * as lib_registry from "../lib/registry.js";
+import type * as lib_reminders from "../lib/reminders.js";
+import type * as registry from "../registry.js";
+import type * as reminders from "../reminders.js";
 import type * as validators from "../validators.js";
 
 import type {
@@ -22,11 +28,17 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  alerts: typeof alerts;
   connector: typeof connector;
   conversations: typeof conversations;
   directory: typeof directory;
+  inbox: typeof inbox;
   "lib/core": typeof lib_core;
   "lib/post": typeof lib_post;
+  "lib/registry": typeof lib_registry;
+  "lib/reminders": typeof lib_reminders;
+  registry: typeof registry;
+  reminders: typeof reminders;
   validators: typeof validators;
 }>;
 

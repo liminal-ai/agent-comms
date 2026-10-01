@@ -15,9 +15,9 @@ const ADMIN = "test-admin-token";
 const m1 = { id: "m1", secret: "m1-secret-0123456789" };
 const NOW = new Date("2026-10-01T12:00:00Z").getTime();
 
-type T = ReturnType<typeof convexTest>;
+type T = Awaited<ReturnType<typeof setup>>;
 
-async function setup(): Promise<T> {
+async function setup() {
   process.env.COMMS_ADMIN_TOKEN = ADMIN;
   const t = convexTest(schema, modules);
   await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m1", secret: m1.secret });
