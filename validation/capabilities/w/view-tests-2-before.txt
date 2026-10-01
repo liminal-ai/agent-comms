@@ -1,0 +1,27 @@
+$ node --test 'test/**/*.test.ts'
+file:///srv/agents/hazel/agent-comms/apps/web/test/view.test.ts:11
+  inboxKind,
+  ^^^^^^^^^
+SyntaxError: The requested module '../src/lib/view.ts' does not provide an export named 'inboxKind'
+    at #asyncInstantiate (node:internal/modules/esm/module_job:327:21)
+    at async ModuleJob.run (node:internal/modules/esm/module_job:431:5)
+    at async node:internal/modules/esm/loader:643:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.18.0
+✖ test/view.test.ts (86.368087ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 93.135331
+
+✖ failing tests:
+
+test at test/view.test.ts:1:1
+✖ test/view.test.ts (86.368087ms)
+  'test failed'
+[ELIFECYCLE] Test failed. See above for more details.

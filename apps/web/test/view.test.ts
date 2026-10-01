@@ -8,6 +8,8 @@ import {
   alertLabel,
   alertsBadge,
   inboxBadge,
+  inboxKind,
+  liveStale,
   parseAlertConfig,
   parseProfile,
   parseReminderForm,
@@ -89,6 +91,17 @@ describe("W registry", () => {
   });
 });
 
+describe("W registry, live", () => {
+  it("W registry: a machine that stops heartbeating turns stale on the clock, not only when Convex next writes", () => {
+    const e = entry({ home: { machine: "m1", harness: "t3", locator: "thr-1" } });
+    assert.equal(liveStale(e, NOW - 30_000, NOW).presence?.stale, false);
+    assert.equal(liveStale(e, NOW - 90_000, NOW).presence?.stale, true);
+    assert.equal(liveStale(e, null, NOW).presence?.stale, true, "never heard from");
+    const person = entry({ participant: ref("lee", "human"), presence: null });
+    assert.equal(liveStale(person, null, NOW).presence, null);
+  });
+});
+
 describe("W reminders", () => {
   it("W reminders: the controls offered follow the state; ended reminders have none", () => {
     assert.deepEqual(reminderActions("active"), ["pause", "blocked", "done", "cancel"]);
@@ -146,6 +159,17 @@ describe("W inbox", () => {
     assert.equal(inboxBadge(3), "Inbox (3)");
     assert.equal(titleWithUnread("agent comms", 0), "agent comms");
     assert.equal(titleWithUnread("agent comms", 3), "(3) agent comms");
+  });
+});
+
+describe("W inbox, kinds", () => {
+  it("W inbox: messages from system participants are labelled by what they are", () => {
+    const m = (meta?: any) => ({ meta }) as any;
+    assert.equal(inboxKind(m()), null);
+    assert.equal(inboxKind(m({ type: "alert", alertId: "a", cause: "connector-silent", subject: { kind: "machine", id: "m1" } })), "Alert");
+    assert.equal(inboxKind(m({ type: "reminder-report", reminderId: "r", name: "ci", target: "reed", fireMessageId: "m" })), "Reminder report: ci");
+    assert.equal(inboxKind(m({ type: "reminder-ended", reminderId: "r", name: "ci", state: "expired" })), "Reminder ended: ci");
+    assert.equal(inboxKind(m({ type: "reminder", reminderId: "r", name: "ci", setBy: "lee", schedule: "every 30m", fire: 2 })), "Reminder: ci");
   });
 });
 
