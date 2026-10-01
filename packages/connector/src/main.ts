@@ -9,7 +9,7 @@ import * as Scope from "effect/Scope";
 import type { HarnessAdapter } from "./adapter.ts";
 import { loadConfig } from "./config.ts";
 import { runConnector } from "./connector.ts";
-import { type ConvexTransport, makeServerApi } from "./server-api.ts";
+import { type ConvexTransport, describeFailure, makeServerApi } from "./server-api.ts";
 
 const { values } = parseArgs({ options: { config: { type: "string" }, help: { type: "boolean", short: "h" } } });
 if (values.help || !values.config) {
@@ -21,7 +21,21 @@ const log = (line: string) => console.error(`${new Date().toISOString()} ${line}
 const config = loadConfig(values.config);
 for (const w of config.warnings) log(`warning: ${w}`);
 
-const client = new ConvexClient(config.convexUrl, { unsavedChangesWarning: false });
+// The Convex client's own logging prints server errors, which can echo a call's arguments (the
+// machine secret among them). It only gets to log what's known to be safe (fix pass 3.6).
+const quiet = (level: string) => (...args: unknown[]) => {
+  const text = args.map(String).join(" ");
+  if (/ConvexError: \{"code":"[a-z_]+"/.test(text) || /^\[CONVEX [A-Z]\(/.test(text)) {
+    const code = /"code":"([a-z_]+)"/.exec(text)?.[1];
+    if (code) log(`convex ${level}: refused (${code})`);
+    return;
+  }
+  log(`convex ${level}: ${describeFailure(new Error(text))}`);
+};
+const client = new ConvexClient(config.convexUrl, {
+  unsavedChangesWarning: false,
+  logger: { log: () => {}, logVerbose: () => {}, warn: quiet("warn"), error: quiet("error") },
+});
 const transport: ConvexTransport = {
   query: (ref, args) => client.query(ref, args),
   mutation: (ref, args) => client.mutation(ref, args),
