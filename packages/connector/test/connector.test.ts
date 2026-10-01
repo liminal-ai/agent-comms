@@ -243,3 +243,28 @@ describe("fix pass 3.3", () => {
     await until("freed", async () => (r.sessions?.sessionCount() ?? -1) === 1, 8_000);
   });
 });
+
+describe("fix pass 3.1", () => {
+  it("3.1 a Claude Code handoff and a restart question each have a deadline", async () => {
+    const { ClaudeCodeSessions } = await import("../src/claude-code.ts");
+    const { makePoke } = await import("../src/adapter.ts");
+    const Effect = await import("effect/Effect");
+    const sessions = new ClaudeCodeSessions({
+      pollWaitMs: 50,
+      handOffDeadlineMs: 200,
+      checkDeadlineMs: 200,
+      homed: async () => [{ participant: { id: "p", name: "b", kind: "agent" }, home: { machine: "box", harness: "claude-code", locator: "b" }, state: "active" }],
+      presence: () => {},
+      poke: makePoke(),
+    });
+    await sessions.register({ participant: "b", harness: "claude-code", sessionId: "s", cwd: "/", status: "idle" });
+    const d = { id: "d1", message: { id: "m1", kind: "request" }, status: { state: "claimed", at: 0 } } as never;
+    const target = { participant: "b", locator: "b" };
+    const started = Date.now();
+    const h = await Effect.runPromise(sessions.adapter.handOff(target, d, { confirm: async () => true }));
+    expect(h._tag).toBe("lost");
+    const c = await Effect.runPromise(sessions.adapter.check(target, d, undefined));
+    expect(c._tag).toBe("later");
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+});

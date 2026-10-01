@@ -30,6 +30,9 @@ class FakeT3 implements T3Client {
   private turns = 0;
   refuse = false;
   failStart = false;
+  /** Resubscriptions to fail before one succeeds; and whether a resumed subscription gets a snapshot (events gone). */
+  failResubscribes = 0;
+  eventsGone = false;
 
   readonly id: string;
 
@@ -78,9 +81,19 @@ class FakeT3 implements T3Client {
     }
     void id;
   }
+  /** The WebSocket drops: every subscriber is told its stream closed. */
+  drop() {
+    const subs = [...this.listeners];
+    this.listeners.clear();
+    for (const f of subs) setTimeout(() => (f as (i: unknown) => void)({ kind: "closed" }), 1);
+  }
   async subscribe(id: string, options: { afterSequence?: number }, onItem: (i: T3StreamItem) => void) {
     if (id !== this.id) throw new Error("no such thread");
-    if (options.afterSequence === undefined) {
+    if (options.afterSequence !== undefined && this.failResubscribes > 0) {
+      this.failResubscribes -= 1;
+      throw new Error("ECONNREFUSED");
+    }
+    if (options.afterSequence === undefined || this.eventsGone) {
       const snap = structuredClone(this.thread);
       setTimeout(() => onItem({ kind: "snapshot", thread: snap }), 1);
     } else {
@@ -509,5 +522,34 @@ describe("fix pass 3.3", () => {
     const h = await adapter.handOff(target, answer);
     assert.equal(h._tag, "accepted");
     assert.equal(t3.listeners.size, 0);
+  });
+});
+
+describe("fix pass 3.2", () => {
+  it("3.2 a dropped stream is resubscribed with retries, and the turn still resolves", async () => {
+    const { t3, adapter } = setup();
+    const h = await accepted(adapter);
+    const outcome = adapter.awaitOutcome(target, delivery(), h.turnId);
+    t3.failResubscribes = 2;
+    t3.drop();
+    await tick(2_500); // two failed attempts, then a good one
+    t3.assistant("4");
+    t3.finish();
+    assert.deepEqual(await outcome, { _tag: "replied", answer: "4" });
+  });
+
+  it("3.2 a resubscription that gets a snapshot (events missed) makes the outcome uncertain", async () => {
+    const { t3, adapter } = setup();
+    const h = await accepted(adapter);
+    const outcome = adapter.awaitOutcome(target, delivery(), h.turnId);
+    t3.eventsGone = true;
+    t3.drop();
+    t3.userMessage("lee-while-down"); // unseen
+    await tick(100);
+    t3.eventsGone = false;
+    t3.assistant("mixed");
+    t3.finish();
+    const o = await outcome;
+    assert.equal(o._tag, "uncertain", JSON.stringify(o));
   });
 });

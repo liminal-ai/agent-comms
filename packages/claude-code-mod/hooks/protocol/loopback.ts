@@ -156,6 +156,7 @@ const name = string({ pattern: NAME_PATTERN, label: "a participant name (lowerca
 const harnessId = string({ min: 1, max: 256, pattern: /^[\x21-\x7e]+$/, label: "a harness id (printable, 1-256)" });
 const text = string({ min: 1, max: MAX_TEXT_CHARS, label: `non-empty text (at most ${MAX_TEXT_CHARS} characters)` });
 const presence = literal("idle", "busy");
+const idempotencyKey = string({ min: 8, max: 128, pattern: /^[A-Za-z0-9_-]+$/, label: "an idempotency key ([A-Za-z0-9_-], 8-128)" });
 
 const attachment: Decoder<AttachmentRef> = object({
   name: string({ min: 1, max: 512 }),
@@ -305,6 +306,12 @@ const requestDecoders = {
     conversationId: optional(id),
     text,
     attachments: optional(array(attachment, { max: 20 })),
+    /**
+     * Idempotency key (fix pass 3.1): a repeat with the same `as` and `key`
+     * returns the first send's result instead of posting again. The CLI makes
+     * one per invocation and reuses it when it retries after `unavailable`.
+     */
+    key: optional(idempotencyKey),
   }),
 
   /**
@@ -321,6 +328,8 @@ const requestDecoders = {
     messageId: id,
     text,
     attachments: optional(array(attachment, { max: 20 })),
+    /** As for `send`. */
+    key: optional(idempotencyKey),
   }),
 
   /**

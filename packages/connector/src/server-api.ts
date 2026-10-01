@@ -171,6 +171,7 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
           via: "cli",
           ...(req.conversationId !== undefined ? { conversationId: req.conversationId } : {}),
           ...(req.attachments ? { attachments: req.attachments } : {}),
+          ...(req.key !== undefined ? { key: req.key } : {}),
         }),
       ),
     reply: (req) =>
@@ -182,6 +183,7 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
           text: req.text,
           via: "cli",
           ...(req.attachments ? { attachments: req.attachments } : {}),
+          ...(req.key !== undefined ? { key: req.key } : {}),
         }),
       ),
     read: (req) =>

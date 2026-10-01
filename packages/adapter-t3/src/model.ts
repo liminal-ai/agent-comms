@@ -129,6 +129,8 @@ export class TurnTracker {
    */
   stoppedAfterEnd = false;
   startFailed = false;
+  /** Events were missed (a resubscription got a snapshot instead of a replay): can't vouch for the turn (3.2). */
+  gap = false;
   lastSequence = -1;
 
   constructor(messageId: string) {

@@ -24,7 +24,7 @@ import {
   stateRef,
   summary,
 } from "./lib/core";
-import { openDm, post } from "./lib/post";
+import { openDm, post, replayed } from "./lib/post";
 import { attachment, enteredInput, failureReason, machineAuth, via } from "./validators";
 
 export const DEFAULT_LEASE_MS = 60_000;
@@ -397,10 +397,13 @@ export const send = mutation({
     text: v.string(),
     attachments: v.optional(v.array(attachment)),
     via: v.optional(via),
+    key: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Responses["send"]> => {
     const machine = await requireMachine(ctx, args.machine);
     const sender = await actingAs(ctx, machine, args.as);
+    const earlier = await replayed(ctx, sender, args.key);
+    if (earlier) return earlier;
     const recipients = [];
     for (const name of args.to) {
       const normalized = await ctx.db
@@ -425,6 +428,7 @@ export const send = mutation({
       kind: "request",
       text: args.text,
       ...(args.attachments ? { attachments: args.attachments } : {}),
+      ...(args.key !== undefined ? { idempotencyKey: args.key } : {}),
       origin: { via: args.via ?? "cli" },
     });
   },
@@ -442,10 +446,13 @@ export const reply = mutation({
     text: v.string(),
     attachments: v.optional(v.array(attachment)),
     via: v.optional(via),
+    key: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Responses["reply"]> => {
     const machine = await requireMachine(ctx, args.machine);
     const me = await actingAs(ctx, machine, args.as);
+    const earlier = await replayed(ctx, me, args.key);
+    if (earlier) return earlier;
     const original = await getOr(ctx, "messages", args.messageId);
     const conversation = (await ctx.db.get(original.conversationId))!;
     await membership(ctx, conversation._id, me);
@@ -459,6 +466,7 @@ export const reply = mutation({
       inReplyTo: original._id,
       text: args.text,
       ...(args.attachments ? { attachments: args.attachments } : {}),
+      ...(args.key !== undefined ? { idempotencyKey: args.key } : {}),
       origin: { via: args.via ?? "cli" },
     });
     for (const state of ["ambiguous", "uncertain"] as const) {

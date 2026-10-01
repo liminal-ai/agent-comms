@@ -1,6 +1,7 @@
 // The `comms` CLI: what an agent runs from its shell to send, answer and read.
 // Talks only to the local connector (or the stub) over the loopback socket.
 
+import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 import {
   type ConversationSummary,
@@ -28,6 +29,9 @@ export const USAGE = `usage:
   Text may be given as several words, or "-" to read it from stdin. Text may start
   with "-"; anything after "--" is text, whatever it looks like.
   --json prints the connector's response as JSON. --socket <path> overrides the socket.
+  --key <k>: the idempotency key for send/reply (default: a new one). If the connector
+  answers unavailable, comms retries with the same key, then prints it; rerunning with
+  that --key can't post twice.
 
 exit codes: 0 ok, 1 the connector refused, 2 usage, 3 connector unreachable`;
 
@@ -100,7 +104,18 @@ export async function run(argv: string[], io: Io): Promise<number> {
       return me;
     };
     const request = async <K extends Op>(op: K, body: Requests[K]): Promise<Responses[K] | null> => {
-      const response = await call(socket, op, body);
+      let response = await call(socket, op, body);
+      // A send or reply carries an idempotency key, so retrying after `unavailable` can't post twice (3.1).
+      const keyed = (body as { key?: string }).key;
+      for (const delayMs of keyed ? [2_000, 5_000] : []) {
+        if (response.ok || response.error.code !== "unavailable") break;
+        await new Promise((r) => setTimeout(r, delayMs));
+        response = await call(socket, op, body);
+      }
+      if (!response.ok && keyed && response.error.code === "unavailable") {
+        io.stderr(`comms ${command}: unavailable: ${response.error.message}\nIt may or may not have been posted. Retry with the same key, which can't post twice: --key ${keyed}\n`);
+        return null;
+      }
       if (!response.ok) {
         io.stderr(`comms ${command}: ${response.error.code}: ${response.error.message}\n`);
         return null;
@@ -126,6 +141,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
         const body: Requests["send"] = {
           as: as(),
           to,
+          key: values.key ?? randomUUID(),
           text: await text(rest.slice(i)),
           ...(values.conversation ? { conversationId: values.conversation } : {}),
         };
@@ -137,7 +153,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
       case "reply": {
         const [messageId, ...words] = rest;
         if (!messageId) throw new UsageError("comms reply needs a message id");
-        const r = await request("reply", { as: as(), messageId, text: await text(words) });
+        const r = await request("reply", { as: as(), messageId, key: values.key ?? randomUUID(), text: await text(words) });
         if (!r) return EXIT.error;
         if (!values.json) {
           io.stdout(describeSend(`answered ${messageId} with`, r));

@@ -68,6 +68,8 @@ export interface T3AdapterOptions {
   replayQuietMs?: number;
   /** After our turn ends, how long to watch for the session stopping (a Claude interrupt). */
   interruptWindowMs?: number;
+  /** If the thread's event stream stays down this long, stop waiting on it: the restart check decides (3.2). */
+  streamDownLimitMs?: number;
 }
 
 export interface T3Adapter {
@@ -89,6 +91,8 @@ interface Follower {
   snapshot: T3Thread | undefined;
   synced: boolean;
   lastItemAt: number;
+  /** When the stream went down and hasn't come back (undefined while it's up). */
+  downSince: number | undefined;
   wait<T>(test: () => T | undefined, timeoutMs?: number): Promise<T | undefined>;
   stop(): void;
 }
@@ -99,6 +103,7 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
   const acceptTimeoutMs = options.acceptTimeoutMs ?? 60_000;
   const replayQuietMs = options.replayQuietMs ?? 1_500;
   const interruptWindowMs = options.interruptWindowMs ?? 4_000;
+  const streamDownLimitMs = options.streamDownLimitMs ?? 5 * 60_000;
   /** Deliveries we're following in this process, by delivery id. */
   const following = new Map<string, Follower>();
 
@@ -111,6 +116,7 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
       snapshot: undefined,
       synced: afterSequence === undefined,
       lastItemAt: Date.now(),
+      downSince: undefined,
       wait: (test, timeoutMs) =>
         new Promise((resolve) => {
           const check = () => {
@@ -133,10 +139,29 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
         unsubscribe?.();
       },
     };
+    /** Whether the current subscription asked for a replay after a sequence (then a snapshot means events were missed). */
+    let resumedAfter = afterSequence !== undefined;
+    const resubscribe = (attempt: number) => {
+      if (stopped) return;
+      // Resume from the last event we saw, without a gap; retry with backoff while T3 is away (3.2).
+      resumedAfter = true;
+      client
+        .subscribe(threadId, { afterSequence: tracker.lastSequence }, onItem)
+        .then((u) => {
+          if (stopped) return u();
+          unsubscribe = u;
+          f.downSince = undefined;
+        })
+        .catch((e) => {
+          log(`resubscribing to ${threadId} (attempt ${attempt}): ${e instanceof Error ? e.message : String(e)}`);
+          setTimeout(() => resubscribe(attempt + 1), Math.min(30_000, 500 * 2 ** Math.min(attempt, 6)));
+        });
+    };
     const onItem = (item: T3StreamItem | { kind: "closed" }) => {
       f.lastItemAt = Date.now();
       if (item.kind === "snapshot") {
         f.snapshot = item.thread;
+        if (resumedAfter && tracker.seenOurs && !tracker.ended) tracker.gap = true; // events after our message were missed
         if (!tracker.seenOurs) tracker.start(item.thread.session, item.thread.snapshotSequence);
         if (afterSequence !== undefined) f.synced = true; // the events were gone; the snapshot is all there is
       } else if (item.kind === "event") {
@@ -144,11 +169,8 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
       } else if (item.kind === "synchronized") {
         f.synced = true;
       } else if (item.kind === "closed" && !stopped) {
-        // Resume from the last event we saw, without a gap.
-        void client
-          .subscribe(threadId, { afterSequence: tracker.lastSequence }, onItem)
-          .then((u) => (unsubscribe = u))
-          .catch((e) => log(`resubscribing to ${threadId}: ${e instanceof Error ? e.message : String(e)}`));
+        f.downSince ??= Date.now();
+        resubscribe(1);
       }
       for (const w of [...waiters]) w();
     };
@@ -182,6 +204,7 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
    */
   function outcomeOf(thread: T3Thread, t: TurnTracker): Outcome {
     const turnId = t.turnId!;
+    if (t.gap) return { _tag: "uncertain", detail: "some of its turn's events were missed while T3's stream was down" };
     if (t.startedByUs === undefined) t.startedByUs = startedBy(thread, t.messageId, turnId) ?? false;
     if (t.ambiguous) return { _tag: "ambiguous", entered: t.entered() };
     const latest = thread.latestTurn?.turnId === turnId ? thread.latestTurn : null;
@@ -281,7 +304,17 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
         const tracker = new TurnTracker(messageId);
         const f = await follow(threadId, tracker);
         // Courtesy wait until idle, from the live session state; a cancelled handoff stops waiting.
-        await f.wait(() => (gate?.signal.aborted || (f.snapshot && !tracker.sessionBusy) ? true : undefined));
+        await f.wait(() =>
+          gate?.signal.aborted ||
+          (f.snapshot && !tracker.sessionBusy) ||
+          (f.downSince !== undefined && Date.now() - f.downSince > streamDownLimitMs)
+            ? true
+            : undefined,
+        );
+        if (f.downSince !== undefined) {
+          f.stop();
+          return { _tag: "aborted", detail: "T3's event stream is down; not sending" };
+        }
         const cursor = String(tracker.lastSequence);
         // The last check before sending: the claim is still ours, and the cursor is recorded (2.2).
         if (gate && (gate.signal.aborted || !(await gate.confirm(encodeCursor(Number(cursor)))) || gate.signal.aborted)) {
@@ -327,7 +360,14 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
       try {
         const f = following.get(delivery.id) ?? (await replay(target, delivery));
         if (!f) return { _tag: "lost", detail: "can't follow the turn's events; the restart check decides" };
-        await f.wait(() => (f.tracker.ended ? true : undefined));
+        const ended = await f.wait(() =>
+          f.tracker.ended ? "ended" : f.downSince !== undefined && Date.now() - f.downSince > streamDownLimitMs ? "down" : undefined,
+        );
+        if (ended === "down") {
+          f.stop();
+          following.delete(delivery.id);
+          return { _tag: "lost", detail: "T3's event stream has been down too long; the restart check decides" };
+        }
         f.tracker.turnId ??= turnId;
         const outcome = await settle(target, f);
         f.stop();

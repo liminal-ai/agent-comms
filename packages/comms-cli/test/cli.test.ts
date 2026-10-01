@@ -146,3 +146,12 @@ describe("fix pass 3.7", () => {
     assert.match(read.stdout, /\n  --as is text here\n/);
   });
 });
+
+describe("fix pass 3.1", () => {
+  it("3.1 a send repeated with the same --key posts once", async () => {
+    const a = await comms(["send", "--as", "cedar", "@hazel", "--key", "retry-key-0001", "once only"]);
+    const b = await comms(["send", "--as", "cedar", "@hazel", "--key", "retry-key-0001", "once only"]);
+    assert.equal(a.code, EXIT.ok, a.stderr);
+    assert.equal(a.stdout.match(/^sent (m_\d+)/)![1], b.stdout.match(/^sent (m_\d+)/)![1]);
+  });
+});

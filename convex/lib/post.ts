@@ -13,6 +13,7 @@ export interface PostInput {
   kind: "request" | "answer";
   inReplyTo?: Id<"messages">;
   collectedFrom?: Id<"deliveries">;
+  idempotencyKey?: string;
   /** A collected answer to a request accepted earlier: posted even if the sender has since been retired or left (2.4). */
   inFlight?: boolean;
   text: string;
@@ -51,6 +52,7 @@ export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResu
     text: input.text,
     attachments: input.attachments ?? [],
     origin: input.origin,
+    ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
     createdAt: now,
   });
   await ctx.db.patch(conversation._id, { lastSeq: seq, lastAt: now });
@@ -81,6 +83,30 @@ export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResu
     result.deliveries.push(await stateRef(ctx, (await ctx.db.get(deliveryId))!));
   }
   return result;
+}
+
+/** The earlier result of a send or reply with this key from this sender, if any (fix pass 3.1). */
+export async function replayed(ctx: MutationCtx, sender: Doc<"participants">, key: string | undefined): Promise<SendResult | null> {
+  if (key === undefined) return null;
+  const m = await ctx.db
+    .query("messages")
+    .withIndex("by_sender_key", (q) => q.eq("senderId", sender._id).eq("idempotencyKey", key))
+    .first();
+  if (!m) return null;
+  const deliveries = await ctx.db
+    .query("deliveries")
+    .withIndex("by_message", (q) => q.eq("messageId", m._id))
+    .collect();
+  const skipped = [];
+  for (const id of m.recipientIds) {
+    const r = await ctx.db.get(id);
+    if (r && r.kind === "agent" && !deliveries.some((d) => d.recipientId === id)) skipped.push({ name: r.name, reason: "retired" as const });
+  }
+  return {
+    message: await envelope(ctx, m),
+    deliveries: await Promise.all(deliveries.map((d) => stateRef(ctx, d))),
+    skipped,
+  };
 }
 
 /** The DM between two participants, opened if new. */

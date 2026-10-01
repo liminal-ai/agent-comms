@@ -60,9 +60,12 @@ export default defineSchema({
     text: v.string(),
     attachments: v.array(attachment),
     origin,
+    /** The sender's idempotency key, if the send carried one (fix pass 3.1). */
+    idempotencyKey: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_conversation_seq", ["conversationId", "seq"])
+    .index("by_sender_key", ["senderId", "idempotencyKey"])
     .index("by_collectedFrom", ["collectedFrom"])
     .index("by_inReplyTo", ["inReplyTo"]),
 

@@ -178,6 +178,21 @@ describe("fix pass 2.4-2.6", () => {
   });
 });
 
+describe("fix pass 3.1", () => {
+  it("3.1 a send or reply repeated with the same key returns the first result and posts once", async () => {
+    const t = await setup();
+    const one = await t.mutation(api.connector.send, { machine: m1, as: "a", to: ["b"], text: "q", key: "key-00000001" });
+    const two = await t.mutation(api.connector.send, { machine: m1, as: "a", to: ["b"], text: "q", key: "key-00000001" });
+    expect(two.message.id).toBe(one.message.id);
+    expect(two.deliveries).toEqual(one.deliveries);
+    const view = await t.query(api.conversations.view, { adminToken: ADMIN, conversationId: one.message.conversationId });
+    expect(view.messages).toHaveLength(1);
+    const r1 = await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: one.message.id, text: "a", key: "key-00000002" });
+    const r2 = await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: one.message.id, text: "a", key: "key-00000002" });
+    expect(r2.message.id).toBe(r1.message.id);
+  });
+});
+
 describe("fix pass 1.10", () => {
   it("1.10 send, reply, web post and group titles over the caps are rejected with a clear error", async () => {
     const t = await setup();

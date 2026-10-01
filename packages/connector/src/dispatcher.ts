@@ -24,6 +24,10 @@ export interface DispatcherOptions {
   tickMs?: number;
   /** How long to leave a delivery alone after a check said "later". */
   laterMs?: number;
+  /** After this long of "later" answers, the delivery is recorded uncertain (3.2). */
+  laterLimitMs?: number;
+  /** A readiness check that takes longer than this counts as not ready (3.1). */
+  readyTimeoutMs?: number;
   /** Backoff for writes while the server is unreachable. */
   retryBaseMs?: number;
   retryMaxMs?: number;
@@ -47,6 +51,13 @@ export const runDispatcher = (options: DispatcherOptions) =>
     const log = options.log ?? ((line: string) => console.error(`agent-comms connector: ${line}`));
     const tickMs = options.tickMs ?? 1_000;
     const laterMs = options.laterMs ?? 5_000;
+    const laterLimitMs = options.laterLimitMs ?? 10 * 60_000;
+    const readyTimeoutMs = options.readyTimeoutMs ?? 5_000;
+    /** Delivery id → when checks first started saying "later". */
+    const laterSince = new Map<string, number>();
+    /** Participant → last known readiness; refreshed in the background so a wedged harness can't stall this loop (3.1). */
+    const readiness = new Map<string, boolean>();
+    const checkingReady = new Set<string>();
 
     let latest: WorkItem[] = [];
     /** Participant → the delivery we're working on for it. */
@@ -208,12 +219,21 @@ export const runDispatcher = (options: DispatcherOptions) =>
       Effect.gen(function* () {
         const check: Check = yield* withLease(h, adapter.check(h.target, h.delivery, knownTurnId));
         const id = h.delivery.id;
+        if (check._tag !== "later") laterSince.delete(id);
         const wasDelivered = h.delivery.status.state === "delivered";
         const collect = h.delivery.message.kind === "request";
         switch (check._tag) {
-          case "later":
+          case "later": {
+            const since = laterSince.get(id) ?? Date.now();
+            laterSince.set(id, since);
+            if (Date.now() - since >= laterLimitMs) {
+              laterSince.delete(id);
+              yield* write("uncertain", id, api.uncertain(id, h.claim.claimId, `couldn't establish what happened after ${Math.round((Date.now() - since) / 1000)} s (${check.detail})`));
+              return yield* release(h);
+            }
             notBefore.set(id, Date.now() + laterMs);
             return;
+          }
           case "unknown":
             yield* write("uncertain", id, api.uncertain(id, h.claim.claimId, check.detail));
             return yield* release(h);
@@ -309,7 +329,24 @@ export const runDispatcher = (options: DispatcherOptions) =>
           const expired = !inFlight.claim || inFlight.claim.leaseExpiresAt <= now;
           if (!ours && !expired) continue;
         }
-        if (!(yield* adapter.ready(target))) continue;
+        const key = `${first.harness}/${participant}`;
+        if (!checkingReady.has(key)) {
+          checkingReady.add(key);
+          yield* adapter.ready(target).pipe(
+            Effect.timeoutOption(Duration.millis(readyTimeoutMs)),
+            Effect.map((r) => r._tag === "Some" && r.value),
+            Effect.tap((ok) =>
+              Effect.sync(() => {
+                const changed = readiness.get(key) !== ok;
+                readiness.set(key, ok);
+                if (changed && ok) wake();
+              }),
+            ),
+            Effect.ensuring(Effect.sync(() => checkingReady.delete(key))),
+            Effect.forkScoped,
+          );
+        }
+        if (!readiness.get(key)) continue;
         busy.set(participant, next.id);
         yield* work(adapter, next, target).pipe(
           Effect.ensuring(
