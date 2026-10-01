@@ -1,0 +1,265 @@
+// The capabilities pass (docs/04-capabilities.md): the agent registry, people
+// and @owner, send-and-wait, reminders and alerts. Shapes shared by Convex, the
+// connector, the CLI, the mod and the web view. The operations that carry them
+// are in loopback.ts; the renderings in render.ts.
+
+import type {
+  ConversationRef,
+  DeliveryId,
+  DeliveryState,
+  Home,
+  MessageEnvelope,
+  MessageId,
+  ParticipantName,
+  ParticipantRef,
+  ParticipantState,
+} from "./model.ts";
+
+// ---------------------------------------------------------------------------
+// Names
+
+/** The system participants, created at deploy. They send; they're never addressed and never get deliveries. */
+export const SYSTEM_PARTICIPANTS = ["reminders", "alerts"] as const;
+export type SystemParticipant = (typeof SYSTEM_PARTICIPANTS)[number];
+
+/**
+ * Names promotion refuses. `owner` resolves to the sender's owner in any send;
+ * `all` is kept for later; the system participants' names are taken at deploy.
+ */
+export const RESERVED_NAMES: readonly string[] = ["owner", "all", ...SYSTEM_PARTICIPANTS];
+
+/** In a send's `to`, resolves to the sending agent's owner. */
+export const OWNER_ALIAS = "owner";
+
+// ---------------------------------------------------------------------------
+// 1. Agent registry
+
+export const MAX_DESCRIPTION_CHARS = 200;
+export const MAX_DUTIES = 10;
+export const MAX_DUTY_CHARS = 300;
+
+export interface Presence {
+  status: "idle" | "busy" | "offline";
+  /** When the status was last written. */
+  at: number;
+  /** When it last changed to `idle` (not on repeated idle writes). Absent unless idle. */
+  idleSince?: number;
+  /** The participant's machine hasn't been heard from: the status can't be trusted, and never counts as idle. */
+  stale: boolean;
+}
+
+export interface RegistryEntry {
+  participant: ParticipantRef;
+  state: ParticipantState;
+  presence: Presence | null;
+  description?: string;
+  duties?: string[];
+  /** Agents only. */
+  owner?: ParticipantRef;
+  harness?: Home["harness"];
+  /** Only with `long` (thread ids and machines aren't listed by default). */
+  home?: Home;
+}
+
+// ---------------------------------------------------------------------------
+// 3. Send and wait
+
+/**
+ * The default bound for a waiting send, below the shortest default shell
+ * timeout of the harnesses agents run in (Claude Code's Bash tool: 120 s;
+ * Codex in T3: Hazel's H0). Revised from H0 before R2 ships.
+ */
+export const DEFAULT_WAIT_MS = 100_000;
+/** The longest bound `--wait` accepts. Waits past a harness's shell timeout need the shell timeout raised too. */
+export const MAX_WAIT_MS = 60 * 60_000;
+/** An answered result not acknowledged within this long gets its one fallback into the requester's thread. */
+export const ACK_WINDOW_MS = 2 * 60_000;
+/** How long a wait and its results are kept (for `await` and `comms status`) after the wait ends. */
+export const WAIT_RETENTION_MS = 7 * 24 * 60 * 60_000;
+
+/**
+ * One addressed agent's result in a wait. Every transition is a compare-and-set:
+ * - `open` → `answered` (the answer was returned to the wait; its message is stored)
+ * - `open` → `expired` (the wait's bound or `until` passed first; a later answer goes to the thread)
+ * - `open` → `ended` (the delivery ended `failed` or `uncertain`, or the agent was retired: no answer is coming)
+ * - `answered` → `acknowledged` (the CLI printed it and said so)
+ * - `answered` → `fell-back` (not acknowledged within ACK_WINDOW_MS: delivered once into the thread)
+ * `ambiguous` keeps the result `open`: the agent will finish it with `comms reply`.
+ */
+export type WaitResultState = "open" | "answered" | "expired" | "ended" | "acknowledged" | "fell-back";
+
+export const FINAL_WAIT_RESULT_STATES: readonly WaitResultState[] = ["expired", "ended", "acknowledged", "fell-back"];
+
+export interface WaitResult {
+  recipient: ParticipantRef;
+  state: WaitResultState;
+  /** The recipient's delivery of the request. */
+  delivery: { id: DeliveryId; state: DeliveryState; detail?: string };
+  /** Present once `answered` (and after): the answer returned to the wait. */
+  answer?: MessageEnvelope;
+  /** When the result last changed. */
+  at: number;
+}
+
+export interface Wait {
+  id: string;
+  messageId: MessageId;
+  waiter: ParticipantRef;
+  /** The wait stops counting as "busy waiting" at this time, or when every result is final, whichever is first. */
+  until: number;
+  /** Still counts as busy waiting for the mutual-wait rule. */
+  active: boolean;
+  results: WaitResult[];
+  /** People addressed by the request: never waited on; the message is in their inbox. */
+  inInbox: ParticipantRef[];
+  createdAt: number;
+}
+
+/** Why a send asked to wait but didn't. */
+export interface NoWait {
+  reason: "busy-waiting" | "nobody-to-wait-for";
+  /** For `busy-waiting`: the addressed agents who are themselves in an active wait. */
+  busy?: ParticipantName[];
+}
+
+/**
+ * The CLI's exit codes for `send` (waiting) and `await` (and the existing ones):
+ * 0: every waited result `answered` (or nobody to wait for); 1: the connector refused;
+ * 2: usage; 3: no connector; 4: the bound was reached with results still open (the
+ * message id is printed; answers arriving later go to the thread); 5: every result is
+ * final but at least one `ended` without an answer (failed, uncertain, retired).
+ */
+export const CLI_EXIT = { ok: 0, refused: 1, usage: 2, unreachable: 3, pending: 4, endedWithoutAnswer: 5 } as const;
+
+/** `comms status <message-id>`: each addressed recipient's delivery, and the answer if there is one. */
+export interface MessageStatus {
+  message: MessageEnvelope;
+  conversation: ConversationRef;
+  recipients: {
+    participant: ParticipantRef;
+    /** Absent for people (they read in the web view) and for recipients that got none (retired). */
+    delivery?: { id: DeliveryId; state: DeliveryState; detail?: string };
+    /** The collected answer, or the `comms reply` that completed the delivery. */
+    answer?: MessageEnvelope;
+    /** Other answers to the message from this recipient (follow-ups). */
+    followUps: MessageEnvelope[];
+    /** For people: whether they've read it. */
+    inbox?: { readAt: number | null };
+  }[];
+  /** The caller's wait on this message, if any. */
+  wait?: Wait;
+}
+
+// ---------------------------------------------------------------------------
+// 4. Reminders
+
+export type ReminderState = "active" | "paused" | "blocked" | "done" | "cancelled" | "expired";
+export const REMINDER_DEFAULT_EXPIRY_MS = 7 * 24 * 60 * 60_000;
+export const REMINDER_MAX_EXPIRY_MS = 30 * 24 * 60 * 60_000;
+/** Reminders fire from a once-a-minute cron: intervals below this are refused. */
+export const REMINDER_MIN_INTERVAL_MS = 60_000;
+
+export type ReminderAction = "pause" | "resume" | "done" | "cancel" | "blocked";
+
+export interface ReminderSchedule {
+  /** Repeat every this many ms, starting one interval after creation. */
+  everyMs?: number;
+  /** Fire once at this time (epoch ms). Exactly one of everyMs and at. */
+  at?: number;
+}
+
+export interface Reminder {
+  id: string;
+  name: string;
+  text: string;
+  target: ParticipantRef;
+  createdBy: ParticipantRef;
+  schedule: ReminderSchedule;
+  /** Fire only once the watched participant (the target unless `watch`) has been idle this long. */
+  idleForMs?: number;
+  watch?: ParticipantRef;
+  /** Stop after this many fires. */
+  max?: number;
+  reportTo?: ParticipantRef;
+  state: ReminderState;
+  /** Why it's `blocked` (from `comms reminder blocked`), or how it ended. */
+  stateReason?: string;
+  stateAt: number;
+  fires: number;
+  nextFireAt?: number;
+  expiresAt: number;
+  createdAt: number;
+}
+
+export interface ReminderFire {
+  reminderId: string;
+  /** The fire's request message (from @reminders to the target, in their DM). */
+  messageId: MessageId;
+  deliveryId: DeliveryId;
+  deliveryState: DeliveryState;
+  firedAt: number;
+  /** The target's answer, once collected (or completed with `comms reply`). */
+  answer?: { messageId: MessageId; text: string; at: number };
+}
+
+export interface ReminderSkip {
+  at: number;
+  reason: "previous-fire-not-final" | "not-idle" | "presence-stale";
+  detail?: string;
+}
+
+// ---------------------------------------------------------------------------
+// 5. Alerts
+
+export type AlertCause = "uncertain-delivery" | "connector-silent" | "reminder-blocked" | "reminder-expired" | "delivery-reclaimed";
+
+export interface Alert {
+  id: string;
+  cause: AlertCause;
+  subject: { kind: "delivery" | "machine" | "reminder"; id: string };
+  /** The human it was posted to (the affected agent's owner). */
+  owner: ParticipantRef;
+  /** The alert message posted by @alerts. */
+  messageId: MessageId;
+  openedAt: number;
+  /** When the condition cleared; a recurrence opens a new incident. */
+  resolvedAt?: number;
+  summary: string;
+}
+
+export interface AlertConfig {
+  /** A machine with homed agents unheard from this long. */
+  connectorSilentMs: number;
+  /** A reminder blocked this long. */
+  reminderBlockedMs: number;
+  /** A delivery claimed more than this many times. */
+  maxClaims: number;
+}
+
+export const DEFAULT_ALERT_CONFIG: AlertConfig = { connectorSilentMs: 10 * 60_000, reminderBlockedMs: 60 * 60_000, maxClaims: 5 };
+
+// ---------------------------------------------------------------------------
+// People: the inbox
+
+export interface InboxItem {
+  message: MessageEnvelope;
+  conversation: ConversationRef;
+  readAt: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Durations on the CLI ("90s", "20m", "2h", "7d")
+
+const UNIT_MS: Record<string, number> = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+
+export function parseDuration(text: string): number | null {
+  const m = /^(\d+)(s|m|h|d)$/.exec(text.trim());
+  return m ? Number(m[1]) * UNIT_MS[m[2]!]! : null;
+}
+
+export function formatDuration(ms: number): string {
+  for (const [unit, size] of [["d", 86_400_000], ["h", 3_600_000], ["m", 60_000]] as const) {
+    if (ms % size === 0 && ms >= size) return `${ms / size}${unit}`;
+  }
+  return `${Math.round(ms / 1000)}s`;
+}
