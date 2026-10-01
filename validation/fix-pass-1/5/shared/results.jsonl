@@ -1,0 +1,9 @@
+{"at":"2026-10-01T14:05:51.703Z","item":"1","homes":[{"name":"@fp1-lhc","dot":"dot idle","label":"idle"},{"name":"@fp1-native","dot":"dot idle","label":"idle"},{"name":"@term-a","dot":"dot idle","label":"idle"}]}
+{"at":"2026-10-01T14:06:02.422Z","item":"2a","request":"jn791cs5cg74f3pk0g2p9g5wyh8ff2d9","conversation":"j577tst32rmc5pqjmb84by6qsn8fev6d","state":"replied","detail":null,"answers":[{"from":"fp1-lhc","collected":true,"text":"Ottawa."}]}
+{"at":"2026-10-01T14:06:06.708Z","item":"2c","request":"jn76rwcmm9yft6awrgjnw26z098fepyp","conversation":"j570pc6mj4n3e5y8tryqk25v2h8fftdg","state":"replied","detail":null,"answers":[{"from":"term-a","collected":true,"text":"169"}]}
+{"at":"2026-10-01T14:06:15.936Z","item":"3","group":"fp1 shared group 14:06:07","woken":["fp1-lhc","term-a"],"states":{"fp1-lhc":"replied","term-a":"replied"},"replies":[{"from":"term-a","collected":true,"text":"@term-a"},{"from":"fp1-lhc","collected":true,"text":"@fp1-lhc"}],"nativeWoken":false}
+{"at":"2026-10-01T14:11:46.017Z","item":"4-t3","delivery":"j974yqk88rsjpd9n0ywvy0tp2h8fedj9","first":"ambiguous","final":"ambiguous","detail":"other input entered the turn: t3-user-message","answers":[{"from":"fp1-native","collected":false,"text":"ACC2-4"}]}
+{"at":"2026-10-01T14:11:53.414Z","item":"5-t3","delivery":"j97a4948afrjetcwqtnq2q832x8fedq0","state":"replied","answers":[{"from":"fp1-lhc","collected":true,"text":"6"}],"expected":"6"}
+{"at":"2026-10-01T14:16:13.419Z","item":"8-t3","delivery":"j9700y98bjhv381jcw8mrrhk2n8ffe59","state":"replied","answers":[{"from":"fp1-lhc","collected":true,"text":"ixteen\nseventeen\neighteen\nnine"}],"turns":{"ourMessages":1,"latestTurnIsOurs":true,"assistantTurnsAfterOurs":["840841b0-b70f-4e05-83e7-6f722cc0c569"]}}
+{"at":"2026-10-01T14:20:49.289Z","item":"6","messages":273,"withPrivateMarker":0}
+{"at":"2026-10-01T14:20:49.290Z","item":"7","collected":118,"collectedFromAnAnswersDelivery":0,"answerDeliveriesPastDelivered":0}

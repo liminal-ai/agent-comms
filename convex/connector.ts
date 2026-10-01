@@ -363,7 +363,20 @@ export const ambiguous = mutation({
   args: { machine: machineAuth, deliveryId: v.string(), claimId: v.string(), turnId: v.string(), entered: v.array(enteredInput) },
   handler: async (ctx, args) => {
     const what = args.entered.map((e) => e.origin).join(", ") || "other input";
-    return finish(ctx, args, "ambiguous", `other input entered the turn: ${what}`);
+    const result = await finish(ctx, args, "ambiguous", `other input entered the turn: ${what}`);
+    // The agent may already have answered explicitly during the turn: then the request has its
+    // answer and the delivery is complete (found in the fix pass 1 shared-checks rerun).
+    const d = (await ctx.db.get(result.delivery.id as Id<"deliveries">))!;
+    const earlier = await ctx.db
+      .query("messages")
+      .withIndex("by_inReplyTo", (q) => q.eq("inReplyTo", d.messageId))
+      .filter((q) => q.and(q.eq(q.field("senderId"), d.recipientId), q.eq(q.field("collectedFrom"), undefined)))
+      .first();
+    if (d.state === "ambiguous" && earlier) {
+      await ctx.db.patch(d._id, { state: "replied", at: Date.now(), detail: `${d.detail}; completed by comms reply ${earlier._id}, sent during the turn` });
+      return { delivery: await stateRef(ctx, (await ctx.db.get(d._id))!) };
+    }
+    return result;
   },
 });
 
