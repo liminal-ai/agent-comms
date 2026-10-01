@@ -1,138 +1,18 @@
 // The mod against the real connector stub over a Unix socket: registration,
 // polling, submission, reports, restart checks, reconnection, slow polls.
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { request } from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { after, afterEach, beforeEach, describe, it } from "node:test";
-import { type Fixture, StubComms, startStubServer, type StubServer } from "@agent-comms/connector-stub";
-import { CommsMod, type Host } from "../hooks/core/mod.ts";
+import { describe, it } from "node:test";
+import { StubComms } from "@agent-comms/connector-stub";
+import { CommsMod } from "../hooks/core/mod.ts";
 import { parseDeliveryHeader, parseNoticeHeader } from "../hooks/protocol/render.ts";
+import { FakeSession, makeMod, pumpUntil, rawCall, stubOps, until, useStub, wrap } from "./support.ts";
 
-const fixture: Fixture = {
-  machine: "box",
-  participants: [{ name: "lee", kind: "human", home: { harness: "web" } }, { name: "mod-a" }, { name: "mod-b" }],
-  conversations: [],
-  messages: [],
-};
-
-const root = await mkdtemp(join(tmpdir(), "comms-mod-test-"));
-after(() => rm(root, { recursive: true, force: true }));
-let n = 0;
-
-function rawCall(socketPath: string, path: string, body: string, method = "POST"): Promise<{ status: number; text: string }> {
-  return new Promise((resolve, reject) => {
-    const req = request({ socketPath, path, method, headers: { "content-type": "application/json" } }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (c: Buffer) => chunks.push(c));
-      res.on("end", () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString() }));
-    });
-    req.on("error", reject);
-    req.end(body);
-  });
-}
-
-/** A fake Claude Code session: records submissions, lets tests drive turns. */
-class FakeSession {
-  submitted: string[] = [];
-  journal: string | null = null;
-  transcript: string[] = [];
-  logs: string[] = [];
-  calls: { path: string; body: any; at: number }[] = [];
-  inFlightPolls = 0;
-  maxInFlightPolls = 0;
-  dropNext: string | undefined;
-  clock = 1_000_000;
-  socketPath: string;
-  constructor(socketPath: string) {
-    this.socketPath = socketPath;
-  }
-  host(): Host {
-    return {
-      call: async (path, body) => {
-        this.calls.push({ path, body: JSON.parse(body), at: this.clock });
-        const isPoll = path === "/v1/poll";
-        if (isPoll) this.maxInFlightPolls = Math.max(this.maxInFlightPolls, ++this.inFlightPolls);
-        try {
-          return await rawCall(this.socketPath, path, body);
-        } finally {
-          if (isPoll) this.inFlightPolls--;
-        }
-      },
-      submit: async (text) => {
-        if (this.dropNext !== undefined) {
-          const dropped = this.dropNext;
-          this.dropNext = undefined;
-          return { dropped };
-        }
-        this.submitted.push(text);
-        this.transcript.push(text);
-        return {};
-      },
-      now: () => this.clock,
-      log: (line) => this.logs.push(line),
-      loadJournal: async () => this.journal,
-      saveJournal: async (text) => {
-        this.journal = text;
-      },
-      transcriptHas: async (needle) => this.transcript.some((t) => t.includes(needle)),
-    };
-  }
-  ops(op: string) {
-    return this.calls.filter((c) => c.path === `/v1/${op}`).map((c) => c.body);
-  }
-}
-
-let server: StubServer;
-let comms: StubComms;
-let socketPath: string;
-
-async function startStub(existing?: StubComms) {
-  comms = existing ?? StubComms.fromFixture(fixture);
-  server = await startStubServer({ socketPath, comms, pollWaitMs: 300 });
-}
-
-beforeEach(async () => {
-  const dir = join(root, `s${++n}`);
-  await mkdir(dir, { recursive: true });
-  socketPath = join(dir, "agent-comms", "connector.sock");
-  await startStub();
-});
-afterEach(() => server.close());
-
-const post = (body: object) => rawCall(socketPath, "/stub/post", JSON.stringify(body)).then((r) => JSON.parse(r.text));
-const state = () => rawCall(socketPath, "/stub/state", "", "GET").then((r) => JSON.parse(r.text));
-const until = async (test: () => boolean | Promise<boolean>, what: string, ms = 5_000) => {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (await test()) return;
-    await new Promise((r) => setTimeout(r, 20));
-  }
-  assert.fail(`timed out waiting for ${what}`);
-};
-
-function makeMod(session: FakeSession, sessionId = "sess-1", participant = "mod-a") {
-  return new CommsMod(session.host(), { participant, sessionId, cwd: "/tmp", pluginName: "agent-comms", pollWaitMs: 200 });
-}
-
-async function pumpUntil(mod: CommsMod, test: () => boolean | Promise<boolean>, what: string) {
-  await until(async () => {
-    await mod.tick();
-    return test();
-  }, what);
-}
-
-const wrap = (text: string) => `The agent-comms plugin sent a message:\n${text}\n\nThis is how Claude Code surfaces a prompt a plugin submits between turns — it starts this turn in the user's place. Address the message above.`;
-
-async function deliveryState(id: string) {
-  const s = await state();
-  return s.record.deliveries.find((d: any) => d.id === id)?.status?.state;
-}
+const ctx = useStub("comms-mod-test-");
+const { post, deliveryState } = stubOps(ctx);
 
 describe("CommsMod against the stub", () => {
   it("registers, submits a delivery, reports delivered and the collected answer", async () => {
-    const session = new FakeSession(socketPath);
+    const session = new FakeSession(ctx.socketPath);
     const mod = makeMod(session);
     await mod.start();
     assert.equal(session.ops("register")[0].participant, "mod-a");
@@ -151,7 +31,7 @@ describe("CommsMod against the stub", () => {
   });
 
   it("reports other input in our turn as ambiguous and tells the agent to comms reply", async () => {
-    const session = new FakeSession(socketPath);
+    const session = new FakeSession(ctx.socketPath);
     const mod = makeMod(session);
     await mod.start();
     const sent = await post({ sender: "mod-b", to: ["mod-a"], text: "run the tests" });
@@ -175,7 +55,7 @@ describe("CommsMod against the stub", () => {
   });
 
   it("an answer delivery is delivered and nothing its turn does is collected", async () => {
-    const session = new FakeSession(socketPath);
+    const session = new FakeSession(ctx.socketPath);
     const mod = makeMod(session);
     await mod.start();
     const req = await post({ sender: "mod-a", to: ["mod-b"], text: "ping" });
@@ -189,20 +69,20 @@ describe("CommsMod against the stub", () => {
   });
 
   it("dedupes a delivery handed out twice", async () => {
-    const session = new FakeSession(socketPath);
+    const session = new FakeSession(ctx.socketPath);
     const mod = makeMod(session);
     await mod.start();
     await post({ sender: "mod-b", to: ["mod-a"], text: "once" });
     await pumpUntil(mod, () => session.submitted.length === 1, "the submission");
     // The same delivery handed out again (a replayed poll) is not submitted twice.
-    const d = comms.record.deliveries[0]!;
-    await (mod as any).handle({ type: "deliver", delivery: (comms as any).render(d) });
+    const d = ctx.comms.record.deliveries[0]!;
+    await (mod as any).handle({ type: "deliver", delivery: (ctx.comms as any).render(d) });
     await mod.tick();
     assert.equal(session.submitted.length, 1);
   });
 
   it("never overlaps polls when the connector is slow", async () => {
-    const session = new FakeSession(socketPath);
+    const session = new FakeSession(ctx.socketPath);
     const mod = new CommsMod(session.host(), { participant: "mod-a", sessionId: "sess-1", cwd: "/tmp", pluginName: "agent-comms", pollWaitMs: 1_000 });
     await mod.start();
     for (let i = 0; i < 10; i++) {
@@ -215,7 +95,7 @@ describe("CommsMod against the stub", () => {
   });
 
   it("re-registers after the connector restarts and answers the restart check without re-running", async () => {
-    const session = new FakeSession(socketPath);
+    const session = new FakeSession(ctx.socketPath);
     const mod = makeMod(session);
     await mod.start();
     const sent = await post({ sender: "mod-b", to: ["mod-a"], text: "long job" });
@@ -225,8 +105,7 @@ describe("CommsMod against the stub", () => {
     await pumpUntil(mod, () => session.ops("delivered").length === 1, "delivered");
 
     // Restart: same record, sessions gone. The delivery comes back as a check.
-    await server.close();
-    await startStub(new StubComms(comms.record));
+    await ctx.restart(new StubComms(ctx.comms.record));
 
     mod.onTurnComplete({ turnId: "turn-1", reason: "answer", answer: "finished" });
     await pumpUntil(mod, () => session.ops("register").length >= 2 || session.ops("outcome").length >= 1, "re-registration or outcome");
@@ -235,7 +114,7 @@ describe("CommsMod against the stub", () => {
   });
 
   it("answers a check for something it never saw with no, and for a transcript-only one with unknown", async () => {
-    const session = new FakeSession(socketPath);
+    const session = new FakeSession(ctx.socketPath);
     const mod = makeMod(session);
     await mod.start();
     await (mod as any).check({ deliveryId: "d_x", messageId: "m_x", state: "claimed" });
@@ -250,9 +129,8 @@ describe("CommsMod against the stub", () => {
   });
 
   it("a later session of the same participant knows what an earlier one submitted", async () => {
-    await server.close();
-    await startStub();
-    const first = new FakeSession(socketPath);
+    await ctx.restart();
+    const first = new FakeSession(ctx.socketPath);
     const mod1 = makeMod(first, "sess-1");
     await mod1.start();
     const sent = await post({ sender: "mod-b", to: ["mod-a"], text: "before a crash" });
@@ -260,7 +138,7 @@ describe("CommsMod against the stub", () => {
     mod1.onTurnStart("turn-1", wrap(first.submitted[0]!));
     await pumpUntil(mod1, () => first.ops("delivered").length === 1, "delivered");
 
-    const second = new FakeSession(socketPath);
+    const second = new FakeSession(ctx.socketPath);
     second.journal = first.journal;
     const mod2 = makeMod(second, "sess-2");
     await mod2.start();
@@ -271,10 +149,10 @@ describe("CommsMod against the stub", () => {
   });
 
   it("stops polling when a newer session supersedes it", async () => {
-    const a = new FakeSession(socketPath);
+    const a = new FakeSession(ctx.socketPath);
     const mod1 = makeMod(a, "sess-1");
     await mod1.start();
-    const b = new FakeSession(socketPath);
+    const b = new FakeSession(ctx.socketPath);
     const mod2 = makeMod(b, "sess-2");
     await mod2.start();
     await mod1.tick();
@@ -282,7 +160,7 @@ describe("CommsMod against the stub", () => {
   });
 
   it("reports a prompt a hook dropped as failed", async () => {
-    const session = new FakeSession(socketPath);
+    const session = new FakeSession(ctx.socketPath);
     session.dropNext = "blocked by policy";
     const mod = makeMod(session);
     await mod.start();
