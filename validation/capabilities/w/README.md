@@ -1,10 +1,11 @@
 # W: the web view's registry, inbox, reminders and alerts (Hazel)
 
-Against R0 (main 3f2d4dc). Raw evidence:
+Against R0 (main 3f2d4dc) and Cedar's review changes (ff55c4d: alert conversation ids, reminders' last fire and skip). Raw evidence:
 
 - `view-tests-before.txt`: the 14 view-logic tests failing on the stub module (commit 9610657).
 - `view-tests-2-before.txt`: two more failing (live staleness, inbox labels) before their helpers (1526452).
-- `view-tests-after.txt`: 16 of 16 pass, typecheck clean, production build.
+- `view-tests-3-before.txt`: the last-fire/skip test failing before its helper (2cde8c1).
+- `view-tests-after.txt`: 17 of 17 pass, typecheck clean.
 - `live-r0/`: `live-check.mjs` in headless Chrome against my dev server (127.0.0.1:3791, my worktree)
   and the local Convex deployment: `output.txt` (every step logged, ALL PASS) and screenshots.
   - Registry: term-a's description and duties set through `registry.setProfile` and shown; an

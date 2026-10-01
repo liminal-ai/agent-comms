@@ -128,7 +128,7 @@ function Main({ token }: { token: string }) {
           (directory ? <Registry token={token} directory={directory} now={now} promote={<Promote token={token} machines={directory.machines.map((m) => m.machineId)} />} /> : <p className="muted">Loading…</p>)}
         {side === "inbox" && (isPerson ? <Inbox token={token} human={as} onOpen={open} /> : <p className="muted">Pick a person to post as; the inbox is theirs.</p>)}
         {side === "reminders" && <Reminders token={token} as={as} now={now} />}
-        {side === "alerts" && <Alerts token={token} alerts={alerts?.alerts} now={now} />}
+        {side === "alerts" && <Alerts token={token} alerts={alerts?.alerts} now={now} onOpen={open} />}
       </section>
       <section className="pane conversations">
         {conversations && directory ? (

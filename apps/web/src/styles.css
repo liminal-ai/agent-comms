@@ -133,6 +133,7 @@ h3.group { margin-top: 14px; color: var(--muted); font-weight: 600; }
 .history li { padding: 2px 0; }
 .alerts li.open strong { color: var(--bad); }
 .alerts li.resolved { opacity: 0.7; }
+.alerts .actions { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 .row { display: flex; gap: 8px; }
 .row label { flex: 1; }
 details summary { cursor: pointer; margin: 6px 0; }

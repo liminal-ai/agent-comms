@@ -19,6 +19,7 @@ import {
   presenceView,
   type ReminderForm,
   reminderActions,
+  reminderLast,
   reminderLine,
   scheduleText,
 } from "./lib/view.ts";
@@ -232,6 +233,7 @@ export function Reminders({ token, as, now }: { token: string; as: string; now: 
         {reminderLine(r, now)} · set by @{r.createdBy.name}
         {r.reportTo && ` · reports to @${r.reportTo.name}`} · expires {clockTime(r.expiresAt)}
       </div>
+      {reminderLast(r, now) && <div className="small muted last">{reminderLast(r, now)}</div>}
       <div className="text small">{r.text}</div>
       <div className="actions">
         {reminderActions(r.state).map((a) => (
@@ -355,7 +357,7 @@ function NewReminder({ token, as }: { token: string; as: string }) {
 // ---------------------------------------------------------------------------
 // Alerts
 
-export function Alerts({ token, alerts, now }: { token: string; alerts: Alert[] | undefined; now: number }) {
+export function Alerts({ token, alerts, now, onOpen }: { token: string; alerts: Alert[] | undefined; now: number; onOpen: (conversationId: string) => void }) {
   if (!alerts) return <p className="muted">Loading…</p>;
   const open = alerts.filter((a) => a.resolvedAt === undefined);
   const resolved = alerts.filter((a) => a.resolvedAt !== undefined);
@@ -368,6 +370,10 @@ export function Alerts({ token, alerts, now }: { token: string; alerts: Alert[] 
       <div className="small muted">
         to @{a.owner.name} · opened {clockTime(a.openedAt)}
         {a.resolvedAt !== undefined && ` · resolved ${clockTime(a.resolvedAt)}`}
+      </div>
+      <div className="actions">
+        <button onClick={() => onOpen(a.conversationId)}>Open alert</button>
+        {a.subject.conversationId && <button onClick={() => onOpen(a.subject.conversationId!)}>Open the delivery's conversation</button>}
       </div>
     </li>
   );

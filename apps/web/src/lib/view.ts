@@ -7,6 +7,7 @@ import {
   type AlertCause,
   type AlertConfig,
   formatDuration,
+  formatSchedule,
   MAX_DESCRIPTION_CHARS,
   MAX_DUTIES,
   MAX_DUTY_CHARS,
@@ -126,7 +127,8 @@ export const ACTION_LABEL: Record<ReminderAction, string> = {
 
 /** "every 30m", "once at 14:30", plus its idle condition and fire limit. */
 export function scheduleText(r: Reminder): string {
-  const parts = [r.schedule.everyMs !== undefined ? `every ${formatDuration(r.schedule.everyMs)}` : `once at ${clockTime(r.schedule.at ?? 0)}`];
+  // The same words as the fire's "Reminder:" line (formatSchedule).
+  const parts = [formatSchedule(r.schedule)];
   if (r.idleForMs !== undefined && r.idleForMs > 0) parts.push(`once @${(r.watch ?? r.target).name} has been idle ${formatDuration(r.idleForMs)}`);
   if (r.max !== undefined) parts.push(`at most ${plural(r.max, "fire")}`);
   return parts.join(", ");
@@ -139,6 +141,20 @@ export function reminderLine(r: Reminder, now: number): string {
   const parts = [state, fires];
   if (r.state === "active" && r.nextFireAt !== undefined) parts.push(r.nextFireAt > now ? `next in ${span(r.nextFireAt - now)}` : "due now");
   return parts.join(" · ");
+}
+
+/**
+ * The last thing that happened, for the list: the last fire's delivery state, or
+ * the last skip if it's newer (with the fire it was waiting on). Null if neither.
+ */
+export function reminderLast(r: Reminder, now: number): string | null {
+  const fire = r.lastFire ? `last fire ${span(now - r.lastFire.firedAt)} ago: ${r.lastFire.deliveryState}` : null;
+  const skip = r.lastSkip;
+  if (skip && (!r.lastFire || skip.at > r.lastFire.firedAt)) {
+    const why = `${skip.reason.replace(/-/g, " ")}${skip.detail ? `, ${skip.detail}` : ""}`;
+    return `skipped ${span(now - skip.at)} ago: ${why}${fire ? ` (${fire})` : ""}`;
+  }
+  return fire;
 }
 
 export interface ReminderForm {
