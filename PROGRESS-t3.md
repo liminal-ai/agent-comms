@@ -59,4 +59,32 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
   to `comms reply` when background work from an already-answered request finishes.
 - Needs Cedar: merge branch hazel; regenerate `pnpm-lock.yaml` for the new package (root file,
   not committed by me); decisions on the three contract edges from Part C.
-- Next: run the same checks against the real connector, then M6 and the shared acceptance check.
+- Against the real connector: every check passes, including SIGKILL recovery (VALIDATION.md).
+
+## Shared acceptance check (local) — passes in full 2026-09-30
+
+- Write-up: validation/acceptance/README.md (Cedar, main 9de3a0c); my Claude Code rows checked,
+  no corrections. Incident recorded there: a test terminal under /srv/agents/hazel loaded my
+  CLAUDE.md and tried lhc-agent (nothing sent). Test terminals now run in /tmp/hazel-mod-work
+  with a PATH holding only comms and node.
+- Next: M6 cloud checkpoint, waiting on Lee.
+
+## Fix pass 1 (docs/03-fix-pass.md)
+
+### Section 1, mod items 1.5-1.9 — done 2026-10-01
+- Failing tests first: 12c9bd3 (`test/fix-pass-1.test.ts`, `test/fix-pass-1-mod.test.ts`, named by item;
+  12 of 13 failed on that commit). Fixes: a280186. 35 tests pass, typecheck clean, plugin validates.
+- Linking by identity uses shapes captured live on 2.1.286: notification `<task-id>`/`<tool-use-id>`,
+  Bash `backgroundTaskId` and Agent `agentId` in tool results, `agent.spawn` `parentAgentId`.
+- Found while doing it: a background helper's hand-back arrives as a `peer` prompt
+  (`<agent-message from="<agentId>">`). It's linked to our turn only if that agent is ours; otherwise other input.
+- 1.9 needed no protocol change: the report keeps 49 entries plus `+N more`.
+
+### Section 3, my items — done 2026-10-01
+- Mod 3.8, 3.8a, 3.9, 3.10: 9db5e24. 39 mod tests pass. Live: folder 0700 and files 0600 after
+  loosening; the log kept across sessions; deliveries still collected.
+- T3 3.11-3.15: t3code-v044 `lhc-provider` 43c935261c and 5790b946b2. Evidence in
+  `validation/fix-pass-1/` there. 3780 restarted on it; LHC recall still works from the same store,
+  now derived from the T3 home in code.
+- Depends on Cedar 3.1: the mod's start deadline only surfaces as `uncertain` if the connector sends a
+  check for a Claude Code delivery that never reports `delivered`. Asked (relay ff7d6d1b).

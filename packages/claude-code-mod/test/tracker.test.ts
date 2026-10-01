@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { hasOtherPrompt, SETTLE_MS, Tracker } from "../hooks/core/tracker.ts";
+import { hasOtherPrompt, Tracker } from "../hooks/core/tracker.ts";
 
 const HEADER = "[agent-comms v1] delivery=d_1 message=m_1 kind=request";
 const RENDERED = `${HEADER}\nFrom: @reed (agent), via agent-comms\n> say OK`;
@@ -59,57 +59,39 @@ describe("Tracker", () => {
     assert.deepEqual(outcome, { type: "outcome", deliveryId: "d_1", turnId: "t1", outcome: { outcome: "replied", answer: "final" } });
   });
 
-  it("a task notification for our own tool call or subagent keeps the reply collectable", () => {
+  it("a task notification for our own background shell or subagent keeps the reply collectable", () => {
     const t = started();
     t.turnStart("t1", wrap(RENDERED), 1);
-    t.toolCall({ toolUseId: "toolu_bash" });
-    t.toolCall({ toolUseId: "toolu_x", agentId: "agent_7" });
-    t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "<task done>", at: 2 });
+    t.toolCall({ toolUseId: "toolu_bash", tool: "Bash", background: true });
+    t.toolResult({ toolUseId: "toolu_bash", result: { backgroundTaskId: "shell_1" } });
+    t.toolCall({ toolUseId: "toolu_agent", tool: "Agent" });
+    t.agentSpawned({ agentId: "agent_7", engine: true });
+    t.toolResult({ toolUseId: "toolu_agent", result: { agentId: "agent_7" } });
+    t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "<task-notification>\n<task-id>shell_1</task-id>\n<tool-use-id>toolu_bash</tool-use-id>\n</task-notification>", at: 2 });
     t.taskRow({ id: "shell_1", toolUseId: "toolu_bash" });
     t.taskRow({ id: "shell_1", toolUseId: "toolu_bash" });
-    t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "<agent done>", at: 3 });
+    t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "<task-notification>\n<task-id>agent_7</task-id>\n</task-notification>", at: 3 });
     t.taskRow({ id: "agent_7" });
     const [outcome] = t.turnComplete({ turnId: "t1", reason: "answer", answer: "done", at: 4 });
     assert.equal(outcome?.type === "outcome" && outcome.outcome.outcome, "replied");
-  });
-
-  it("a row drawn twice counts once, so it can't cover for an unlinked notification", () => {
-    const t = started();
-    t.turnStart("t1", wrap(RENDERED), 1);
-    t.toolCall({ toolUseId: "toolu_bash" });
-    t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "ours", at: 2 });
-    t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "someone else's", at: 2 });
-    t.taskRow({ id: "shell_1", toolUseId: "toolu_bash" });
-    t.taskRow({ id: "shell_1", toolUseId: "toolu_bash" });
-    const [outcome] = t.turnComplete({ turnId: "t1", reason: "answer", answer: "done", at: 3 });
-    assert.equal(outcome?.type === "outcome" && outcome.outcome.outcome, "ambiguous");
   });
 
   it("an unlinked task notification makes it ambiguous", () => {
     const t = started();
     t.turnStart("t1", wrap(RENDERED), 1);
     t.toolCall({ toolUseId: "toolu_bash" });
-    t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "<someone else's task>", at: 2 });
+    t.promptSubmit({ turnId: "t1", origin: { kind: "task-notification" }, text: "<task-notification>\n<task-id>shell_9</task-id>\n<tool-use-id>toolu_other</tool-use-id>\n</task-notification>", at: 2 });
     t.taskRow({ id: "shell_9", toolUseId: "toolu_other" });
     const [outcome] = t.turnComplete({ turnId: "t1", reason: "answer", answer: "done", at: 3 });
-    assert.deepEqual(outcome?.type === "outcome" && outcome.outcome, { outcome: "ambiguous", entered: [{ origin: "task-notification", at: 3 }] });
+    assert.deepEqual(outcome?.type === "outcome" && outcome.outcome, { outcome: "ambiguous", entered: [{ origin: "task-notification", at: 2 }] });
   });
 
-  it("a prompt typed during our turn is ambiguous unless the next turn starts with it", () => {
-    const entered = started();
-    entered.turnStart("t1", wrap(RENDERED), 1);
-    entered.promptSubmit({ turnId: "t1", origin: { kind: "composer" }, text: "also check the logs", at: 2 });
-    assert.deepEqual(entered.turnComplete({ turnId: "t1", reason: "answer", answer: "done", at: 3 }), []);
-    assert.deepEqual(entered.tick(3 + SETTLE_MS - 1), []);
-    const [late] = entered.tick(3 + SETTLE_MS);
-    assert.deepEqual(late?.type === "outcome" && late.outcome, { outcome: "ambiguous", entered: [{ origin: "composer", at: 2 }] });
-
-    const queued = started();
-    queued.turnStart("t1", wrap(RENDERED), 1);
-    queued.promptSubmit({ turnId: "t1", origin: { kind: "composer" }, text: "also check the logs", at: 2 });
-    queued.turnComplete({ turnId: "t1", reason: "answer", answer: "done", at: 3 });
-    const [next] = queued.turnStart("t2", "also check the logs", 4);
-    assert.deepEqual(next?.type === "outcome" && next.outcome, { outcome: "replied", answer: "done" });
+  it("a prompt typed during our turn is ambiguous", () => {
+    const t = started();
+    t.turnStart("t1", wrap(RENDERED), 1);
+    t.promptSubmit({ turnId: "t1", origin: { kind: "composer" }, text: "also check the logs", at: 2 });
+    const [outcome] = t.turnComplete({ turnId: "t1", reason: "answer", answer: "done", at: 3 });
+    assert.deepEqual(outcome?.type === "outcome" && outcome.outcome, { outcome: "ambiguous", entered: [{ origin: "composer", at: 2 }] });
   });
 
   it("input typed during another turn, or while idle, doesn't touch ours", () => {
@@ -128,9 +110,10 @@ describe("Tracker", () => {
     t.toolCall({ toolUseId: "toolu_bg", background: true });
     t.toolCall({ toolUseId: "toolu_fg" });
     t.turnComplete({ turnId: "t1", reason: "answer", answer: "started it", at: 2 });
-    assert.equal(t.followUpFor("<task-notification><tool-use-id>toolu_bg</tool-use-id>")?.messageId, "m_1");
-    assert.equal(t.followUpFor("<tool-use-id>toolu_fg</tool-use-id>"), undefined);
-    assert.equal(t.followUpFor("<tool-use-id>toolu_other</tool-use-id>"), undefined);
+    const note = (id: string) => `<task-notification>\n<task-id>x</task-id>\n<tool-use-id>${id}</tool-use-id>\n</task-notification>`;
+    assert.equal(t.followUpFor(note("toolu_bg"))?.messageId, "m_1");
+    assert.equal(t.followUpFor(note("toolu_fg")), undefined);
+    assert.equal(t.followUpFor(note("toolu_other")), undefined);
   });
 
   it("a turn that merged someone else's queued prompt with ours is ambiguous", () => {
