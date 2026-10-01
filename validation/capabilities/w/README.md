@@ -19,3 +19,9 @@ Against R0 (main 3f2d4dc) and Cedar's review changes (ff55c4d: alert conversatio
 Not yet checkable live, waiting on Cedar: system participants in the registry (created at deploy, R1/R3),
 inbox rows and marking them read (post() writes them in R1), alerts in the list (R4). The live
 acceptance (`docs/04-capabilities.md` 6, 9, 11) covers them once those land.
+
+Promotion for R1's API (Cedar's heads-up): the promote form now has an owner picker (people only, default
+@lee) and sends `owner`, which today's `directory.promote` already accepts as an optional string, so it
+works before and after R1. Reserved names are refused in the form. Failing tests first (58ece7d,
+`view-tests-4-before.txt`); 19 of 19 pass. Live: `promote-check.mjs` → `live-r0/promote-output.txt` and
+`7-promote-owner.png` (the owner list, and @reminders refused; nothing promoted).

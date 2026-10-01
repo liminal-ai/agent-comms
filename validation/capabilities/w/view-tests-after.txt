@@ -1,39 +1,43 @@
 $ node --test 'test/**/*.test.ts'
 ▶ W registry
-  ✔ W registry: an idle agent shows how long it has been idle (1.092767ms)
-  ✔ W registry: a stale machine is never shown as idle, whatever was last written (12.286128ms)
-  ✔ W registry: busy, offline, people and system participants (0.194491ms)
-  ✔ W registry: a profile edit is one description line and one duty per line, blanks dropped (0.310491ms)
-  ✔ W registry: a profile edit over the protocol's limits is refused before it's sent (0.174701ms)
-✔ W registry (14.979409ms)
+  ✔ W registry: an idle agent shows how long it has been idle (1.097622ms)
+  ✔ W registry: a stale machine is never shown as idle, whatever was last written (12.348235ms)
+  ✔ W registry: busy, offline, people and system participants (0.194709ms)
+  ✔ W registry: a profile edit is one description line and one duty per line, blanks dropped (0.314439ms)
+  ✔ W registry: a profile edit over the protocol's limits is refused before it's sent (0.173941ms)
+✔ W registry (15.034892ms)
+▶ W registry, promotion (R1 API)
+  ✔ W promote: an agent is promoted with its owner (a person), as R1's directory.promote requires (0.236653ms)
+  ✔ W promote: reserved names, bad names, a missing thread id or machine, and an owner who isn't a person are refused (0.142693ms)
+✔ W registry, promotion (R1 API) (0.537594ms)
 ▶ W registry, live
-  ✔ W registry: a machine that stops heartbeating turns stale on the clock, not only when Convex next writes (0.182507ms)
-✔ W registry, live (0.282682ms)
+  ✔ W registry: a machine that stops heartbeating turns stale on the clock, not only when Convex next writes (0.185643ms)
+✔ W registry, live (0.313198ms)
 ▶ W reminders
-  ✔ W reminders: the controls offered follow the state; ended reminders have none (0.239331ms)
-  ✔ W reminders: the schedule reads like the rendering (every 30m, once at a time), with its conditions (0.362091ms)
-  ✔ W reminders: the status line says the state, fires, next fire and why it's blocked (0.186493ms)
-  ✔ W reminders: the list shows the last fire's delivery state and the last skip, whichever is newer (0.235225ms)
-  ✔ W reminders: the create form becomes reminders.create arguments (0.428742ms)
-  ✔ W reminders: the create form refuses what Convex would (both or neither schedule, under a minute, past, too long) (0.196011ms)
-✔ W reminders (1.940128ms)
+  ✔ W reminders: the controls offered follow the state; ended reminders have none (0.207293ms)
+  ✔ W reminders: the schedule reads like the rendering (every 30m, once at a time), with its conditions (0.382708ms)
+  ✔ W reminders: the status line says the state, fires, next fire and why it's blocked (0.175172ms)
+  ✔ W reminders: the list shows the last fire's delivery state and the last skip, whichever is newer (0.160909ms)
+  ✔ W reminders: the create form becomes reminders.create arguments (0.38713ms)
+  ✔ W reminders: the create form refuses what Convex would (both or neither schedule, under a minute, past, too long) (0.174714ms)
+✔ W reminders (1.706314ms)
 ▶ W inbox
-  ✔ W inbox: the badge and the page title carry the unread count (0.119832ms)
-✔ W inbox (0.18333ms)
+  ✔ W inbox: the badge and the page title carry the unread count (0.094468ms)
+✔ W inbox (0.162992ms)
 ▶ W inbox, kinds
-  ✔ W inbox: messages from system participants are labelled by what they are (0.162995ms)
-✔ W inbox, kinds (0.307783ms)
+  ✔ W inbox: messages from system participants are labelled by what they are (0.13598ms)
+✔ W inbox, kinds (0.189547ms)
 ▶ W alerts
-  ✔ W alerts: each cause has a plain label, and resolved incidents say so (0.222626ms)
-  ✔ W alerts: the badge counts open incidents only (0.110873ms)
-  ✔ W alerts: thresholds are edited in minutes and checked against Convex's ranges (0.171822ms)
-✔ W alerts (0.603743ms)
-ℹ tests 17
-ℹ suites 6
-ℹ pass 17
+  ✔ W alerts: each cause has a plain label, and resolved incidents say so (0.209111ms)
+  ✔ W alerts: the badge counts open incidents only (0.109438ms)
+  ✔ W alerts: thresholds are edited in minutes and checked against Convex's ranges (0.170528ms)
+✔ W alerts (0.585352ms)
+ℹ tests 19
+ℹ suites 7
+ℹ pass 19
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 115.68374
+ℹ duration_ms 114.61736
 $ tsc -p tsconfig.json

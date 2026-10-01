@@ -21,6 +21,7 @@ import {
   type MessageEnvelope,
   PRESENCE_STALE_MS,
   type ReminderState,
+  RESERVED_NAMES,
   type RegistryEntry,
 } from "@agent-comms/protocol";
 
@@ -84,6 +85,31 @@ export function liveStale(e: RegistryEntry, machineSeen: number | null, now: num
   if (!e.presence) return e;
   const stale = e.presence.stale || machineSeen === null || now - machineSeen >= PRESENCE_STALE_MS;
   return stale === e.presence.stale ? e : { ...e, presence: { ...e.presence, stale } };
+}
+
+export interface PromotionForm {
+  name: string;
+  harness: "t3" | "claude-code";
+  machine: string;
+  /** The T3 thread id; ignored for a Claude Code terminal (its locator is its name). */
+  locator: string;
+  /** A person's name. */
+  owner: string;
+}
+
+/** The promote form as `directory.promote` arguments (R1: an agent needs an owner; reserved names are refused). */
+export function parsePromotion(
+  f: PromotionForm,
+  people: readonly string[],
+): Parsed<{ name: string; kind: "agent"; home: { machine: string; harness: "t3" | "claude-code"; locator: string }; owner: string }> {
+  if (!NAME_PATTERN.test(f.name)) return { ok: false, error: "Names are lowercase letters, digits, - and _." };
+  if (RESERVED_NAMES.includes(f.name)) return { ok: false, error: `@${f.name} is reserved.` };
+  const machine = f.machine.trim();
+  if (!machine) return { ok: false, error: "Give the machine it lives on." };
+  const locator = f.harness === "claude-code" ? f.name : f.locator.trim();
+  if (!locator) return { ok: false, error: "Give the T3 thread id." };
+  if (!people.includes(f.owner)) return { ok: false, error: "Pick its owner (a person)." };
+  return { ok: true, value: { name: f.name, kind: "agent", home: { machine, harness: f.harness, locator }, owner: f.owner } };
 }
 
 /** The profile editor: one description line, one duty per line (blank lines dropped). Empty clears. */

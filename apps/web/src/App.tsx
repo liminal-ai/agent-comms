@@ -3,12 +3,11 @@
 // its delivery states, and a composer. Everything is a live Convex subscription;
 // the dev admin token is kept in localStorage.
 
-import { NAME_PATTERN } from "@agent-comms/protocol";
 import { useMutation, useQuery } from "convex/react";
 import { Component, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Alerts, Inbox, Registry, Reminders } from "./Capabilities.tsx";
-import { alertsBadge, inboxBadge, titleWithUnread } from "./lib/view.ts";
+import { alertsBadge, inboxBadge, parsePromotion, titleWithUnread } from "./lib/view.ts";
 
 const TOKEN_KEY = "agent-comms.adminToken";
 const AS_KEY = "agent-comms.as";
@@ -125,7 +124,7 @@ function Main({ token }: { token: string }) {
           ))}
         </div>
         {side === "agents" &&
-          (directory ? <Registry token={token} directory={directory} now={now} promote={<Promote token={token} machines={directory.machines.map((m) => m.machineId)} />} /> : <p className="muted">Loading…</p>)}
+          (directory ? <Registry token={token} directory={directory} now={now} promote={<Promote token={token} machines={directory.machines.map((m) => m.machineId)} people={people.map((p) => p.name)} />} /> : <p className="muted">Loading…</p>)}
         {side === "inbox" && (isPerson ? <Inbox token={token} human={as} onOpen={open} /> : <p className="muted">Pick a person to post as; the inbox is theirs.</p>)}
         {side === "reminders" && <Reminders token={token} as={as} now={now} />}
         {side === "alerts" && <Alerts token={token} alerts={alerts?.alerts} now={now} onOpen={open} />}
@@ -158,30 +157,34 @@ function Main({ token }: { token: string }) {
 // ---------------------------------------------------------------------------
 // Promotion (shown under the agent registry)
 
-function Promote({ token, machines }: { token: string; machines: string[] }) {
+function Promote({ token, machines, people }: { token: string; machines: string[]; people: string[] }) {
   const promote = useMutation(api.directory.promote);
   const [name, setName] = useState("");
   const [harness, setHarness] = useState<"t3" | "claude-code">("t3");
   const [machine, setMachine] = useState(machines[0] ?? "");
   const [locator, setLocator] = useState("");
+  const [owner, setOwner] = useState(people.includes("lee") ? "lee" : people[0] ?? "");
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   useEffect(() => {
     if (!machine && machines[0]) setMachine(machines[0]);
   }, [machines, machine]);
+  useEffect(() => {
+    if (!people.includes(owner) && people.length > 0) setOwner(people.includes("lee") ? "lee" : people[0]!);
+  }, [people, owner]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!NAME_PATTERN.test(name)) return setNote({ ok: false, text: "Names are lowercase letters, digits, - and _." });
-    const home = { machine, harness, locator: harness === "claude-code" ? name : locator.trim() };
-    if (harness === "t3" && !home.locator) return setNote({ ok: false, text: "Give the T3 thread id." });
-    promote({ adminToken: token, name, kind: "agent", home })
+    const parsed = parsePromotion({ name, harness, machine, locator, owner }, people);
+    if (!parsed.ok) return setNote({ ok: false, text: parsed.error });
+    const { home } = parsed.value;
+    promote({ adminToken: token, ...parsed.value })
       .then(() => {
         setNote({
           ok: true,
           text:
             harness === "claude-code"
-              ? `@${name} promoted. Start its terminal with AGENT_COMMS_PARTICIPANT=${name}.`
-              : `@${name} promoted; thread ${home.locator} on ${machine}.`,
+              ? `@${name} promoted, owned by @${owner}. Start its terminal with AGENT_COMMS_PARTICIPANT=${name}.`
+              : `@${name} promoted, owned by @${owner}; thread ${home.locator} on ${home.machine}.`,
         });
         setName("");
         setLocator("");
@@ -212,6 +215,12 @@ function Promote({ token, machines }: { token: string; machines: string[] }) {
           T3 thread id <input value={locator} onChange={(e) => setLocator(e.target.value)} />
         </label>
       )}
+      <label>
+        Owner
+        <select value={owner} onChange={(e) => setOwner(e.target.value)}>
+          {people.map((p) => <option key={p} value={p}>@{p}</option>)}
+        </select>
+      </label>
       <button type="submit">Promote</button>
       {note && <p className={note.ok ? "ok" : "error"}>{note.text}</p>}
     </form>
