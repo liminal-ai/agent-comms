@@ -1,0 +1,5 @@
+case: ten-requests-sonnet
+started: 2026-10-01T13:52:35Z
+ended: 2026-10-01T13:53:49Z
+exit: 0
+command: /srv/agents/hazel/bin/ten-real cca

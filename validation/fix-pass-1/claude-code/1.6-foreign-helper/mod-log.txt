@@ -1,0 +1,15 @@
+2026-10-01T13:43:06.617Z presence: unavailable: agent-comms: $.http.fetch(http://connector/v1/presence) over /run/user/1000/agent-comms/connector.sock failed: ECONNREFUSED: ECONNREFUSED: Was there a typo in the url or port?; will retry
+2026-10-01T13:43:07.239Z presence: unavailable: agent-comms: $.http.fetch(http://connector/v1/presence) over /run/user/1000/agent-comms/connector.sock failed: ECONNREFUSED: ECONNREFUSED: Was there a typo in the url or port?; will retry
+2026-10-01T13:43:07.240Z poll: unavailable: agent-comms: $.http.fetch(http://connector/v1/poll) over /run/user/1000/agent-comms/connector.sock failed: ECONNREFUSED: ECONNREFUSED: Was there a typo in the url or port?
+2026-10-01T13:43:09.245Z presence: unavailable: agent-comms: $.http.fetch(http://connector/v1/presence) over /run/user/1000/agent-comms/connector.sock failed: ECONNREFUSED: ECONNREFUSED: Was there a typo in the url or port?; will retry
+2026-10-01T13:43:09.246Z poll: unavailable: agent-comms: $.http.fetch(http://connector/v1/poll) over /run/user/1000/agent-comms/connector.sock failed: ECONNREFUSED: ECONNREFUSED: Was there a typo in the url or port?
+2026-10-01T13:43:09.811Z registered as @cc-a
+2026-10-01T13:43:13.869Z j97e2c255svht9803nhfwa8z518femcn: delivered
+2026-10-01T13:43:15.300Z j97e2c255svht9803nhfwa8z518femcn: tool Monitor toolu_016atME9dHAq5aMSwKudfq6w in subagent aaf8aaf48969c07fa
+2026-10-01T13:43:16.658Z j97e2c255svht9803nhfwa8z518femcn: tool Bash toolu_01VBjNkByd6D6PYZqNLcyM3q in our turn
+2026-10-01T13:43:17.203Z j97e2c255svht9803nhfwa8z518femcn: tool Read toolu_01MCQGrYgYRuR5ynrxsjkBwt in subagent aaf8aaf48969c07fa
+2026-10-01T13:43:19.785Z j97e2c255svht9803nhfwa8z518femcn: tool Bash toolu_01NWJkMcCvHXNWn3kXSTff2K in subagent aaf8aaf48969c07fa
+2026-10-01T13:44:00.532Z j97e2c255svht9803nhfwa8z518femcn: tool SubagentHandback toolu_01Y5YYLZ5iLBRGJS5MCzjojU in subagent aaf8aaf48969c07fa
+2026-10-01T13:44:17.390Z j97e2c255svht9803nhfwa8z518femcn: peer input during our turn
+2026-10-01T13:44:19.192Z j97e2c255svht9803nhfwa8z518femcn: outcome ambiguous
+2026-10-01T13:44:19.192Z j97e2c255svht9803nhfwa8z518femcn: done
