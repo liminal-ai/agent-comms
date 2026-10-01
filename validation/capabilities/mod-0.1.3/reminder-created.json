@@ -1,0 +1,30 @@
+{
+  "createdAt": 1790884944892,
+  "createdBy": {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+  },
+  "expiresAt": 1790886744892,
+  "fires": 0,
+  "id": "k978e7aeg1d176mxh33g28afnh8ffcde",
+  "max": 1,
+  "name": "term-a-render-check",
+  "nextFireAt": 1790885004892,
+  "reportTo": {
+    "id": "js79dhbzw3jkamzb5zdzn6mpgh8ffxa9",
+    "kind": "agent",
+    "name": "term-a"
+  },
+  "schedule": {
+    "everyMs": 60000
+  },
+  "state": "active",
+  "stateAt": 1790884944892,
+  "target": {
+    "id": "js79dhbzw3jkamzb5zdzn6mpgh8ffxa9",
+    "kind": "agent",
+    "name": "term-a"
+  },
+  "text": "Reminder render check (Hazel, mod 0.1.3): reply with the single word PONG and nothing else. Use no tools."
+}

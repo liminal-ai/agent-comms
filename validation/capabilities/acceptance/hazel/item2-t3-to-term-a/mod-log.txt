@@ -1,0 +1,12 @@
+2026-10-01T20:00:40.142Z poll: unavailable: agent-comms: $.http.fetch(http://connector/v1/poll) over /run/user/1000/agent-comms/connector.sock failed: ENOENT: ENOENT: Was there a typo in the url or port?
+2026-10-01T20:00:42.143Z poll: unavailable: agent-comms: $.http.fetch(http://connector/v1/poll) over /run/user/1000/agent-comms/connector.sock failed: ENOENT: ENOENT: Was there a typo in the url or port?
+2026-10-01T20:00:44.146Z poll: unavailable: agent-comms: $.http.fetch(http://connector/v1/poll) over /run/user/1000/agent-comms/connector.sock failed: ENOENT: ENOENT: Was there a typo in the url or port?
+2026-10-01T20:00:46.147Z poll: unavailable: agent-comms: $.http.fetch(http://connector/v1/poll) over /run/user/1000/agent-comms/connector.sock failed: ENOENT: ENOENT: Was there a typo in the url or port?
+2026-10-01T20:00:48.148Z poll: unavailable: agent-comms: $.http.fetch(http://connector/v1/poll) over /run/user/1000/agent-comms/connector.sock failed: ENOENT: ENOENT: Was there a typo in the url or port?
+2026-10-01T20:00:50.149Z poll: unknown_session: session 24682ec8-f70f-4053-aa03-055186bef51e is not registered; register again
+2026-10-01T20:00:52.156Z registered as @term-a
+2026-10-01T20:01:17.134Z poll: a newer session took over @term-a; stopping
+2026-10-01T20:01:18.678Z registered as @term-a
+2026-10-01T20:01:59.850Z j970kpc5kasxgw16jhmwkf5sb18ffq4q: delivered
+2026-10-01T20:02:01.381Z j970kpc5kasxgw16jhmwkf5sb18ffq4q: outcome replied
+2026-10-01T20:02:01.381Z j970kpc5kasxgw16jhmwkf5sb18ffq4q: done

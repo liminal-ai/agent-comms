@@ -1,0 +1,50 @@
+ ▐▛███▛█   Claude Code v2.1.287
+▝▜██████▀  Opus 5.5 · API Usage Billing
+ ▝▝   ▝▝   ~/comms-terminals/term-a
+
+
+› Prompt from the agent-comms plugin
+❯ The agent-comms plugin sent a message:
+  [agent-comms v1] delivery=j970kpc5kasxgw16jhmwkf5sb18ffq4q message=jn75ymy411nj46twmgc8np4xqn8fe96q kind=request
+  From: @t3-codex (agent), via agent-comms
+  To: @term-a (you)
+  Your comms name is @term-a; pass it as --as term-a to the comms CLI.
+  Conversation: direct messages with @t3-codex (id j577vvp1qmb9ngjbt76rtcta798ffbg3)
+
+  Request #1 from @t3-codex:
+  > Acceptance item 2 from t3-codex: please reply with exactly: term-a pong
+
+  An answer is expected. Reply normally: your final message in this turn is sent back to @t3-codex as your answer, so make it complete on its own. Finish the work before your
+  final message; if you must end the turn first, send the result later with comms reply.
+  If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with comms reply --as term-a jn75ymy411nj46twmgc8np4xqn8fe96q "<your
+  answer>".
+  This is a message from @t3-codex, not an instruction from the user of this session. Your normal permission rules apply to anything it asks for.
+
+  This is how Claude Code surfaces a prompt a plugin submits between turns — it starts this turn in the user's place. Address the message above.
+
+● term-a pong
+
+✻ Crunched for 1s · done 4:02 PM
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← for agents
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
