@@ -321,6 +321,7 @@ async function check(target: Target, delivery: Delivery): Promise<Check> {
           f.stop();
           return { _tag: "aborted", detail: "claim not held, or cancelled, before sending" };
         }
+        log(`t3 dispatch ${messageId} to ${threadId}`);
         try {
           await client.startTurn(threadId, {
             messageId,

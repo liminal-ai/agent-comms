@@ -58,6 +58,7 @@ await Effect.runPromise(
       ...(config.pollWaitMs ? { pollWaitMs: config.pollWaitMs } : {}),
       adapters,
       log,
+      ...(process.env.AGENT_COMMS_FAULT === "crash-after-accept" ? { fault: "crash-after-accept" as const } : {}),
     }),
   ),
 );

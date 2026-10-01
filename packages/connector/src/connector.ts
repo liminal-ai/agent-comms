@@ -22,6 +22,8 @@ export interface ConnectorOptions {
   /** Adapters other than Claude Code's (which is always present), e.g. T3's. */
   adapters?: HarnessAdapter[];
   log?: (line: string) => void;
+  /** Test-only fault injection; see DispatcherOptions.fault. */
+  fault?: "crash-after-accept";
 }
 
 export interface RunningConnector {
@@ -132,7 +134,7 @@ export const runConnector = (options: ConnectorOptions) =>
     );
 
     const adapters = new Map([["claude-code" as const, sessions.adapter], ...(options.adapters ?? []).map((a) => [a.harness, a] as const)]);
-    yield* runDispatcher({ leaseMs: options.leaseMs ?? 60_000, ...(options.tickMs ? { tickMs: options.tickMs } : {}), log }).pipe(
+    yield* runDispatcher({ leaseMs: options.leaseMs ?? 60_000, ...(options.fault ? { fault: options.fault } : {}), ...(options.tickMs ? { tickMs: options.tickMs } : {}), log }).pipe(
       Effect.provideService(ServerApi, api),
       Effect.provideService(Adapters, adapters),
       Effect.provideService(Poke, poke),

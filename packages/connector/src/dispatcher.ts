@@ -32,6 +32,12 @@ export interface DispatcherOptions {
   retryBaseMs?: number;
   retryMaxMs?: number;
   log?: (line: string) => void;
+  /**
+   * Test-only fault injection (fix pass section 5): "crash-after-accept" kills
+   * this process right after the harness accepted a delivery and before
+   * `delivered` is recorded: the crash window recovery has to handle.
+   */
+  fault?: "crash-after-accept";
 }
 
 class ClaimLost extends Data.TaggedError("ClaimLost")<{ deliveryId: string }> {}
@@ -51,6 +57,8 @@ export const runDispatcher = (options: DispatcherOptions) =>
     const log = options.log ?? ((line: string) => console.error(`agent-comms connector: ${line}`));
     const tickMs = options.tickMs ?? 1_000;
     const laterMs = options.laterMs ?? 5_000;
+    /** One line per decision, for the evidence of what the connector did and why. */
+    const decide = (id: string, what: string, detail?: string) => log(`decision ${id} ${what}${detail ? ` ${detail}` : ""}`);
     const laterLimitMs = options.laterLimitMs ?? 10 * 60_000;
     const readyTimeoutMs = options.readyTimeoutMs ?? 5_000;
     /** Delivery id → when checks first started saying "later". */
@@ -126,8 +134,10 @@ export const runDispatcher = (options: DispatcherOptions) =>
       const claimId = h.claim.claimId;
       switch (outcome._tag) {
         case "replied":
+          decide(id, "outcome", `replied turn=${turnId}`);
           return write("collect", id, api.collect(id, claimId, turnId, clipAnswer(outcome.answer)));
         case "ambiguous":
+          decide(id, "outcome", `ambiguous turn=${turnId} entered=${outcome.entered.map((e) => e.origin).join(",")}`);
           return write("ambiguous", id, api.ambiguous(id, claimId, turnId, outcome.entered)).pipe(
             Effect.tap((ok) => {
               const notify = adapters.get(h.harness)?.notifyUnmatched;
@@ -140,8 +150,10 @@ export const runDispatcher = (options: DispatcherOptions) =>
             }),
           );
         case "failed":
+          decide(id, "outcome", `failed turn=${turnId} ${outcome.reason}: ${outcome.detail ?? ""}`);
           return write("failed", id, api.failed(id, claimId, turnId, outcome.reason, outcome.detail));
         case "uncertain":
+          decide(id, "outcome", `uncertain turn=${turnId} ${outcome.detail}`);
           return write("uncertain", id, api.uncertain(id, claimId, outcome.detail));
       }
     };
@@ -176,6 +188,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
           api.prepare(h.delivery.id, h.claim.claimId, cursor).pipe(
             Effect.tap(() =>
               Effect.sync(() => {
+                decide(h.delivery.id, "gate", `claim confirmed; sending (cursor=${cursor ?? "none"})`);
                 if (cursor !== undefined) h.delivery = { ...h.delivery, status: { ...h.delivery.status, cursor } };
               }),
             ),
@@ -197,7 +210,9 @@ export const runDispatcher = (options: DispatcherOptions) =>
           return log(`${h.delivery.id}: can't confirm the claim (${cas.failure.message}); will retry`);
         }
         h.claim = cas.success.claim;
+        decide(h.delivery.id, "handoff", `to ${h.harness}:${h.target.locator}`);
         const result = yield* withLease(h, adapter.handOff(h.target, h.delivery, gateFor(h)));
+        decide(h.delivery.id, `handoff-${result._tag}`, result._tag === "accepted" ? `turn=${result.turnId}` : result.detail);
         switch (result._tag) {
           case "aborted":
             log(`${h.delivery.id}: not sent (${result.detail})`);
@@ -208,6 +223,10 @@ export const runDispatcher = (options: DispatcherOptions) =>
           case "lost":
             return log(`${h.delivery.id}: lost during handoff (${result.detail}); will check later`);
           case "accepted": {
+            if (options.fault === "crash-after-accept") {
+              decide(h.delivery.id, "fault", "crash-after-accept: killing the connector before recording delivered");
+              process.kill(process.pid, "SIGKILL");
+            }
             if (!(yield* markDelivered(h, result.turnId, result.cursor))) return yield* release(h);
             if (h.delivery.message.kind !== "request") return yield* release(h);
             return yield* follow(adapter, h, result.turnId);
@@ -219,6 +238,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
       Effect.gen(function* () {
         const check: Check = yield* withLease(h, adapter.check(h.target, h.delivery, knownTurnId));
         const id = h.delivery.id;
+        decide(id, `check-${check._tag}`, `recorded=${h.delivery.status.state}${"turnId" in check ? ` turn=${check.turnId}` : ""}${"detail" in check ? ` ${check.detail}` : ""}`);
         if (check._tag !== "later") laterSince.delete(id);
         const wasDelivered = h.delivery.status.state === "delivered";
         const collect = h.delivery.message.kind === "request";
@@ -288,6 +308,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
           takeover = r.success.takeover;
         }
         held.set(item.id, h);
+        decide(item.id, takeover ? "recover" : "claimed", `state=${h.delivery.status.state} participant=${h.target.participant}`);
         if (takeover) yield* recover(adapter, h, item.turnId ?? h.delivery.status.turnId);
         else yield* handOffAndFollow(adapter, h);
       }).pipe(
