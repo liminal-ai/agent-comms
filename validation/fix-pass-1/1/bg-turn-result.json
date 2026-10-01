@@ -1,0 +1,136 @@
+{
+ "threadId": "thr-fp1-bg-d710e2ae",
+ "ourMessageId": "comms-probe-21723e92",
+ "ourCreatedAt": "2026-10-01T13:54:07.075Z",
+ "wakeTurn": {
+  "turnId": "8d4ecc8c-54b2-47eb-a73b-a6c65aa34cac",
+  "state": "completed",
+  "requestedAt": "2026-10-01T13:54:51.841Z",
+  "startedAt": "2026-10-01T13:54:51.841Z",
+  "completedAt": "2026-10-01T13:54:51.881Z",
+  "assistantMessageId": "assistant:cab68e90-cba7-493b-b5c8-19561db37551"
+ },
+ "wakeRequestedAtEqualsOurs": false,
+ "snapshots": [
+  {
+   "label": "after-lee-turn",
+   "at": "2026-10-01T13:54:07.074Z",
+   "latestTurn": {
+    "turnId": "fb9bc96b-d7c2-4339-8698-d0478d2048e1",
+    "state": "completed",
+    "requestedAt": "2026-10-01T13:54:01.916Z",
+    "startedAt": "2026-10-01T13:54:01.916Z",
+    "completedAt": "2026-10-01T13:54:06.752Z",
+    "assistantMessageId": "assistant:7fcddd06-13d2-4a8b-bc24-397d7766f655"
+   },
+   "session": {
+    "status": "ready",
+    "activeTurnId": null
+   },
+   "messages": [
+    {
+     "id": "lee-bg-fd93b121-5e8a-4934-92c6-e803a27bd0c8",
+     "role": "user",
+     "turnId": null,
+     "createdAt": "2026-10-01T13:54:01.916Z"
+    },
+    {
+     "id": "assistant:7fcddd06-13d2-4a8b-bc24-397d7766f655",
+     "role": "assistant",
+     "turnId": "fb9bc96b-d7c2-4339-8698-d0478d2048e1",
+     "createdAt": "2026-10-01T13:54:06.744Z"
+    }
+   ]
+  },
+  {
+   "label": "after-our-turn",
+   "at": "2026-10-01T13:54:10.134Z",
+   "latestTurn": {
+    "turnId": "7997057d-690a-4a62-a452-adbef18486df",
+    "state": "completed",
+    "requestedAt": "2026-10-01T13:54:07.082Z",
+    "startedAt": "2026-10-01T13:54:07.082Z",
+    "completedAt": "2026-10-01T13:54:08.645Z",
+    "assistantMessageId": "assistant:ea116796-59e6-4983-bfa5-5083df616a8d"
+   },
+   "session": {
+    "status": "ready",
+    "activeTurnId": null
+   },
+   "messages": [
+    {
+     "id": "lee-bg-fd93b121-5e8a-4934-92c6-e803a27bd0c8",
+     "role": "user",
+     "turnId": null,
+     "createdAt": "2026-10-01T13:54:01.916Z"
+    },
+    {
+     "id": "assistant:7fcddd06-13d2-4a8b-bc24-397d7766f655",
+     "role": "assistant",
+     "turnId": "fb9bc96b-d7c2-4339-8698-d0478d2048e1",
+     "createdAt": "2026-10-01T13:54:06.744Z"
+    },
+    {
+     "id": "comms-probe-21723e92",
+     "role": "user",
+     "turnId": null,
+     "createdAt": "2026-10-01T13:54:07.082Z"
+    },
+    {
+     "id": "assistant:ea116796-59e6-4983-bfa5-5083df616a8d",
+     "role": "assistant",
+     "turnId": "7997057d-690a-4a62-a452-adbef18486df",
+     "createdAt": "2026-10-01T13:54:08.611Z"
+    }
+   ]
+  },
+  {
+   "label": "after-wake",
+   "at": "2026-10-01T13:54:52.740Z",
+   "latestTurn": {
+    "turnId": "8d4ecc8c-54b2-47eb-a73b-a6c65aa34cac",
+    "state": "completed",
+    "requestedAt": "2026-10-01T13:54:51.841Z",
+    "startedAt": "2026-10-01T13:54:51.841Z",
+    "completedAt": "2026-10-01T13:54:51.881Z",
+    "assistantMessageId": "assistant:cab68e90-cba7-493b-b5c8-19561db37551"
+   },
+   "session": {
+    "status": "ready",
+    "activeTurnId": null
+   },
+   "messages": [
+    {
+     "id": "lee-bg-fd93b121-5e8a-4934-92c6-e803a27bd0c8",
+     "role": "user",
+     "turnId": null,
+     "createdAt": "2026-10-01T13:54:01.916Z"
+    },
+    {
+     "id": "assistant:7fcddd06-13d2-4a8b-bc24-397d7766f655",
+     "role": "assistant",
+     "turnId": "fb9bc96b-d7c2-4339-8698-d0478d2048e1",
+     "createdAt": "2026-10-01T13:54:06.744Z"
+    },
+    {
+     "id": "comms-probe-21723e92",
+     "role": "user",
+     "turnId": null,
+     "createdAt": "2026-10-01T13:54:07.082Z"
+    },
+    {
+     "id": "assistant:ea116796-59e6-4983-bfa5-5083df616a8d",
+     "role": "assistant",
+     "turnId": "7997057d-690a-4a62-a452-adbef18486df",
+     "createdAt": "2026-10-01T13:54:08.611Z"
+    },
+    {
+     "id": "assistant:cab68e90-cba7-493b-b5c8-19561db37551",
+     "role": "assistant",
+     "turnId": "8d4ecc8c-54b2-47eb-a73b-a6c65aa34cac",
+     "createdAt": "2026-10-01T13:54:51.843Z"
+    }
+   ]
+  }
+ ]
+}
