@@ -379,6 +379,12 @@ export interface DeliveryCheck {
   /** `claimed`: was it submitted into the session? `delivered`: what happened to `turnId`? */
   state: Extract<DeliveryState, "claimed" | "delivered">;
   turnId?: string;
+  /**
+   * When the delivery was created, epoch ms on the server's clock (the same
+   * instant as its message's `createdAt`). The mod compares it with when it lost
+   * its history: only a delivery created after that loss can be answered `no`.
+   */
+  createdAt: number;
 }
 
 export type PollItem = { type: "deliver"; delivery: Delivery } | { type: "check"; check: DeliveryCheck };

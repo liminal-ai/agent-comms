@@ -161,7 +161,7 @@ describe("connector restart", () => {
 
     // After our old lease runs out, the new connector asks instead of re-running.
     const check = await b.nextCheck();
-    expect(check).toMatchObject({ deliveryId: d.id, state: "delivered", turnId: "t1" });
+    expect(check).toMatchObject({ deliveryId: d.id, state: "delivered", turnId: "t1", createdAt: d.message.createdAt });
     await b.ok("check-result", {
       deliveryId: d.id, found: "yes", turnId: "t1", turn: "completed", outcome: "replied", answer: "finished",
     } as never);

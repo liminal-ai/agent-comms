@@ -359,12 +359,13 @@ export class StubComms {
       if (d.recipientId !== p.ref.id) continue;
       const kind = this.message(d.messageId).kind;
       if (d.status.state === "claimed") {
-        checks.push({ deliveryId: d.id, messageId: d.messageId, state: "claimed" });
+        checks.push({ deliveryId: d.id, messageId: d.messageId, state: "claimed", createdAt: this.message(d.messageId).createdAt });
       } else if (d.status.state === "delivered" && kind === "request") {
         checks.push({
           deliveryId: d.id,
           messageId: d.messageId,
           state: "delivered",
+          createdAt: this.message(d.messageId).createdAt,
           ...(d.status.turnId ? { turnId: d.status.turnId } : {}),
         });
       }
@@ -668,6 +669,7 @@ export class StubComms {
       deliveryId: d.id,
       messageId: d.messageId,
       state: d.status.state,
+      createdAt: this.message(d.messageId).createdAt,
       ...(d.status.turnId ? { turnId: d.status.turnId } : {}),
     };
     session.checks.push(check);

@@ -288,7 +288,7 @@ describe("stub restart", () => {
     assert.equal((await op("poll", { sessionId: "s-mod-a" })).body.error.code, "unknown_session");
     await register("mod-a");
     const items = await poll("s-mod-a");
-    assert.deepEqual(items, [{ type: "check", check: { deliveryId: d.id, messageId: d.message.id, state: "claimed" } }]);
+    assert.deepEqual(items, [{ type: "check", check: { deliveryId: d.id, messageId: d.message.id, state: "claimed", createdAt: d.message.createdAt } }]);
 
     // Found and still running: delivered, and nothing new while it runs.
     await ok("check-result", { sessionId: "s-mod-a", deliveryId: d.id, found: "yes", turnId: "t9", turn: "running" });
@@ -299,7 +299,7 @@ describe("stub restart", () => {
     await start(new StubComms(comms.record));
     await register("mod-a");
     assert.deepEqual(await poll("s-mod-a"), [
-      { type: "check", check: { deliveryId: d.id, messageId: d.message.id, state: "delivered", turnId: "t9" } },
+      { type: "check", check: { deliveryId: d.id, messageId: d.message.id, state: "delivered", turnId: "t9", createdAt: d.message.createdAt } },
     ]);
     const done = await ok("check-result", {
       sessionId: "s-mod-a", deliveryId: d.id, found: "yes", turnId: "t9", turn: "completed", outcome: "replied", answer: "OK",

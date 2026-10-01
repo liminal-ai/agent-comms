@@ -337,6 +337,8 @@ export class ClaudeCodeSessions {
           messageId: delivery.message.id,
           state: delivery.status.state === "delivered" ? "delivered" : "claimed",
           ...(turnId !== undefined ? { turnId } : {}),
+          // Convex creates a delivery in the same mutation, at the same instant, as its message.
+          createdAt: delivery.message.createdAt,
         };
         this.enqueue(s, { type: "check", check });
         return answer;
