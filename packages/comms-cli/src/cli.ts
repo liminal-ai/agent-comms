@@ -56,8 +56,10 @@ export const USAGE = `usage:
     in the foreground). For long asks use --continue, or run comms send in the background.
   - Codex: a command has no time limit but hands back control after 10 s. Keep polling
     the shell session until comms exits, or the answer is printed where nobody reads it.
-  An answer printed after your turn ended isn't counted as seen: it's delivered into your
-  thread too, marked as possibly already shown.
+  An answer counts as seen only when your harness shows it reached you: in Claude Code, this
+  command's own output in the same turn, in the foreground. Otherwise (a background run,
+  T3 or Codex, --json, an answer over about 30,000 characters) it's also delivered into
+  your thread about 2 minutes after the wait ends, marked as possibly already shown.
 
   @owner addresses your owner (the person who owns you); @reminders and @alerts can't be addressed.
   --as defaults to $${PARTICIPANT_ENV}. It names you; the connector accepts any

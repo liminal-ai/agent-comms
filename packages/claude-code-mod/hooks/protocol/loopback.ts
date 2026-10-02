@@ -248,6 +248,8 @@ const requestDecoders = {
     sessionId: harnessId,
     cwd: string({ min: 1, max: 4096 }),
     status: presence,
+    /** Fix pass 0.1: the main turn running now, if busy (as `presence`), so a session registering mid-turn after a connector restart still stamps its waits. */
+    turnId: optional(harnessId),
   }),
 
   /** The session is ending. Deliveries it was offered but never acked are checked on the next registration. */
