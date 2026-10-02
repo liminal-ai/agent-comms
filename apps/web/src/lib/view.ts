@@ -359,3 +359,14 @@ export function parseAlertConfig(f: AlertConfigForm): Parsed<AlertConfig> {
 export function ownerChoices(participants: readonly { name: string; kind: string; state: string }[]): string[] {
   return participants.filter((p) => p.kind === "human" && p.state === "active").map((p) => p.name);
 }
+
+/** The Alerts tab's badge, open list and resolved list (today's behaviour: all from the newest alerts). */
+export function alertsView(open: readonly Alert[] | undefined, recent: readonly Alert[] | undefined): { badge: string; open: Alert[]; resolved: Alert[] } {
+  const r = recent ?? [];
+  return { badge: alertsBadge(r), open: r.filter((a) => a.resolvedAt === undefined), resolved: r.filter((a) => a.resolvedAt !== undefined) };
+}
+
+/** Who the view posts as by default (today's behaviour: the saved choice, else "lee"). */
+export function defaultPostingAs(saved: string | null, participants: readonly { name: string; kind: string; state: string }[]): string {
+  return saved ?? "lee";
+}
