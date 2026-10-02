@@ -1,0 +1,3 @@
+[31m     [31m×[31m setState, rebind and setProfile refuse @alerts and @reminders; upgrade repairs one retired by a direct database edit[39m[32m 51[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m19 skipped[39m[90m (20)[39m

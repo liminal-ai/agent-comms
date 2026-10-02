@@ -424,3 +424,23 @@ describe("R1 registry over the connector", () => {
     expect(await errorCode(t.mutation(api.connector.agentsSet, { machine: m1, as: "a", name: "b", description: "x" }))).toBe("conflict");
   });
 });
+
+describe("fix pass 1.6: system participants are protected", () => {
+  it("setState, rebind and setProfile refuse @alerts and @reminders; upgrade repairs one retired by a direct database edit", async () => {
+    const t = await setup();
+    await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
+    for (const name of ["alerts", "reminders"]) {
+      expect(await errorCode(t.mutation(api.directory.setState, { adminToken: ADMIN, name, state: "retired" })), name).toBe("bad_request");
+      expect(await errorCode(t.mutation(api.directory.setState, { adminToken: ADMIN, name, state: "paused" })), name).toBe("bad_request");
+      expect(await errorCode(t.mutation(api.directory.rebind, { adminToken: ADMIN, name, home: agentHome(name) })), name).toBe("bad_request");
+      expect(await errorCode(t.mutation(api.registry.setProfile, { adminToken: ADMIN, name, description: "x" })), name).toBe("bad_request");
+    }
+    await t.run(async (ctx) => {
+      const p = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "alerts")).unique())!;
+      await ctx.db.patch(p._id, { state: "retired" });
+    });
+    const r = await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
+    expect(r.systemRepaired).toEqual(["alerts"]);
+    expect((await byName(t, "alerts")).state).toBe("active");
+  });
+});
