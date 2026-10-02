@@ -2,6 +2,8 @@
 
 Draft 1 by Reed, 2026-10-01, from the lhc-group discussion with Lee, Alder and Wrenn. Review: Cedar and Hazel (buildability), then Alder (scope) and Wrenn (references).
 
+> **Superseded (2026-10-02).** Lee scaled this back: agent homes are plain files in a private `liminal-agents` repo, with `mem-save` logging. Nothing in this draft is being built.
+
 **Prerequisite:** the capabilities pass is signed off (Wrenn's live retest and Alder's scope check). This pass uses its reminders, notices, inbox and registry.
 
 ## What this adds
