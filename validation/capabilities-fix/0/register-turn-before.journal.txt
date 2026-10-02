@@ -1,0 +1,4 @@
+    not ok 1 - a session registering mid-turn (after a connector restart) says which main turn is running
+not ok 3 - 0.1 register carries the running turn (Hazel's review)
+# pass 9
+# fail 1

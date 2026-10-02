@@ -36,6 +36,9 @@ export function renderAnswerWithProof(p: AnswerProof, heading: string, text: str
 }
 
 /**
+ * `chars` counts JavaScript string length (UTF-16 code units), as the CLI, the mod and the
+ * connector all do; a parser in another language must count the same way.
+ *
  * Every complete proof in a tool result: a begin line, then an end line with the same
  * wait, message and token, both whole lines at column 0, with exactly `chars` characters
  * between them. Lines are split on "\n"; a trailing "\r" is dropped from each.

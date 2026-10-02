@@ -20,140 +20,143 @@ $ pnpm -r --workspace-concurrency=1 --filter '!@agent-comms/connector' test && v
 Scope: 6 of 8 workspace projects
 $ node --test --test-timeout=30000 'test/**/*.test.ts'
 ▶ R0 operations
-  ✔ lists the new operations (0.802252ms)
-  ✔ send takes wait and waitMs, bounded (1.174694ms)
-  ✔ await is held at most MAX_POLL_WAIT_MS; ack names recipients optionally (0.245329ms)
-  ✔ registry operations bound descriptions and duties (0.226433ms)
-  ✔ remind needs exactly one of every and at; bounds the interval and expiry (0.571349ms)
-  ✔ has an `unsupported` error for operations a connector doesn't implement yet (0.183333ms)
-✔ R0 operations (4.330315ms)
+  ✔ lists the new operations (0.902933ms)
+  ✔ send takes wait and waitMs, bounded (1.182255ms)
+  ✔ await is held at most MAX_POLL_WAIT_MS; ack names recipients optionally (0.264529ms)
+  ✔ registry operations bound descriptions and duties (0.213598ms)
+  ✔ remind needs exactly one of every and at; bounds the interval and expiry (0.542172ms)
+  ✔ has an `unsupported` error for operations a connector doesn't implement yet (0.16557ms)
+✔ R0 operations (4.403184ms)
 ▶ R0 CLI exit codes and durations
-  ✔ has a distinct code for 'bound reached, still pending' (0.275223ms)
-  ✔ parses and formats durations (0.371958ms)
-✔ R0 CLI exit codes and durations (0.927644ms)
+  ✔ has a distinct code for 'bound reached, still pending' (0.234069ms)
+  ✔ parses and formats durations (0.362258ms)
+✔ R0 CLI exit codes and durations (0.871562ms)
 ▶ R0 renderings
-  ✔ renders a reminder fire with a structured header and how to mark it done or blocked (1.168155ms)
-  ✔ renders the one fallback answer as possibly already shown (0.321455ms)
-  ✔ produces the texts system participants post (0.316403ms)
-✔ R0 renderings (1.992722ms)
+  ✔ renders a reminder fire with a structured header and how to mark it done or blocked (1.052985ms)
+  ✔ renders the one fallback answer as possibly already shown (0.415453ms)
+  ✔ produces the texts system participants post (0.322135ms)
+✔ R0 renderings (3.331138ms)
 ▶ R0 review (Hazel)
-  ✔ requires a reason for reminder-update blocked in the decoder (0.244002ms)
-  ✔ parses --at as ISO 8601 with a time, or HH:MM as the next occurrence in local time (0.480728ms)
-  ✔ renders a schedule for the reminder line (0.303155ms)
-✔ R0 review (Hazel) (1.196052ms)
+  ✔ requires a reason for reminder-update blocked in the decoder (0.307021ms)
+  ✔ parses --at as ISO 8601 with a time, or HH:MM as the next occurrence in local time (0.423874ms)
+  ✔ renders a schedule for the reminder line (0.243371ms)
+✔ R0 review (Hazel) (1.157417ms)
 ▶ R3 notices (agreed with Hazel)
-  ✔ renders a notice: its own header kind, no reply expected, no comms reply line (0.485394ms)
-✔ R3 notices (agreed with Hazel) (0.583003ms)
+  ✔ renders a notice: its own header kind, no reply expected, no comms reply line (0.397098ms)
+✔ R3 notices (agreed with Hazel) (0.482201ms)
 ▶ 0.1 answer proof markers
-  ✔ prints an answer between a begin and an end line, the end carrying the length of what's between (0.833831ms)
-  ✔ finds a complete proof in a tool result, among other output (0.945726ms)
-  ✔ finds each of several answers' proofs (0.212542ms)
-  ✔ is no proof when the end marker is missing (truncated output) (0.133763ms)
-  ✔ is no proof when the middle was cut (the length doesn't match) (0.219016ms)
-  ✔ is no proof when a marker is quoted, indented, or mismatched (0.262622ms)
-  ✔ an answer can't forge a marker: its lines are always indented (0.233413ms)
-  ✔ splits only on \n, and tolerates a \r\n tool result (0.227774ms)
-✔ 0.1 answer proof markers (4.355204ms)
+  ✔ prints an answer between a begin and an end line, the end carrying the length of what's between (1.409222ms)
+  ✔ finds a complete proof in a tool result, among other output (1.393089ms)
+  ✔ finds each of several answers' proofs (0.323221ms)
+  ✔ is no proof when the end marker is missing (truncated output) (0.199228ms)
+  ✔ is no proof when the middle was cut (the length doesn't match) (0.183445ms)
+  ✔ is no proof when a marker is quoted, indented, or mismatched (0.213314ms)
+  ✔ an answer can't forge a marker: its lines are always indented (0.388128ms)
+  ✔ splits only on \n, and tolerates a \r\n tool result (0.428444ms)
+✔ 0.1 answer proof markers (6.223955ms)
 ▶ 0.1 contract shapes
-  ✔ presence carries the main turn id while busy; answer-seen reports proofs from one turn (0.625186ms)
-✔ 0.1 contract shapes (0.829569ms)
+  ✔ presence carries the main turn id while busy; answer-seen reports proofs from one turn (1.083604ms)
+✔ 0.1 contract shapes (1.34076ms)
+▶ 0.1 register carries the running turn (Hazel's review)
+  ✔ a session registering mid-turn (after a connector restart) says which main turn is running (0.525912ms)
+✔ 0.1 register carries the running turn (Hazel's review) (0.740524ms)
 ▶ boundHistory
-  ✔ keeps the newest messages, oldest first, and counts the rest (1.559918ms)
-  ✔ stops at the character cap (0.191301ms)
-  ✔ clips the newest message rather than showing nothing (0.191858ms)
-  ✔ handles no unread messages (0.152429ms)
-✔ boundHistory (3.20649ms)
+  ✔ keeps the newest messages, oldest first, and counts the rest (1.885011ms)
+  ✔ stops at the character cap (0.241263ms)
+  ✔ clips the newest message rather than showing nothing (0.284263ms)
+  ✔ handles no unread messages (0.204759ms)
+✔ boundHistory (3.962107ms)
 ▶ socketPath
-  ✔ prefers the override, then XDG_RUNTIME_DIR, then /run/user/<uid> on Linux (0.229281ms)
-  ✔ uses ~/.agent-comms on macOS (0.111045ms)
-✔ socketPath (0.490593ms)
+  ✔ prefers the override, then XDG_RUNTIME_DIR, then /run/user/<uid> on Linux (0.325977ms)
+  ✔ uses ~/.agent-comms on macOS (0.170211ms)
+✔ socketPath (0.835745ms)
 ▶ decodeRequest
-  ✔ knows every operation (0.261911ms)
-  ✔ accepts a valid send and drops unknown fields (0.383109ms)
-  ✔ names the failing path (0.403212ms)
-  ✔ bounds poll waits (0.292419ms)
-  ✔ decodes each outcome kind (0.471209ms)
-  ✔ decodes check results (0.371532ms)
-✔ decodeRequest (2.502318ms)
+  ✔ knows every operation (0.400715ms)
+  ✔ accepts a valid send and drops unknown fields (0.550032ms)
+  ✔ names the failing path (0.607641ms)
+  ✔ bounds poll waits (0.534495ms)
+  ✔ decodes each outcome kind (0.590782ms)
+  ✔ decodes check results (0.457533ms)
+✔ decodeRequest (3.568946ms)
 ▶ parseResponse
-  ✔ passes success and coded errors through (0.220312ms)
-  ✔ turns anything else into an internal error (0.149348ms)
-✔ parseResponse (0.484222ms)
+  ✔ passes success and coded errors through (0.275884ms)
+  ✔ turns anything else into an internal error (0.148365ms)
+✔ parseResponse (0.544104ms)
 ▶ contract changes from Hazel's review
-  ✔ lets only a failed outcome omit turnId (0.231485ms)
-  ✔ accepts over-long answers and clips them on collection (0.324224ms)
-  ✔ lets a completed check omit the outcome (an answer's delivery) (0.115214ms)
-✔ contract changes from Hazel's review (0.782917ms)
+  ✔ lets only a failed outcome omit turnId (0.262064ms)
+  ✔ accepts over-long answers and clips them on collection (0.42181ms)
+  ✔ lets a completed check omit the outcome (an answer's delivery) (0.143971ms)
+✔ contract changes from Hazel's review (0.979546ms)
 ▶ fix pass 1.10
-  ✔ 1.10 message text over the cap is refused with the limit in the error (0.205989ms)
-✔ fix pass 1.10 (0.26596ms)
+  ✔ 1.10 message text over the cap is refused with the limit in the error (0.263057ms)
+✔ fix pass 1.10 (0.344485ms)
 ▶ renderDelivery
-  ✔ starts with the header and round-trips through the parser (1.965355ms)
-  ✔ states sender, recipient name, conversation, and that an answer is expected (0.362337ms)
-  ✔ carries a source statement only when the harness doesn't label the source (0.249436ms)
-  ✔ identifies the source without claiming the user's authority (0.179073ms)
-  ✔ renders an answer as needing no reply, quoting the request it answers (0.234753ms)
-  ✔ names a group and the other addressees (0.307675ms)
-  ✔ includes bounded history and says how to read what was left out (0.257853ms)
-  ✔ lists attachments by reference (0.225479ms)
-  ✔ never lets a header inside a message body or history be parsed (0.277122ms)
-✔ renderDelivery (5.221027ms)
+  ✔ starts with the header and round-trips through the parser (2.819812ms)
+  ✔ states sender, recipient name, conversation, and that an answer is expected (0.477036ms)
+  ✔ carries a source statement only when the harness doesn't label the source (0.430111ms)
+  ✔ identifies the source without claiming the user's authority (0.25334ms)
+  ✔ renders an answer as needing no reply, quoting the request it answers (0.342294ms)
+  ✔ names a group and the other addressees (0.400082ms)
+  ✔ includes bounded history and says how to read what was left out (0.434767ms)
+  ✔ lists attachments by reference (0.323014ms)
+  ✔ never lets a header inside a message body or history be parsed (0.467678ms)
+✔ renderDelivery (7.532289ms)
 ▶ parseDeliveryHeader
-  ✔ finds the header inside Claude Code's plugin wrapper (0.270292ms)
-  ✔ tolerates surrounding whitespace and CRLF (0.104128ms)
-  ✔ does not match a header embedded in a longer line (0.094533ms)
-  ✔ rejects malformed headers (0.092898ms)
-  ✔ returns null when two different deliveries appear, and one for a repeat (0.087669ms)
-✔ parseDeliveryHeader (0.848816ms)
+  ✔ finds the header inside Claude Code's plugin wrapper (0.391535ms)
+  ✔ tolerates surrounding whitespace and CRLF (0.142209ms)
+  ✔ does not match a header embedded in a longer line (0.150086ms)
+  ✔ rejects malformed headers (0.132985ms)
+  ✔ returns null when two different deliveries appear, and one for a repeat (0.125437ms)
+✔ parseDeliveryHeader (1.291719ms)
 ▶ renderUnmatchedNotice
-  ✔ tells the agent to comms reply, and is never parsed as a delivery (0.533244ms)
-✔ renderUnmatchedNotice (0.626443ms)
+  ✔ tells the agent to comms reply, and is never parsed as a delivery (0.619451ms)
+✔ renderUnmatchedNotice (0.716003ms)
 ▶ fix pass 1.10 / 1.11
-  ✔ 1.10 a rendered delivery never exceeds the rendered cap, however its fields add up (1.235538ms)
-  ✔ 1.11 a lone CR, U+2028 or U+2029 in a body can't forge a header, raw or normalized (0.347908ms)
-✔ fix pass 1.10 / 1.11 (1.684875ms)
-ℹ tests 59
-ℹ suites 17
-ℹ pass 59
+  ✔ 1.10 a rendered delivery never exceeds the rendered cap, however its fields add up (2.03302ms)
+  ✔ 1.11 a lone CR, U+2028 or U+2029 in a body can't forge a header, raw or normalized (0.570321ms)
+✔ fix pass 1.10 / 1.11 (2.776792ms)
+ℹ tests 60
+ℹ suites 18
+ℹ pass 60
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 132.034273
+ℹ duration_ms 146.584786
 $ node --test 'test/**/*.test.ts'
 ▶ W registry
-  ✔ W registry: an idle agent shows how long it has been idle (1.213731ms)
-  ✔ W registry: a stale machine is never shown as idle, whatever was last written (12.042723ms)
-  ✔ W registry: busy, offline, people and system participants (0.184561ms)
-  ✔ W registry: a profile edit is one description line and one duty per line, blanks dropped (0.3118ms)
-  ✔ W registry: a profile edit over the protocol's limits is refused before it's sent (0.195055ms)
-✔ W registry (14.881126ms)
+  ✔ W registry: an idle agent shows how long it has been idle (1.088389ms)
+  ✔ W registry: a stale machine is never shown as idle, whatever was last written (12.216577ms)
+  ✔ W registry: busy, offline, people and system participants (0.187362ms)
+  ✔ W registry: a profile edit is one description line and one duty per line, blanks dropped (0.314725ms)
+  ✔ W registry: a profile edit over the protocol's limits is refused before it's sent (0.182552ms)
+✔ W registry (14.898201ms)
 ▶ W registry, promotion (R1 API)
-  ✔ W promote: an agent is promoted with its owner (a person), as R1's directory.promote requires (0.261854ms)
-  ✔ W promote: reserved names, bad names, a missing thread id or machine, and an owner who isn't a person are refused (0.152784ms)
-✔ W registry, promotion (R1 API) (0.574141ms)
+  ✔ W promote: an agent is promoted with its owner (a person), as R1's directory.promote requires (0.252271ms)
+  ✔ W promote: reserved names, bad names, a missing thread id or machine, and an owner who isn't a person are refused (0.157881ms)
+✔ W registry, promotion (R1 API) (0.566696ms)
 ▶ W registry, live
-  ✔ W registry: a machine that stops heartbeating turns stale on the clock, not only when Convex next writes (0.200743ms)
-✔ W registry, live (0.342647ms)
+  ✔ W registry: a machine that stops heartbeating turns stale on the clock, not only when Convex next writes (0.191686ms)
+✔ W registry, live (0.321832ms)
 ▶ W reminders
-  ✔ W reminders: the controls offered follow the state; ended reminders have none (0.212576ms)
-  ✔ W reminders: the schedule reads like the rendering (every 30m, once at a time), with its conditions (0.401679ms)
-  ✔ W reminders: the status line says the state, fires, next fire and why it's blocked (0.177921ms)
-  ✔ W reminders: the list shows the last fire's delivery state and the last skip, whichever is newer (0.165162ms)
-  ✔ W reminders: the create form becomes reminders.create arguments (0.393566ms)
-  ✔ W reminders: the create form refuses what Convex would (both or neither schedule, under a minute, past, too long) (0.176142ms)
-✔ W reminders (1.812591ms)
+  ✔ W reminders: the controls offered follow the state; ended reminders have none (0.204455ms)
+  ✔ W reminders: the schedule reads like the rendering (every 30m, once at a time), with its conditions (0.384148ms)
+  ✔ W reminders: the status line says the state, fires, next fire and why it's blocked (0.170017ms)
+  ✔ W reminders: the list shows the last fire's delivery state and the last skip, whichever is newer (0.161558ms)
+  ✔ W reminders: the create form becomes reminders.create arguments (0.391132ms)
+  ✔ W reminders: the create form refuses what Convex would (both or neither schedule, under a minute, past, too long) (0.166501ms)
+✔ W reminders (1.691498ms)
 ▶ W inbox
-  ✔ W inbox: the badge and the page title carry the unread count (0.097017ms)
-✔ W inbox (0.167535ms)
+  ✔ W inbox: the badge and the page title carry the unread count (0.100357ms)
+✔ W inbox (0.167519ms)
 ▶ W inbox, kinds
-  ✔ W inbox: messages from system participants are labelled by what they are (0.139944ms)
-✔ W inbox, kinds (0.198318ms)
+  ✔ W inbox: messages from system participants are labelled by what they are (0.137306ms)
+✔ W inbox, kinds (0.191597ms)
 ▶ W alerts
-  ✔ W alerts: each cause has a plain label, and resolved incidents say so (0.21164ms)
-  ✔ W alerts: the badge counts open incidents only (0.109442ms)
-  ✔ W alerts: thresholds are edited in minutes and checked against Convex's ranges (0.175507ms)
-✔ W alerts (0.596501ms)
+  ✔ W alerts: each cause has a plain label, and resolved incidents say so (0.204733ms)
+  ✔ W alerts: the badge counts open incidents only (0.114489ms)
+  ✔ W alerts: thresholds are edited in minutes and checked against Convex's ranges (0.178857ms)
+✔ W alerts (0.595775ms)
 ℹ tests 19
 ℹ suites 7
 ℹ pass 19
@@ -161,49 +164,49 @@ $ node --test 'test/**/*.test.ts'
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 122.855165
+ℹ duration_ms 114.362226
 $ node --test --test-timeout=30000 'test/**/*.test.ts'
 ▶ T3 adapter: live
-  ✔ starts its own turn on an idle thread, with the thread's modes and the T3 rendering (7.209944ms)
-  ✔ collects the turn's answer (287.344906ms)
-  ✔ waits for a busy thread, then runs as its own turn (337.71545ms)
-  ✔ is ambiguous when someone types into our turn, reporting only that it happened (255.725074ms)
-  ✔ is ambiguous when our message joins a turn someone else started (260.73492ms)
-  ✔ isn't ambiguous when a later message starts its own turn (254.571279ms)
-  ✔ reports an interrupt and an errored turn as failed (306.857469ms)
-  ✔ rejects when T3 can't start the turn, when it refuses, or when the thread is missing (4.192274ms)
-  ✔ reports presence from the thread's session (0.90108ms)
-  ✔ sends the unmatched notice once, as its own turn (1.179178ms)
-✔ T3 adapter: live (1719.729339ms)
+  ✔ starts its own turn on an idle thread, with the thread's modes and the T3 rendering (6.06359ms)
+  ✔ collects the turn's answer (285.547559ms)
+  ✔ waits for a busy thread, then runs as its own turn (334.062981ms)
+  ✔ is ambiguous when someone types into our turn, reporting only that it happened (254.477678ms)
+  ✔ is ambiguous when our message joins a turn someone else started (259.362506ms)
+  ✔ isn't ambiguous when a later message starts its own turn (256.518524ms)
+  ✔ reports an interrupt and an errored turn as failed (302.353056ms)
+  ✔ rejects when T3 can't start the turn, when it refuses, or when the thread is missing (6.553626ms)
+  ✔ reports presence from the thread's session (1.749946ms)
+  ✔ sends the unmatched notice once, as its own turn (2.479154ms)
+✔ T3 adapter: live (1712.391875ms)
 ▶ T3 adapter: restart check
-  ✔ says absent when our message never arrived (0.683399ms)
-  ✔ replays from the cursor: running, then completed with the outcome (4013.915789ms)
-  ✔ replays foreign input that entered our turn while the connector was down (4012.773904ms)
-  ✔ without a cursor, never collects from the snapshot alone (1.3) (4.437703ms)
-✔ T3 adapter: restart check (8033.015838ms)
+  ✔ says absent when our message never arrived (1.212986ms)
+  ✔ replays from the cursor: running, then completed with the outcome (4018.646021ms)
+  ✔ replays foreign input that entered our turn while the connector was down (4007.86523ms)
+  ✔ without a cursor, never collects from the snapshot alone (1.3) (3.436709ms)
+✔ T3 adapter: restart check (8032.348857ms)
 ▶ fix pass 1: reply ownership
-  ✔ 1.1 a foreign message landing just before ours, with no turn started in between, makes it ambiguous (261.973406ms)
-  ✔ 1.2 a background turn starting between our message and our turn isn't taken as ours (253.559793ms)
-  ✔ 1.3 recovery without the turn's full events reports uncertain, never collects (2.796429ms)
-  ✔ 1.3 the restart check never collects an interrupted turn's partial answer (63.574759ms)
-  ✔ 1.4 reads our turn's own end state when a later turn has started (254.293006ms)
-  ✔ 1.4 can't read our turn's end state: uncertain (254.222985ms)
-✔ fix pass 1: reply ownership (1090.938854ms)
+  ✔ 1.1 a foreign message landing just before ours, with no turn started in between, makes it ambiguous (259.972378ms)
+  ✔ 1.2 a background turn starting between our message and our turn isn't taken as ours (257.777466ms)
+  ✔ 1.3 recovery without the turn's full events reports uncertain, never collects (3.779513ms)
+  ✔ 1.3 the restart check never collects an interrupted turn's partial answer (64.681338ms)
+  ✔ 1.4 reads our turn's own end state when a later turn has started (254.746397ms)
+  ✔ 1.4 can't read our turn's end state: uncertain (255.94508ms)
+✔ fix pass 1: reply ownership (1098.428025ms)
 ▶ fix pass 2.2 / 2.3
-  ✔ 2.2 the claim is re-checked right before sending; a lost claim sends nothing (0.820731ms)
-  ✔ 2.2 an aborted handoff (claim lost during the courtesy wait) sends nothing (81.218553ms)
-  ✔ 2.3 the real client: an HTTP 4xx refusal is rejected; a 5xx or a dropped connection is not (170.737278ms)
-✔ fix pass 2.2 / 2.3 (252.994534ms)
+  ✔ 2.2 the claim is re-checked right before sending; a lost claim sends nothing (4.25081ms)
+  ✔ 2.2 an aborted handoff (claim lost during the courtesy wait) sends nothing (82.646122ms)
+  ✔ 2.3 the real client: an HTTP 4xx refusal is rejected; a 5xx or a dropped connection is not (219.167524ms)
+✔ fix pass 2.2 / 2.3 (306.716931ms)
 ▶ fix pass 3.3
-  ✔ 3.3 an answer's delivery leaves no subscription behind (2.541406ms)
-✔ fix pass 3.3 (2.660908ms)
+  ✔ 3.3 an answer's delivery leaves no subscription behind (2.551692ms)
+✔ fix pass 3.3 (2.694004ms)
 ▶ fix pass 3.2
-  ✔ 3.2 a dropped stream is resubscribed with retries, and the turn still resolves (3256.443114ms)
-  ✔ 3.2 a resubscription that gets a snapshot (events missed) makes the outcome uncertain (354.806351ms)
-✔ fix pass 3.2 (3611.45309ms)
+  ✔ 3.2 a dropped stream is resubscribed with retries, and the turn still resolves (3255.559266ms)
+  ✔ 3.2 a resubscription that gets a snapshot (events missed) makes the outcome uncertain (353.664239ms)
+✔ fix pass 3.2 (3609.438057ms)
 ▶ fix pass 1.2, Reed's follow-up
-  ✔ 1.2 a background turn isn't ours even if its requestedAt equals our createdAt to the millisecond (254.348849ms)
-✔ fix pass 1.2, Reed's follow-up (254.522361ms)
+  ✔ 1.2 a background turn isn't ours even if its requestedAt equals our createdAt to the millisecond (255.026563ms)
+✔ fix pass 1.2, Reed's follow-up (255.666265ms)
 ℹ tests 27
 ℹ suites 7
 ℹ pass 27
@@ -211,42 +214,42 @@ $ node --test --test-timeout=30000 'test/**/*.test.ts'
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 15069.689529
+ℹ duration_ms 15155.281373
 $ node --test --test-timeout=30000 'test/**/*.test.ts'
 ▶ stub connector
-  ✔ reports itself and who is homed here (16.497456ms)
-  ✔ delivers a fixture request with bounded history, and collects the answer once (10.504573ms)
-  ✔ holds a poll until a delivery arrives (53.020954ms)
-  ✔ answers an idle poll with no items after the wait (152.863973ms)
-  ✔ rejects a second concurrent poll from the same session (314.30462ms)
-  ✔ delivers serially per participant (105.888752ms)
-  ✔ delivers an answer to the requester and never collects from it (7.247171ms)
-  ✔ completes an ambiguous delivery with comms reply, and allows follow-ups (3.776904ms)
-  ✔ supersedes an older session of the same participant (2.577841ms)
-  ✔ enforces homes: --as must be homed here; only Claude Code homes register (2.143615ms)
-  ✔ skips retired recipients and holds paused ones (54.654671ms)
-  ✔ validates requests and addressing (19.010936ms)
-  ✔ doesn't hand out a delivery on a poll whose client went away (74.755893ms)
-  ✔ reads pages and moves the read position only for the newest page (20.046072ms)
-  ✔ records every request and response (3.445975ms)
-✔ stub connector (842.654055ms)
+  ✔ reports itself and who is homed here (16.591929ms)
+  ✔ delivers a fixture request with bounded history, and collects the answer once (10.439594ms)
+  ✔ holds a poll until a delivery arrives (54.382537ms)
+  ✔ answers an idle poll with no items after the wait (156.26133ms)
+  ✔ rejects a second concurrent poll from the same session (326.859111ms)
+  ✔ delivers serially per participant (114.73777ms)
+  ✔ delivers an answer to the requester and never collects from it (35.424412ms)
+  ✔ completes an ambiguous delivery with comms reply, and allows follow-ups (8.398115ms)
+  ✔ supersedes an older session of the same participant (4.433846ms)
+  ✔ enforces homes: --as must be homed here; only Claude Code homes register (3.453809ms)
+  ✔ skips retired recipients and holds paused ones (55.453086ms)
+  ✔ validates requests and addressing (18.931432ms)
+  ✔ doesn't hand out a delivery on a poll whose client went away (77.271418ms)
+  ✔ reads pages and moves the read position only for the newest page (14.010419ms)
+  ✔ records every request and response (6.658665ms)
+✔ stub connector (906.523646ms)
 ▶ stub restart
-  ✔ asks the session about unfinished deliveries instead of re-running them (64.539729ms)
-  ✔ re-offers a delivery the session clearly doesn't have, and marks unknowns uncertain (17.73825ms)
-✔ stub restart (82.67598ms)
+  ✔ asks the session about unfinished deliveries instead of re-running them (59.890732ms)
+  ✔ re-offers a delivery the session clearly doesn't have, and marks unknowns uncertain (4.590495ms)
+✔ stub restart (64.680774ms)
 ▶ socket directory
-  ✔ creates an owner-only directory and refuses a wider one (3.750988ms)
-  ✔ refuses to start when something already listens on the socket (1.933504ms)
-✔ socket directory (6.027842ms)
+  ✔ creates an owner-only directory and refuses a wider one (1.342034ms)
+  ✔ refuses to start when something already listens on the socket (0.876893ms)
+✔ socket directory (2.359104ms)
 ▶ fix pass 3.7
-  ✔ 3.7 a delivery is handed out with its attachments (5.365079ms)
-✔ fix pass 3.7 (5.577295ms)
+  ✔ 3.7 a delivery is handed out with its attachments (2.79725ms)
+✔ fix pass 3.7 (2.911124ms)
 ▶ capabilities R0
-  ✔ answers the capabilities operations unsupported (501) until they're built, never silently (6.685095ms)
-✔ capabilities R0 (6.882325ms)
+  ✔ answers the capabilities operations unsupported (501) until they're built, never silently (4.022023ms)
+✔ capabilities R0 (4.137484ms)
 ▶ capabilities R1
-  ✔ lists the registry, shows one with its home, and lets an agent set only its own entry (13.25644ms)
-✔ capabilities R1 (13.402305ms)
+  ✔ lists the registry, shows one with its home, and lets an agent set only its own entry (10.403306ms)
+✔ capabilities R1 (10.505885ms)
 ℹ tests 22
 ℹ suites 6
 ℹ pass 22
@@ -254,79 +257,79 @@ $ node --test --test-timeout=30000 'test/**/*.test.ts'
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 1075.921972
+ℹ duration_ms 1108.959911
 $ node scripts/sync-protocol.ts --check && node --test 'test/**/*.test.ts'
 hooks/protocol matches packages/protocol/src
 ▶ W notices
-  ✔ W notice: the tracker finishes a notice at delivered and collects nothing from its turn (7.430736ms)
-  ✔ W notice: the mod submits a notice saying no reply is expected, reports it delivered, and never reports an outcome (36.232307ms)
-✔ W notices (44.691821ms)
+  ✔ W notice: the tracker finishes a notice at delivered and collects nothing from its turn (7.157161ms)
+  ✔ W notice: the mod submits a notice saying no reply is expected, reports it delivered, and never reports an outcome (35.707407ms)
+✔ W notices (43.825212ms)
 ▶ 1.8 journal safety
-  ✔ 1.8: if the journal can't be written, nothing is submitted and the delivery fails (43.354596ms)
-  ✔ 1.8: with an unreadable journal, a check for an unknown delivery is unknown, never no (even with no header in the transcript) (3.356243ms)
-  ✔ 1.8 (Alder): with no journal file, a check for an unknown delivery is unknown, never no (2.054111ms)
-  ✔ 1.8 (Alder): with an empty journal file, a check for an unknown delivery is unknown, never no (2.145941ms)
-  ✔ 1.8: the loss time is kept across sessions; checks without a creation time stay unknown after a loss (22.84815ms)
-  ✔ 1.8 (Reed): a delivery created before the journal was lost is unknown even when checked more than 24 h later (24.066853ms)
-  ✔ 1.8 (Reed): a delivery created after the loss, absent from the journal, is no (23.372221ms)
-  ✔ 1.8: a delivery another session of this participant journaled after we loaded is seen at check time (26.79407ms)
-✔ 1.8 journal safety (149.713193ms)
+  ✔ 1.8: if the journal can't be written, nothing is submitted and the delivery fails (45.18809ms)
+  ✔ 1.8: with an unreadable journal, a check for an unknown delivery is unknown, never no (even with no header in the transcript) (3.597485ms)
+  ✔ 1.8 (Alder): with no journal file, a check for an unknown delivery is unknown, never no (2.040523ms)
+  ✔ 1.8 (Alder): with an empty journal file, a check for an unknown delivery is unknown, never no (2.219799ms)
+  ✔ 1.8: the loss time is kept across sessions; checks without a creation time stay unknown after a loss (23.803995ms)
+  ✔ 1.8 (Reed): a delivery created before the journal was lost is unknown even when checked more than 24 h later (24.197711ms)
+  ✔ 1.8 (Reed): a delivery created after the loss, absent from the journal, is no (23.590882ms)
+  ✔ 1.8: a delivery another session of this participant journaled after we loaded is seen at check time (25.147162ms)
+✔ 1.8 journal safety (151.177497ms)
 ▶ 1.9 more than 50 entered inputs
-  ✔ 1.9: an ambiguous report with 60 inputs is accepted, not dropped (70.295592ms)
-✔ 1.9 more than 50 entered inputs (70.974315ms)
+  ✔ 1.9: an ambiguous report with 60 inputs is accepted, not dropped (46.376305ms)
+✔ 1.9 more than 50 entered inputs (46.547493ms)
 ▶ 3.8 timeouts and the start deadline
-  ✔ 3.8: a poll the connector never answers times out; the mod registers again and keeps polling (362.311092ms)
-  ✔ 3.8: a report call that never answers is bounded and retried (171.735284ms)
-  ✔ 3.8: a submitted prompt that never starts: after the deadline a check is unknown; a late start is still reported (59.291117ms)
-✔ 3.8 timeouts and the start deadline (595.359907ms)
+  ✔ 3.8: a poll the connector never answers times out; the mod registers again and keeps polling (342.365738ms)
+  ✔ 3.8: a report call that never answers is bounded and retried (167.654302ms)
+  ✔ 3.8: a submitted prompt that never starts: after the deadline a check is unknown; a late start is still reported (57.368754ms)
+✔ 3.8 timeouts and the start deadline (569.245834ms)
 ▶ 3.8a follow-up note wording
-  ✔ 3.8a: the note says what happened to the turn's reply (4.927249ms)
-✔ 3.8a follow-up note wording (5.44319ms)
+  ✔ 3.8a: the note says what happened to the turn's reply (7.1582ms)
+✔ 3.8a follow-up note wording (7.922813ms)
 ▶ 1.5 notifications are linked by identity only
-  ✔ 1.5: a foreign notification is other input even when our rows outnumber notifications (Wrenn B1) (3.394ms)
-  ✔ 1.5: our background shell's notification is ours by its tool-use id, with no row drawn (headless) (1.083289ms)
-  ✔ 1.5: a notification naming no id at all is other input (0.28948ms)
-✔ 1.5 notifications are linked by identity only (6.037965ms)
+  ✔ 1.5: a foreign notification is other input even when our rows outnumber notifications (Wrenn B1) (3.641121ms)
+  ✔ 1.5: our background shell's notification is ours by its tool-use id, with no row drawn (headless) (1.135411ms)
+  ✔ 1.5: a notification naming no id at all is other input (0.288238ms)
+✔ 1.5 notifications are linked by identity only (6.412691ms)
 ▶ 1.6 only helpers our turn started
-  ✔ 1.6: a helper Lee started before our turn, finishing during it, is other input (0.414113ms)
-  ✔ 1.6: our helper, and a helper it spawns, are ours (0.321587ms)
-  ✔ 1.6: our helper's hand-back is ours; a hand-back from someone else's helper is other input (0.443247ms)
-✔ 1.6 only helpers our turn started (1.458545ms)
+  ✔ 1.6: a helper Lee started before our turn, finishing during it, is other input (0.442667ms)
+  ✔ 1.6: our helper, and a helper it spawns, are ours (0.336584ms)
+  ✔ 1.6: our helper's hand-back is ours; a hand-back from someone else's helper is other input (0.869543ms)
+✔ 1.6 only helpers our turn started (1.949284ms)
 ▶ 1.7 no queued-prompt guess
-  ✔ 1.7: typed input with our turn id is other input, even if the next turn's text contains it (Alder: yes/yesterday) (0.385442ms)
-  ✔ 1.7: peer, bridge, sdk and another plugin's prompts with our turn id are other input (0.383069ms)
-✔ 1.7 no queued-prompt guess (1.027144ms)
+  ✔ 1.7: typed input with our turn id is other input, even if the next turn's text contains it (Alder: yes/yesterday) (0.419876ms)
+  ✔ 1.7: peer, bridge, sdk and another plugin's prompts with our turn id are other input (0.415101ms)
+✔ 1.7 no queued-prompt guess (1.118532ms)
 ▶ 1.9 more than 50 entered inputs
-  ✔ 1.9: the report stays within the protocol's 50 and says how many more (0.394989ms)
-✔ 1.9 more than 50 entered inputs (0.52278ms)
+  ✔ 1.9: the report stays within the protocol's 50 and says how many more (0.412393ms)
+✔ 1.9 more than 50 entered inputs (0.546127ms)
 ▶ CommsMod against the stub
-  ✔ registers, submits a delivery, reports delivered and the collected answer (60.850132ms)
-  ✔ reports other input in our turn as ambiguous and tells the agent to comms reply (45.095041ms)
-  ✔ an answer delivery is delivered and nothing its turn does is collected (47.443711ms)
-  ✔ dedupes a delivery handed out twice (36.457616ms)
-  ✔ never overlaps polls when the connector is slow (317.944282ms)
-  ✔ re-registers after the connector restarts and answers the restart check without re-running (80.817392ms)
-  ✔ answers a check for something it never saw with no, and for a transcript-only one with unknown (26.559606ms)
-  ✔ a later session of the same participant knows what an earlier one submitted (77.325669ms)
-  ✔ stops polling when a newer session supersedes it (31.644154ms)
-  ✔ reports a prompt a hook dropped as failed (35.982064ms)
-✔ CommsMod against the stub (763.730624ms)
+  ✔ registers, submits a delivery, reports delivered and the collected answer (61.991874ms)
+  ✔ reports other input in our turn as ambiguous and tells the agent to comms reply (46.817537ms)
+  ✔ an answer delivery is delivered and nothing its turn does is collected (44.508255ms)
+  ✔ dedupes a delivery handed out twice (23.254177ms)
+  ✔ never overlaps polls when the connector is slow (305.039048ms)
+  ✔ re-registers after the connector restarts and answers the restart check without re-running (76.146777ms)
+  ✔ answers a check for something it never saw with no, and for a transcript-only one with unknown (28.641946ms)
+  ✔ a later session of the same participant knows what an earlier one submitted (81.460528ms)
+  ✔ stops polling when a newer session supersedes it (31.073276ms)
+  ✔ reports a prompt a hook dropped as failed (34.336568ms)
+✔ CommsMod against the stub (736.115751ms)
 ▶ Tracker
-  ✔ finds our turn from the header inside the plugin wrapper and collects the answer (3.485862ms)
-  ✔ ignores turns that don't carry our header, and a header for another delivery (0.266046ms)
-  ✔ delivers an answer delivery and never collects its turn (0.324214ms)
-  ✔ reports aborted, refused and errored turns as failed, and an empty answer as failed (0.45849ms)
-  ✔ a subagent's turn.complete is not ours, even with our turn id (0.280202ms)
-  ✔ a task notification for our own background shell or subagent keeps the reply collectable (0.925921ms)
-  ✔ an unlinked task notification makes it ambiguous (0.361004ms)
-  ✔ a prompt typed during our turn is ambiguous (0.290323ms)
-  ✔ input typed during another turn, or while idle, doesn't touch ours (0.279448ms)
-  ✔ names the request a later notification of our background work belongs to (0.448202ms)
-  ✔ a turn that merged someone else's queued prompt with ours is ambiguous (0.220069ms)
-✔ Tracker (9.054595ms)
+  ✔ finds our turn from the header inside the plugin wrapper and collects the answer (3.64389ms)
+  ✔ ignores turns that don't carry our header, and a header for another delivery (0.28928ms)
+  ✔ delivers an answer delivery and never collects its turn (0.304675ms)
+  ✔ reports aborted, refused and errored turns as failed, and an empty answer as failed (0.439601ms)
+  ✔ a subagent's turn.complete is not ours, even with our turn id (0.276745ms)
+  ✔ a task notification for our own background shell or subagent keeps the reply collectable (0.925637ms)
+  ✔ an unlinked task notification makes it ambiguous (0.442988ms)
+  ✔ a prompt typed during our turn is ambiguous (0.254639ms)
+  ✔ input typed during another turn, or while idle, doesn't touch ours (0.221947ms)
+  ✔ names the request a later notification of our background work belongs to (0.309907ms)
+  ✔ a turn that merged someone else's queued prompt with ours is ambiguous (0.187353ms)
+✔ Tracker (8.971311ms)
 ▶ hasOtherPrompt
-  ✔ accepts our rendering alone or inside the wrapper, and flags anything else (0.183431ms)
-✔ hasOtherPrompt (0.303577ms)
+  ✔ accepts our rendering alone or inside the wrapper, and flags anything else (0.139976ms)
+✔ hasOtherPrompt (0.237357ms)
 ℹ tests 46
 ℹ suites 12
 ℹ pass 46
@@ -334,32 +337,32 @@ hooks/protocol matches packages/protocol/src
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 11369.384885
+ℹ duration_ms 11353.307942
 $ node --test --test-timeout=30000 'test/**/*.test.ts'
 ▶ comms CLI against the stub
-  ✔ sends a DM request and reports the delivery (13.481151ms)
-  ✔ sends in a group, addressing some members (3.173058ms)
-  ✔ takes --as from AGENT_COMMS_PARTICIPANT and text from stdin (2.321458ms)
-  ✔ replies with inReplyTo, reads history and lists conversations (3.138344ms)
-  ✔ prints the connector's response with --json (0.86247ms)
-  ✔ shows status in plain text (0.739277ms)
-  ✔ exits 1 with the connector's error code (1.729034ms)
-  ✔ exits 2 on usage errors (0.562392ms)
-  ✔ exits 3 when no connector is listening (1.005953ms)
-  ✔ runs as a real binary, quickly (101.298557ms)
-✔ comms CLI against the stub (133.155612ms)
+  ✔ sends a DM request and reports the delivery (13.75605ms)
+  ✔ sends in a group, addressing some members (3.224259ms)
+  ✔ takes --as from AGENT_COMMS_PARTICIPANT and text from stdin (2.425852ms)
+  ✔ replies with inReplyTo, reads history and lists conversations (3.296932ms)
+  ✔ prints the connector's response with --json (0.897744ms)
+  ✔ shows status in plain text (0.720763ms)
+  ✔ exits 1 with the connector's error code (1.772152ms)
+  ✔ exits 2 on usage errors (0.600481ms)
+  ✔ exits 3 when no connector is listening (1.025117ms)
+  ✔ runs as a real binary, quickly (99.453727ms)
+✔ comms CLI against the stub (132.185792ms)
 ▶ fix pass 3.7
-  ✔ 3.7 accepts text starting with -, and -- before text that looks like options (3.962212ms)
-✔ fix pass 3.7 (4.114278ms)
+  ✔ 3.7 accepts text starting with -, and -- before text that looks like options (3.911728ms)
+✔ fix pass 3.7 (4.060111ms)
 ▶ fix pass 3.1
-  ✔ 3.1 a send repeated with the same --key posts once (3.697506ms)
-✔ fix pass 3.1 (3.830814ms)
+  ✔ 3.1 a send repeated with the same --key posts once (3.934176ms)
+✔ fix pass 3.1 (4.064862ms)
 ▶ capabilities R0
-  ✔ uses the protocol's exit codes, including the ones send-and-wait adds (0.300047ms)
-✔ capabilities R0 (0.365082ms)
+  ✔ uses the protocol's exit codes, including the ones send-and-wait adds (0.280767ms)
+✔ capabilities R0 (0.343701ms)
 ▶ capabilities R1: comms agents
-  ✔ sets its own entry, lists the registry, and shows one with duties (10.081565ms)
-✔ capabilities R1: comms agents (10.182059ms)
+  ✔ sets its own entry, lists the registry, and shows one with duties (9.95476ms)
+✔ capabilities R1: comms agents (10.045766ms)
 ℹ tests 14
 ℹ suites 5
 ℹ pass 14
@@ -367,39 +370,39 @@ $ node --test --test-timeout=30000 'test/**/*.test.ts'
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 272.259202
+ℹ duration_ms 274.980494
 
 [1m[30m[46m RUN [49m[39m[22m [36mv5.0.3 [39m[90m/srv/agents/cedar/agent-comms[39m
 
- [32m✓[39m [30m[45m connector [49m[39m packages/connector/test/claude-code.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m [30m[45m connector [49m[39m packages/connector/test/claude-code.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
  [32m✓[39m [30m[42m convex [49m[39m convex/alerts.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 225[2mms[22m[39m
- [32m✓[39m [30m[42m convex [49m[39m convex/capabilities.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 268[2mms[22m[39m
- [32m✓[39m [30m[42m convex [49m[39m convex/reminders.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 283[2mms[22m[39m
- [32m✓[39m [30m[42m convex [49m[39m convex/waits.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 330[2mms[22m[39m
- [32m✓[39m [30m[42m convex [49m[39m convex/comms.test.ts [2m([22m[2m31 tests[22m[2m)[22m[33m 486[2mms[22m[39m
- [32m✓[39m [30m[45m connector [49m[39m packages/connector/test/dispatcher.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 3156[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/capabilities.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 243[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/reminders.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 287[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/waits.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 325[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/comms.test.ts [2m([22m[2m31 tests[22m[2m)[22m[33m 456[2mms[22m[39m
+ [32m✓[39m [30m[45m connector [49m[39m packages/connector/test/dispatcher.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 3139[2mms[22m[39m
    [32m✓[39m fix pass section 2: dispatcher [2m(2)[22m
-     [33m[2m✓[22m[39m 2.2 losing the claim during the handoff cancels the send[33m 3048[2mms[22m[39m
- [32m✓[39m [30m[45m connector [49m[39m packages/connector/test/connector.test.ts [2m([22m[2m21 tests[22m[2m)[22m[33m 16890[2mms[22m[39m
+     [33m[2m✓[22m[39m 2.2 losing the claim during the handoff cancels the send[33m 3043[2mms[22m[39m
+ [32m✓[39m [30m[45m connector [49m[39m packages/connector/test/connector.test.ts [2m([22m[2m21 tests[22m[2m)[22m[33m 16932[2mms[22m[39m
    [32m✓[39m connector with a mod session [2m(6)[22m
      [33m[2m✓[22m[39m claims nothing for a participant with no session, and delivers once one registers[33m 320[2mms[22m[39m
-     [33m[2m✓[22m[39m delivers serially per participant[33m 655[2mms[22m[39m
+     [33m[2m✓[22m[39m delivers serially per participant[33m 670[2mms[22m[39m
    [32m✓[39m connector restart [2m(3)[22m
-     [33m[2m✓[22m[39m recovers a delivered turn by asking the session, and never runs it twice[33m 1545[2mms[22m[39m
-     [33m[2m✓[22m[39m re-runs a claimed delivery only when the session says it never arrived, and marks unknowns uncertain[33m 3065[2mms[22m[39m
-     [33m[2m✓[22m[39m keeps retrying writes while the server is unreachable[33m 1542[2mms[22m[39m
+     [33m[2m✓[22m[39m recovers a delivered turn by asking the session, and never runs it twice[33m 1550[2mms[22m[39m
+     [33m[2m✓[22m[39m re-runs a claimed delivery only when the session says it never arrived, and marks unknowns uncertain[33m 3075[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps retrying writes while the server is unreachable[33m 1560[2mms[22m[39m
    [32m✓[39m fix pass 3.3 [2m(1)[22m
-     [33m[2m✓[22m[39m 3.3 a superseded session is freed once its last poll is answered[33m 5022[2mms[22m[39m
+     [33m[2m✓[22m[39m 3.3 a superseded session is freed once its last poll is answered[33m 5024[2mms[22m[39m
    [32m✓[39m fix pass 3.1 [2m(1)[22m
-     [33m[2m✓[22m[39m 3.1 a Claude Code handoff and a restart question each have a deadline[33m 402[2mms[22m[39m
+     [33m[2m✓[22m[39m 3.1 a Claude Code handoff and a restart question each have a deadline[33m 403[2mms[22m[39m
    [32m✓[39m capabilities R2: send-and-wait through the connector and the CLI [2m(5)[22m
-     [33m[2m✓[22m[39m comms send waits, prints the answer, and acks it in the turn that ran it; the answer never arrives as a turn[33m 338[2mms[22m[39m
+     [33m[2m✓[22m[39m comms send waits, prints the answer, and acks it in the turn that ran it; the answer never arrives as a turn[33m 336[2mms[22m[39m
      [33m[2m✓[22m[39m exits 4 at the bound with the answer still to come, and 5 when a recipient's delivery ends without one[33m 2068[2mms[22m[39m
    [32m✓[39m capabilities acceptance 7a': the connector dies while the CLI waits [2m(1)[22m
-     [33m[2m✓[22m[39m the CLI keeps waiting through a restart (the held await's connection is cut) and prints the answer[33m 1559[2mms[22m[39m
+     [33m[2m✓[22m[39m the CLI keeps waiting through a restart (the held await's connection is cut) and prints the answer[33m 1572[2mms[22m[39m
 
 [2m Test Files [22m [1m[32m8 passed[39m[22m[90m (8)[39m
 [2m      Tests [22m [1m[32m103 passed[39m[22m[90m (103)[39m
-[2m   Start at [22m 12:22:31
-[2m   Duration [22m 17.54s[2m (tests 88%, transform 8%, import 3%, environment 1%)[22m
+[2m   Start at [22m 12:33:40
+[2m   Duration [22m 17.50s[2m (tests 89%, transform 7%, import 3%, environment 1%)[22m
 
