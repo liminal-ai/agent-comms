@@ -1,0 +1,118 @@
+▶ fix pass 1.1: the waiter's turn
+  ✖ 1.1: presence carries the main turn id when busy (19.085365ms)
+  ✖ 1.1: a new main turn while still busy sends presence again with the new turn id (5008.268072ms)
+  ✖ 1.1: re-registering after a connector restart mid-turn carries the running turn id (24.176332ms)
+  ✔ 1.1: idle presence and an idle registration carry no turn id (23.255175ms)
+✖ fix pass 1.1: the waiter's turn (5075.952069ms)
+▶ fix pass 1.1: answer-seen
+  ✖ 1.1: a main-loop tool result with a complete proof sends answer-seen with the session, turn and proof (5011.666625ms)
+  ✔ 1.1: a helper subagent's tool result never confirms, even with a complete proof (12.968064ms)
+  ✔ 1.1: truncated output (Claude Code's persisted preview, no end line) never confirms (9.760529ms)
+  ✔ 1.1: the ids alone (a comms status listing, quoted text) never confirm (6.634005ms)
+  ✔ 1.1: a backgrounded command's tool result never confirms (5.897715ms)
+  ✔ 1.1: a tool result with no main turn running sends nothing (3.207143ms)
+  ✖ 1.1: answer-seen is retried if the connector can't be reached, so a restart inside the window doesn't lose it (5018.086815ms)
+✖ fix pass 1.1: answer-seen (10070.573682ms)
+ℹ tests 11
+ℹ suites 2
+ℹ pass 6
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 20464.060386
+
+✖ failing tests:
+
+test at test/fix-pass-cap.test.ts:15:3
+✖ 1.1: presence carries the main turn id when busy (19.085365ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+      sessionId: 'sess-1',
+      status: 'busy',
+  -   turnId: 'turn-1'
+    }
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/fix-pass-cap.test.ts:21:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1794:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { sessionId: 'sess-1', status: 'busy' },
+    expected: { sessionId: 'sess-1', status: 'busy', turnId: 'turn-1' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/fix-pass-cap.test.ts:24:3
+✖ 1.1: a new main turn while still busy sends presence again with the new turn id (5008.268072ms)
+  AssertionError [ERR_ASSERTION]: timed out waiting for two presences
+      at until (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/support.ts:125:10)
+      at async pumpUntil (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/support.ts:133:3)
+      at async TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/fix-pass-cap.test.ts:30:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: undefined,
+    operator: 'fail',
+    diff: 'simple'
+  }
+
+test at test/fix-pass-cap.test.ts:40:3
+✖ 1.1: re-registering after a connector restart mid-turn carries the running turn id (24.176332ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'turn-1'
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/fix-pass-cap.test.ts:50:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'turn-1',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/fix-pass-cap.test.ts:74:3
+✖ 1.1: a main-loop tool result with a complete proof sends answer-seen with the session, turn and proof (5011.666625ms)
+  AssertionError [ERR_ASSERTION]: timed out waiting for answer-seen
+      at until (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/support.ts:125:10)
+      at async pumpUntil (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/support.ts:133:3)
+      at async TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/fix-pass-cap.test.ts:78:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1794:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: undefined,
+    operator: 'fail',
+    diff: 'simple'
+  }
+
+test at test/fix-pass-cap.test.ts:123:3
+✖ 1.1: answer-seen is retried if the connector can't be reached, so a restart inside the window doesn't lose it (5018.086815ms)
+  AssertionError [ERR_ASSERTION]: timed out waiting for the first attempt
+      at until (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/support.ts:125:10)
+      at async TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/fix-pass-cap.test.ts:127:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: undefined,
+    operator: 'fail',
+    diff: 'simple'
+  }
