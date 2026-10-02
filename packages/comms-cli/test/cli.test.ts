@@ -279,3 +279,31 @@ describe("P3 bug 5: -- protects text starting with @", () => {
     assert.equal(JSON.parse(read.stdout).messages.at(-1).text, "@lee is text here");
   });
 });
+
+describe("P3 bug 9a: a refused await mid-wait", () => {
+  it("exits 1 (refused) and doesn't promise the thread", async () => {
+    const path = join(root, "refuse-await.sock");
+    let calls = 0;
+    const wait = { id: "w_1", messageId: "m_1", waiter: { id: "p", name: "cedar", kind: "agent" }, until: Date.now() + 60_000, active: true, inInbox: [], createdAt: Date.now(),
+      results: [{ recipient: { id: "q", name: "hazel", kind: "agent" }, state: "open", delivery: { id: "d_1", state: "delivered" }, at: Date.now() }] };
+    const server = createServer((req, res) => {
+      req.resume();
+      req.on("end", () => {
+        calls++;
+        res.writeHead(calls === 1 ? 200 : 403, { "content-type": "application/json" });
+        res.end(JSON.stringify(calls === 1 ? { ok: true, wait } : { ok: false, error: { code: "not_homed_here", message: "@cedar moved" } }));
+      });
+    });
+    await new Promise<void>((r) => server.listen(path, r));
+    try {
+      let stdout = "";
+      let stderr = "";
+      const code = await run(["--socket", path, "await", "--as", "cedar", "m_1"], { env: {}, stdout: (t) => (stdout += t), stderr: (t) => (stderr += t), readStdin: async () => "" });
+      assert.equal(code, EXIT.refused, stdout + stderr);
+      assert.doesNotMatch(stdout, /arrive in your thread/);
+      assert.match(stderr, /not_homed_here/);
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
+});

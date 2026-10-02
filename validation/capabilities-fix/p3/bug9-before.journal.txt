@@ -1,0 +1,8 @@
+     [32m✓[39m 9a: a refused await exits 1 (refused), not 4, and doesn't promise the thread[32m 116[2mms[22m[39m
+[31m     [31m×[31m 9b: comms remind --every under a minute is a usage error (exit 2) naming --every[39m[32m 16[2mms[22m[39m
+[31m     [31m×[31m 9c: a send that went out unwaited (busy waiting) exits 0, as the usage text's exit-code table says[39m[32m 17[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[2m | [22m[33m26 skipped[39m[90m (29)[39m
+    not ok 1 - exits 1 (refused) and doesn't promise the thread
+# pass 18
+# fail 1

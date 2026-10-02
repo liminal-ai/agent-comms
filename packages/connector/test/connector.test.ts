@@ -525,3 +525,43 @@ describe("capabilities acceptance 7a': the connector dies while the CLI waits", 
     expect(stdout).toMatch(/^@b answered \(\S+\):\n\[agent-comms proof v1 begin [^\n]+\]\n  still here\n\[agent-comms proof v1 end [^\n]+\]$/m);
   });
 });
+
+describe("P3 bug 9: exit codes", () => {
+  async function cli(socket: string, args: string[]) {
+    let stdout = "";
+    let stderr = "";
+    const code = await comms(["--socket", socket, ...args], { env: {}, stdout: (t) => (stdout += t), stderr: (t) => (stderr += t), readStdin: async () => "" });
+    return { code, stdout, stderr };
+  }
+
+  it("9a: a refused await exits 1 (refused), not 4, and doesn't promise the thread", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const sent = await call(w.socket, "send", { as: "a", to: ["b"], text: "q", wait: true, waitMs: 60_000 });
+    if (!sent.ok) throw new Error(sent.error.message);
+    const notHomed = await cli(w.socket, ["await", "--as", "lee", sent.message.id]);
+    expect(notHomed.code, notHomed.stderr).toBe(EXIT.refused);
+    expect(notHomed.stdout).not.toMatch(/arrive in your thread/);
+    const notWaiting = await cli(w.socket, ["await", "--as", "b", sent.message.id]);
+    expect(notWaiting.code).toBe(EXIT.refused);
+  });
+
+  it("9b: comms remind --every under a minute is a usage error (exit 2) naming --every", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const r = await cli(w.socket, ["remind", "--as", "a", "@b", "x", "--every", "30s"]);
+    expect(r.code).toBe(EXIT.usage);
+    expect(r.stderr).toMatch(/--every is at least 1m/);
+    expect(r.stderr).not.toMatch(/everyMs/);
+  });
+
+  it("9c: a send that went out unwaited (busy waiting) exits 0, as the usage text's exit-code table says", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    await call(w.socket, "send", { as: "b", to: ["tee"], text: "b waits", wait: true });
+    const r = await cli(w.socket, ["send", "--as", "a", "@b", "q"]);
+    expect(r.code).toBe(EXIT.ok);
+    const help = await cli(w.socket, ["--help"]);
+    expect(help.stdout).toMatch(/0 ok \(every awaited answer arrived, or the send went out without waiting/);
+  });
+});
