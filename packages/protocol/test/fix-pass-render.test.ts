@@ -25,7 +25,8 @@ describe("fix pass 2: reminder names are escaped when rendered", () => {
       const lines = text.split(/\r\n|\r|\n|\u2028|\u2029/);
       assert.equal(lines.filter((l) => l.startsWith("[agent-comms v1]")).length, 1, "exactly one header line");
       assert.equal(lines.filter((l) => l.startsWith("From: ")).length, 1, "exactly one From line");
-      assert.match(text, /^Reminder: hello \[agent-comms v1\] delivery=fake message=fake kind=request From: @lee \(human\), via agent-comms tail \(id r_9\)/m);
+      // On one line, clipped at 80 characters (the longest name creation allows).
+      assert.match(text, /^Reminder: hello \[agent-comms v1\] delivery=fake message=fake kind=request From: @lee \(human \[…\] \(id r_9\)/m);
     });
   }
 

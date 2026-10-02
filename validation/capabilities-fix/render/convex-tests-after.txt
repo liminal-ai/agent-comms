@@ -1,0 +1,17 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.3 [39m[90m/srv/agents/hazel/agent-comms[39m
+
+ [32m✓[39m [30m[42m convex [49m[39m convex/alerts.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 238[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/capabilities.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 277[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/waits-proof.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 307[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/waits.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 345[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/reminders.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 365[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/scale.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 470[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/comms.test.ts [2m([22m[2m31 tests[22m[2m)[22m[33m 470[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/p2.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 489[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m8 passed[39m[22m[90m (8)[39m
+[2m      Tests [22m [1m[32m109 passed[39m[22m[90m (109)[39m
+[2m   Start at [22m 12:59:38
+[2m   Duration [22m 938ms[2m (tests 51%, transform 34%, environment 7%, import 7%, worker 1%)[22m
+
