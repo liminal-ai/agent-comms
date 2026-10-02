@@ -201,7 +201,8 @@ export default defineSchema({
     .index("by_state_next", ["state", "nextFireAt"])
     .index("by_expires", ["expiresAt"])
     .index("by_target", ["targetId"])
-    .index("by_creator", ["createdById"]),
+    .index("by_creator", ["createdById"])
+    .index("by_reportTo", ["reportToId"]),
 
   /** One row per fire, keyed by the fire's request message. */
   reminderFires: defineTable({

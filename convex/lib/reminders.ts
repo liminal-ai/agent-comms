@@ -332,6 +332,11 @@ export async function recordFireAnswer(ctx: MutationCtx, requestDelivery: Doc<"d
   });
 }
 
+/** Who may read a reminder (fix pass 0.4): those who may change it, and its report-to. */
+export async function mayRead(ctx: QueryCtx, r: Doc<"reminders">, who: Doc<"participants">): Promise<boolean> {
+  return r.reportToId === who._id || (await mayChange(ctx, r, who));
+}
+
 /** Who may change a reminder: its creator, its target, and the target's owner. */
 export async function mayChange(ctx: QueryCtx, r: Doc<"reminders">, who: Doc<"participants">): Promise<boolean> {
   if (who._id === r.createdById || who._id === r.targetId) return true;
