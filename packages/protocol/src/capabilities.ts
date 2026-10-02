@@ -85,7 +85,7 @@ export interface RegistryEntry {
 export const DEFAULT_WAIT_MS = 100_000;
 /** The longest bound `--wait` accepts. Waits past a harness's shell timeout need the shell timeout raised too. */
 export const MAX_WAIT_MS = 60 * 60_000;
-/** An answered result not acknowledged within this long gets its one fallback into the requester's thread. */
+/** An answered result not confirmed within this long after its wait ended gets its one fallback into the requester's thread (fix pass 0.2). */
 export const ACK_WINDOW_MS = 2 * 60_000;
 /**
  * A wait is held while its CLI keeps calling `await` (each call holds ≤ 25 s). An
@@ -102,10 +102,11 @@ export const WAIT_RETENTION_MS = 7 * 24 * 60 * 60_000;
  * - `open` → `expired` (the wait's `until` passed first, or the answer came while no CLI was
  *   awaiting (WAIT_HELD_MS); the answer goes to the thread as normal)
  * - `open` → `ended` (the delivery ended `failed` or `uncertain`, or the agent was retired: no answer is coming)
- * - `answered` → `acknowledged` (the CLI printed it and said so, while the waiter's turn that ran
- *   the CLI is still running: the waiter is `busy`, not stale, and `busySince` is no later than the
- *   wait's `createdAt`. Otherwise the ack is ignored: printed isn't seen, H0)
- * - `answered` → `fell-back` (not acknowledged within ACK_WINDOW_MS: delivered once into the thread)
+ * - `answered` → `acknowledged` (fix pass 0.1: the harness confirmed, with `answer-seen`, that a tool
+ *   result of the main turn the wait was created in (`waiterTurnId`) carried this answer's complete
+ *   proof markers. The CLI's own `ack` only records `printedAt`: printed isn't seen)
+ * - `answered` → `fell-back` (fix pass 0.2: not confirmed within ACK_WINDOW_MS after the wait ended
+ *   (`endedAt`); delivered once into the thread)
  * `ambiguous` keeps the result `open`: the agent will finish it with `comms reply`.
  */
 export type WaitResultState = "open" | "answered" | "expired" | "ended" | "acknowledged" | "fell-back";
@@ -119,6 +120,14 @@ export interface WaitResult {
   delivery: { id: DeliveryId; state: DeliveryState; detail?: string };
   /** Present once `answered` (and after): the answer returned to the wait. */
   answer?: MessageEnvelope;
+  /**
+   * Fix pass 0.1: the proof token for this answer's markers. Only in the waiter's own `send`
+   * and `await` responses, so only the waiting CLI can print a proof; never in `message-status`,
+   * the web view or the thread.
+   */
+  proofToken?: string;
+  /** When the CLI said it printed this answer (`ack`). Provisional: it doesn't change the state. */
+  printedAt?: number;
   /** When the result last changed. */
   at: number;
 }
@@ -131,6 +140,14 @@ export interface Wait {
   until: number;
   /** Still counts as busy waiting for the mutual-wait rule. */
   active: boolean;
+  /**
+   * Fix pass 0.2: when the wait ended: no result open, `until` passed, or its CLI stopped checking
+   * in (no `await` for WAIT_HELD_MS: then `endedAt` is the last check-in plus WAIT_HELD_MS). Set
+   * once and never moved; the fallback window ACK_WINDOW_MS runs from here.
+   */
+  endedAt?: number;
+  /** Fix pass 0.1: the waiter's main turn when the wait was created, if the harness reports it. Without it nothing confirms, and answers fall back. */
+  waiterTurnId?: string;
   results: WaitResult[];
   /** People addressed by the request: never waited on; the message is in their inbox. */
   inInbox: ParticipantRef[];

@@ -96,6 +96,7 @@ export async function startStubServer(options: StubServerOptions): Promise<StubS
       case "reminders":
       case "reminder":
       case "reminder-update":
+      case "answer-seen":
         return fail(res, path, body, "unsupported", `${op} isn't supported by the stub`);
       default: {
         const unhandled: never = op;
