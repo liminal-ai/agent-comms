@@ -57,6 +57,7 @@ export const messageMeta = v.union(
     setBy: v.string(),
     schedule: v.string(),
     fire: v.number(),
+    reportTo: v.optional(v.string()),
   }),
   v.object({ type: v.literal("reminder-report"), reminderId: v.string(), name: v.string(), target: v.string(), fireMessageId: v.string() }),
   v.object({

@@ -56,6 +56,7 @@ export const promote = mutation({
     if (args.kind === "human" && args.owner) fail("bad_request", "people have no owner");
     const owner = args.owner ? await participantByName(ctx, args.owner) : undefined;
     if (owner && owner.kind !== "human") fail("bad_request", `@${owner.name} isn't a person; an agent's owner is a person`);
+    if (owner && owner.state === "retired") fail("bad_request", `@${owner.name} is retired`);
     const profile = profilePatch(args);
     const taken = await ctx.db
       .query("participants")

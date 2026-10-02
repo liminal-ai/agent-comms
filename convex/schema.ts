@@ -134,6 +134,8 @@ export default defineSchema({
   })
     .index("by_human", ["humanId", "createdAt"])
     .index("by_human_read", ["humanId", "readAt"])
+    // Fix pass 2: unread, newest first, a page at a time.
+    .index("by_human_read_created", ["humanId", "readAt", "createdAt"])
     .index("by_human_conversation", ["humanId", "conversationId", "readAt"])
     .index("by_human_message", ["humanId", "messageId"]),
 
