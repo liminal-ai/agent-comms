@@ -74,3 +74,10 @@ describe("0.1 contract shapes", () => {
     assert.equal(P.ERROR_STATUS.forbidden, 403);
   });
 });
+
+describe("0.1 register carries the running turn (Hazel's review)", () => {
+  it("a session registering mid-turn (after a connector restart) says which main turn is running", () => {
+    const r = P.decodeRequest("register", { participant: "a", harness: "claude-code", sessionId: "s", cwd: "/", status: "busy", turnId: "t-7" });
+    assert.equal(r.ok && (r.value as { turnId?: string }).turnId, "t-7");
+  });
+});
