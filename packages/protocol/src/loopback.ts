@@ -322,8 +322,9 @@ const requestDecoders = {
     sessionId: harnessId,
     status: presence,
     /**
-     * Fix pass 0.1: while busy, the main turn running now. The connector stamps a waiting
-     * send with it (the waiter's turn), and only proofs from that turn confirm an answer.
+     * Fix pass 0.1: while busy, the main turn running now. The connector stamps a Claude Code
+     * agent's waiting send with it (the waiter's turn); only proofs from that turn confirm an
+     * answer. T3 agents are never confirmed (T3 doesn't show the adapter full tool output).
      */
     turnId: optional(harnessId),
   }),
