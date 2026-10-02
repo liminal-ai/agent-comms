@@ -1,0 +1,23 @@
+{
+  "receipt": {
+    "sequence": 2600
+  },
+  "messageId": "msg-5dba351c-fd64-4298-b5a3-f18a1494faad",
+  "turnId": "01a0fd69-4a68-77a2-9ad4-9603092fa33a",
+  "settled": true,
+  "assistantMessages": [
+    {
+      "messageId": "assistant:msg_0b325e2b5fabbf1a016abfd96e604487d18e9d2fd2f9ae6045",
+      "text": "I’ll run the command once with default settings.\n"
+    },
+    {
+      "messageId": "assistant:msg_0b325e2b5fabbf1a016abfd97388e087d19ecddf44f49b4a5e",
+      "text": "```text\nScript completed\nWall time 0.1 seconds\nOutput:\n{\"chunk_id\":\"e69eef\",\"wall_time_seconds\":0.000003425,\"exit_code\":0,\"original_token_count\":28,\"output\":\"<<<comms-answer wait=w_test message=m_test\\nThe answer is forty-two.\\n>>>comms-answer wait=w_test message=m_test\\n\"}\n```"
+    }
+  ],
+  "eventTypes": [
+    "thread.message-sent",
+    "thread.session-set",
+    "thread.activity-appended"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "receipt": {
+    "sequence": 2602
+  },
+  "messageId": "msg-eb1178fe-f512-4759-8766-0f221174059b",
+  "turnId": "739ccf7c-f077-4f15-8d74-fcb2ba07bf74",
+  "settled": true,
+  "assistantMessages": [
+    {
+      "messageId": "assistant:3ee408fc-c08b-4179-bf00-616cf41de2cf",
+      "text": "The tool returned, verbatim:\n\n```\n<<<comms-answer wait=w_test message=m_test\nThe answer is forty-two.\n>>>comms-answer wait=w_test message=m_test\n```"
+    }
+  ],
+  "eventTypes": [
+    "thread.message-sent",
+    "thread.session-set",
+    "thread.activity-appended"
+  ]
+}

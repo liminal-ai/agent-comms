@@ -310,6 +310,16 @@ notification and no new turn for it.
    `ack` only while the waiter's turn is still running (the T3 adapter and the mod both know).
    Otherwise let the fallback deliver it. That's at most a duplicate, which the brief allows.
 
+## 11. Tool output seen by the adapter (capabilities fix pass 0.1)
+
+Only a preview. Every tool activity's output is cut down by T3 to its **first non-empty line,
+at most 84 characters** (`ActivityPayloadProjection.ts:164-188`), on the live stream, the snapshot,
+HTTP and in storage. Claude: `data.rawOutput.content`; Codex: `data.item.aggregatedOutput`. A
+multi-line result (the CLI's begin marker, the answer, the end marker) shows only its first line,
+so the adapter can never confirm an answer reached the model: T3 falls back like Codex. Codex's
+output can also arrive in a later turn for a command no model read. Evidence:
+`validation/capabilities-fix/t3-tool-output/`.
+
 ## Test fixtures on 3780
 
 Project `proj-bacff64b-618b-40a7-87c1-8b89205d3d9e` (`/srv/agents/hazel/t3-workspace`):
