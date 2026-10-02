@@ -4,6 +4,7 @@
 import {
   formatDuration,
   formatSchedule,
+  MAX_TEXT_CHARS,
   type MessageMeta,
   PRESENCE_STALE_MS,
   renderReminderEnded,
@@ -17,6 +18,8 @@ import {
   type ReminderSkip,
   type ReminderState,
 } from "@agent-comms/protocol";
+import { ConvexError } from "convex/values";
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { fail, participantByName, refById } from "./core";
@@ -52,6 +55,7 @@ export async function createReminder(ctx: MutationCtx, creator: Doc<"participant
   const expiresAt = now + expiresMs;
   if (input.at !== undefined && (input.at <= now || input.at > expiresAt)) fail("bad_request", "--at must be in the future and before the reminder expires");
   if (input.text.trim().length === 0) fail("bad_request", "a reminder needs text");
+  if (input.text.length > MAX_TEXT_CHARS) fail("bad_request", `a reminder's text is at most ${MAX_TEXT_CHARS} characters (this is ${input.text.length})`);
   if (input.max !== undefined && (!Number.isInteger(input.max) || input.max < 1)) fail("bad_request", "--max is at least 1");
   if (input.idleForMs !== undefined && input.idleForMs < 0) fail("bad_request", "--idle-for can't be negative");
 
@@ -149,11 +153,11 @@ async function system(ctx: MutationCtx, name: "reminders"): Promise<Doc<"partici
  * Posts a notice from @reminders to a participant in their DM: people get it in
  * their inbox, agents a delivery that ends at `delivered` and is never collected.
  */
-async function notify(ctx: MutationCtx, to: Doc<"participants">, text: string, meta: MessageMeta): Promise<void> {
-  if (to.kind === "system" || to.state === "retired") return;
+async function notify(ctx: MutationCtx, to: Doc<"participants">, text: string, meta: MessageMeta): Promise<Id<"messages"> | undefined> {
+  if (to.kind === "system" || to.state === "retired") return undefined;
   const from = await system(ctx, "reminders");
   const conversation = await openDm(ctx, from, to);
-  await post(ctx, {
+  const sent = await post(ctx, {
     sender: from,
     conversation,
     recipients: [to],
@@ -162,6 +166,7 @@ async function notify(ctx: MutationCtx, to: Doc<"participants">, text: string, m
     origin: { via: "system" },
     meta,
   });
+  return sent.message.id as Id<"messages">;
 }
 
 async function tellEnded(ctx: MutationCtx, r: Doc<"reminders">): Promise<void> {
@@ -240,6 +245,8 @@ async function fire(ctx: MutationCtx, r: Doc<"reminders">, target: Doc<"particip
     origin: { via: "system" },
     meta: { type: "reminder", reminderId: r._id, name: r.name, setBy: creator.name, schedule: formatSchedule(schedule), fire: fireNumber },
   });
+  // Test hook (fix pass 1.4): a failure after the fire's message and delivery are written.
+  if (process.env.COMMS_TEST_FAULT === `reminder-fire-after-post:${r._id}`) throw new Error("injected failure after the fire's message was posted");
   const delivery = result.deliveries[0];
   if (delivery) {
     await ctx.db.insert("reminderFires", {
@@ -266,18 +273,23 @@ async function fire(ctx: MutationCtx, r: Doc<"reminders">, target: Doc<"particip
   }
 }
 
+async function expire(ctx: MutationCtx, r: Doc<"reminders">, now: number): Promise<void> {
+  await ctx.db.patch(r._id, { state: "expired", stateAt: now, nextFireAt: undefined });
+  await tellEnded(ctx, (await ctx.db.get(r._id))!);
+}
+
 /** The minute cron: expiries first, then due reminders (bounded per run). */
 export async function tick(ctx: MutationCtx, now: number): Promise<{ fired: number; skipped: number; expired: number }> {
   let expired = 0;
-  const ending = await ctx.db
-    .query("reminders")
-    .withIndex("by_expires", (q) => q.lte("expiresAt", now))
-    .take(200);
-  for (const r of ending) {
-    if (r.state !== "active" && r.state !== "paused" && r.state !== "blocked") continue;
-    await ctx.db.patch(r._id, { state: "expired", stateAt: now, nextFireAt: undefined });
-    await tellEnded(ctx, (await ctx.db.get(r._id))!);
-    expired++;
+  // Live states only (fix pass 1.3): finished reminders are never read here.
+  for (const state of ["active", "paused", "blocked"] as const) {
+    for (const r of await ctx.db
+      .query("reminders")
+      .withIndex("by_state_expires", (q) => q.eq("state", state).lte("expiresAt", now))
+      .take(100)) {
+      await expire(ctx, r, now);
+      expired++;
+    }
   }
   let fired = 0;
   let skipped = 0;
@@ -286,28 +298,49 @@ export async function tick(ctx: MutationCtx, now: number): Promise<{ fired: numb
     .withIndex("by_state_next", (q) => q.eq("state", "active").lte("nextFireAt", now))
     .take(50);
   for (const r of due) {
-    if (r.nextFireAt === undefined) continue;
-    const target = (await ctx.db.get(r.targetId))!;
-    if (target.state === "retired") {
-      await ctx.db.patch(r._id, { state: "cancelled", stateReason: `@${target.name} was retired`, stateAt: now, nextFireAt: undefined });
-      await tellEnded(ctx, (await ctx.db.get(r._id))!);
-      continue;
+    // Each reminder in its own sub-transaction (fix pass 1.4): if anything throws, all of that
+    // reminder's writes are rolled back, it alone is blocked with the error, and the tick goes on.
+    try {
+      const outcome: Step = await ctx.runMutation(internal.reminders.step, { id: r._id });
+      if (outcome === "fired") fired++;
+      else if (outcome === "skipped") skipped++;
+      else if (outcome === "expired") expired++;
+    } catch (error) {
+      const message = error instanceof ConvexError ? (error.data as { message?: string }).message : (error as Error).message;
+      await ctx.db.patch(r._id, { state: "blocked", stateReason: `the fire failed: ${String(message ?? error).slice(0, 1_000)}`, stateAt: now });
     }
-    if (!(await previousFireFinal(ctx, r, now))) {
-      await skip(ctx, r, { at: now, reason: "previous-fire-not-final" }, r.everyMs !== undefined ? nextSlot(r, now) : now + MINUTE);
-      skipped++;
-      continue;
-    }
-    const blocked = await idleBlock(ctx, r, now);
-    if (blocked) {
-      await skip(ctx, r, blocked, now + MINUTE);
-      skipped++;
-      continue;
-    }
-    await fire(ctx, r, target, now);
-    fired++;
   }
   return { fired, skipped, expired };
+}
+
+export type Step = "fired" | "skipped" | "expired" | "ended" | "none";
+
+/** One due reminder's turn in the tick: expire, cancel, skip or fire it. Run as its own sub-transaction. */
+export async function step(ctx: MutationCtx, id: Id<"reminders">, now: number): Promise<Step> {
+  const r = await ctx.db.get(id);
+  if (!r || r.state !== "active" || r.nextFireAt === undefined || r.nextFireAt > now) return "none";
+  // The firing loop checks expiry itself (fix pass 1.3), whatever the expiry scan reached.
+  if (r.expiresAt <= now) {
+    await expire(ctx, r, now);
+    return "expired";
+  }
+  const target = (await ctx.db.get(r.targetId))!;
+  if (target.state === "retired") {
+    await ctx.db.patch(r._id, { state: "cancelled", stateReason: `@${target.name} was retired`, stateAt: now, nextFireAt: undefined });
+    await tellEnded(ctx, (await ctx.db.get(r._id))!);
+    return "ended";
+  }
+  if (!(await previousFireFinal(ctx, r, now))) {
+    await skip(ctx, r, { at: now, reason: "previous-fire-not-final" }, r.everyMs !== undefined ? nextSlot(r, now) : now + MINUTE);
+    return "skipped";
+  }
+  const blocked = await idleBlock(ctx, r, now);
+  if (blocked) {
+    await skip(ctx, r, blocked, now + MINUTE);
+    return "skipped";
+  }
+  await fire(ctx, r, target, now);
+  return "fired";
 }
 
 /** A fire's request was answered (collected, or completed with `comms reply`): record it, and report it. */
@@ -320,16 +353,54 @@ export async function recordFireAnswer(ctx: MutationCtx, requestDelivery: Doc<"d
   await ctx.db.patch(f._id, { answerMessageId: answerId, answeredAt: now });
   const r = await ctx.db.get(f.reminderId);
   if (!r?.reportToId) return;
+  // The report runs in its own sub-transaction (fix pass 1.5): if it fails, its writes are
+  // rolled back and the answer (collected or replied) stands. It's tried once per answer.
+  try {
+    await ctx.runMutation(internal.reminders.report, { fireId: f._id });
+  } catch (error) {
+    const message = error instanceof ConvexError ? (error.data as { message?: string }).message : (error as Error).message;
+    await ctx.db.patch(f._id, { reportError: String(message ?? error).slice(0, 1_000) });
+  }
+}
+
+/** Posts a fire's answer to the reminder's report-to, clipped to fit (fix pass 1.5). */
+export async function report(ctx: MutationCtx, fireId: Id<"reminderFires">): Promise<void> {
+  const f = (await ctx.db.get(fireId))!;
+  const r = (await ctx.db.get(f.reminderId))!;
+  if (!r.reportToId || !f.answerMessageId || f.reportMessageId) return;
   const reportTo = (await ctx.db.get(r.reportToId))!;
   const target = (await ctx.db.get(r.targetId))!;
-  const answer = (await ctx.db.get(answerId))!;
-  await notify(ctx, reportTo, renderReminderReport({ reminderName: r.name, reminderId: r._id, target: target.name, answer: answer.text }), {
+  const answer = (await ctx.db.get(f.answerMessageId))!;
+  const text = clippedReport(r, target.name, answer);
+  const posted = await notify(ctx, reportTo, text, {
     type: "reminder-report",
     reminderId: r._id,
     name: r.name,
     target: target.name,
     fireMessageId: f.messageId,
   });
+  // Test hook (fix pass 1.5): a failure after the report is written.
+  if (process.env.COMMS_TEST_FAULT === `reminder-report-after-post:${r._id}`) throw new Error("injected failure after the report was posted");
+  if (posted) await ctx.db.patch(f._id, { reportMessageId: posted });
+}
+
+/** The report text, the answer cut so the whole fits MAX_TEXT_CHARS, saying where the full answer is. */
+function clippedReport(r: Doc<"reminders">, target: string, answer: Doc<"messages">): string {
+  const base = { reminderName: r.name, reminderId: r._id, target };
+  let text = renderReminderReport({ ...base, answer: answer.text });
+  if (text.length <= MAX_TEXT_CHARS) return text;
+  let keep = answer.text.length - (text.length - MAX_TEXT_CHARS) - 400;
+  for (;;) {
+    const note = `[… ${answer.text.length - keep} more characters; the full answer is message ${answer._id} in conversation ${answer.conversationId}]`;
+    text = `${renderReminderReport({ ...base, answer: answer.text.slice(0, Math.max(0, keep)) })}\n${note}`;
+    if (text.length <= MAX_TEXT_CHARS || keep <= 0) return text.slice(0, MAX_TEXT_CHARS);
+    keep -= text.length - MAX_TEXT_CHARS + 100;
+  }
+}
+
+/** Who may read a reminder (fix pass 0.4): those who may change it, and its report-to. */
+export async function mayRead(ctx: QueryCtx, r: Doc<"reminders">, who: Doc<"participants">): Promise<boolean> {
+  return r.reportToId === who._id || (await mayChange(ctx, r, who));
 }
 
 /** Who may change a reminder: its creator, its target, and the target's owner. */

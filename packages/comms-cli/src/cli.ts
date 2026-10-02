@@ -15,6 +15,7 @@ import {
   type MessageStatus,
   parseAt,
   parseDuration,
+  renderAnswerWithProof,
   type Op,
   PARTICIPANT_ENV,
   type RegistryEntry,
@@ -24,7 +25,7 @@ import {
   type Responses,
   type SendResult,
 } from "@agent-comms/protocol";
-import { call, ConnectorUnreachable, resolveSocketPath } from "./client.ts";
+import { call, ConnectionLost, ConnectorUnreachable, resolveSocketPath } from "./client.ts";
 
 /** The protocol's exit codes (capabilities.ts): `pending` and `endedWithoutAnswer` come with send-and-wait (R2). */
 export const EXIT = CLI_EXIT;
@@ -68,8 +69,8 @@ export const USAGE = `usage:
   with "-"; anything after "--" is text, whatever it looks like.
   --json prints the connector's response as JSON. --socket <path> overrides the socket.
   --key <k>: the idempotency key for send/reply (default: a new one). If the connector
-  answers unavailable, comms retries with the same key, then prints it; rerunning with
-  that --key can't post twice.
+  answers unavailable or the connection drops, comms retries with the same key, then
+  prints it; rerunning with that --key can't post twice.
 
 exit codes: 0 ok (every awaited answer arrived), 1 the connector refused, 2 usage,
   3 connector unreachable, 4 the wait ended with answers still to come (they'll arrive in
@@ -83,6 +84,8 @@ export interface Io {
 }
 
 class UsageError extends Error {}
+/** A keyed send or reply whose connection kept dropping; its key has been printed. Exits 3. */
+class GaveUp extends Error {}
 
 const OPTIONS = {
   as: { type: "string" },
@@ -164,13 +167,28 @@ export async function run(argv: string[], io: Io): Promise<number> {
       body: Requests[K],
       options: { print?: boolean; onUnsupported?: () => void } = {},
     ): Promise<Responses[K] | null> => {
-      let response = await call(socket, op, body);
-      // A send or reply carries an idempotency key, so retrying after `unavailable` can't post twice (3.1).
+      // A send or reply carries an idempotency key, so retrying can't post twice (3.1). It's retried
+      // after `unavailable` and, since fix pass 1.7, after a dropped connection (the connector may
+      // have posted it and died before answering). Giving up prints the key: exit 3 if the
+      // connector couldn't be reached, 1 if it said it was unavailable.
       const keyed = (body as { key?: string }).key;
+      const attempt = async () => {
+        try {
+          return await call(socket, op, body);
+        } catch (error) {
+          if (keyed && error instanceof ConnectionLost) return error;
+          throw error;
+        }
+      };
+      let response = await attempt();
       for (const delayMs of keyed ? [2_000, 5_000] : []) {
-        if (response.ok || response.error.code !== "unavailable") break;
+        if (!(response instanceof ConnectionLost) && (response.ok || response.error.code !== "unavailable")) break;
         await new Promise((r) => setTimeout(r, delayMs));
-        response = await call(socket, op, body);
+        response = await attempt();
+      }
+      if (response instanceof ConnectionLost) {
+        io.stderr(`comms ${command}: ${response.message}\nIt may or may not have been posted. Retry with the same key, which can't post twice: --key ${keyed}\n`);
+        throw new GaveUp();
       }
       if (!response.ok && keyed && response.error.code === "unavailable") {
         io.stderr(`comms ${command}: unavailable: ${response.error.message}\nIt may or may not have been posted. Retry with the same key, which can't post twice: --key ${keyed}\n`);
@@ -207,7 +225,15 @@ export async function run(argv: string[], io: Io): Promise<number> {
         if (fresh.length === 0) return;
         for (const x of fresh) {
           printed.add(x.recipient.name);
-          if (!values.json) io.stdout(`@${x.recipient.name} answered (${x.answer!.id}):\n${x.answer!.text.split("\n").map((l) => `  ${l}`).join("\n")}\n`);
+          if (!values.json) {
+            const heading = `@${x.recipient.name} answered (${x.answer!.id}):`;
+            // Fix pass 0.1: the markers let the harness confirm this output reached the model.
+            io.stdout(
+              (x.proofToken
+                ? renderAnswerWithProof({ waitId: wait.id, messageId: x.answer!.id, token: x.proofToken }, heading, x.answer!.text)
+                : `${heading}\n${x.answer!.text.split("\n").map((l) => `  ${l}`).join("\n")}`) + "\n",
+            );
+          }
         }
         if (values.json) return;
         const acked = await call(socket, "ack", { as: me, messageId: wait.messageId, recipients: fresh.map((x) => x.recipient.name) }).catch(() => null);
@@ -482,6 +508,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
       io.stderr(`comms: ${error.message}\n${USAGE}\n`);
       return EXIT.usage;
     }
+    if (error instanceof GaveUp) return EXIT.unreachable;
     if (error instanceof ConnectorUnreachable) {
       io.stderr(`comms: ${error.message}\n`);
       return EXIT.unreachable;

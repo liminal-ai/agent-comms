@@ -1,0 +1,4 @@
+[31m     [31m×[31m Alder's repro: a 32,000-character answer to a --report-to reminder is collected, and the report is posted clipped, pointing to the full answer[39m[32m 167[2mms[22m[39m
+[31m     [31m×[31m a report failure after writing began keeps the answer (once), leaves no stray report, and a retry posts nothing twice[39m[32m 20[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[33m14 skipped[39m[90m (16)[39m

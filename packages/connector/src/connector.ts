@@ -57,29 +57,19 @@ export const runConnector = (options: ConnectorOptions) =>
             Effect.catch((e) => Effect.sync(() => log(`presence for @${participant}: ${e.message}`))),
           ),
         ),
+      // Retried for well inside the fallback window, so a connector or Convex blip doesn't cost a duplicate.
+      answerSeen: (participant, turnId, proofs) =>
+        void Effect.runFork(
+          api.answerSeen(participant, turnId, proofs).pipe(
+            Effect.retry({ times: 12, schedule: Schedule.spaced(Duration.seconds(5)) }),
+            Effect.tap((r) => Effect.sync(() => log(`answer-seen for @${participant} turn ${turnId}: ${r.confirmed} of ${proofs.length} confirmed`))),
+            Effect.catch((e) => Effect.sync(() => log(`answer-seen for @${participant}: ${e.message}`))),
+          ),
+        ),
       poke,
     });
 
     const lastPresence = new Map<string, string>();
-    /**
-     * Writes a participant's presence now, for harnesses the connector can read (T3);
-     * the poll below runs every 20 s, too coarse for the ack rule. Claude Code
-     * sessions report their own presence as it changes. Best effort.
-     */
-    const refreshPresence = async (name: string): Promise<void> => {
-      try {
-        const { participants } = await run(api.homed);
-        const p = participants.find((x) => x.participant.name === name);
-        const adapter = p && options.adapters?.find((a) => a.harness === p.home.harness);
-        if (!p || !adapter?.presence) return;
-        const status = await Effect.runPromise(adapter.presence({ participant: name, locator: p.home.locator }));
-        await run(api.presence(name, status));
-        lastPresence.set(name, status);
-      } catch (error) {
-        log(`presence for @${name}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    };
-
     /**
      * `await`: answered at once if no result is open; otherwise held until one
      * leaves `open`, the wait's `until`, the requested hold (≤ 25 s), or the
@@ -125,21 +115,18 @@ export const runConnector = (options: ConnectorOptions) =>
       outcome: (req) => sessions.outcome(req),
       "check-result": (req) => sessions.checkResult(req),
       presence: (req) => sessions.presence(req),
-      // Fix pass section 1 (0.1): confirmations are built after Hazel's review of the contract.
-      "answer-seen": () => Promise.reject(new LoopbackError("unsupported", "answer-seen isn't supported by this connector yet")),
-      send: async (req) => {
-        // The ack rule compares the waiter's busySince with the wait's start: make it current first.
-        if (req.wait) await refreshPresence(req.as);
-        return run(api.send(req));
+      "answer-seen": (req) => sessions.answerSeen(req),
+      send: (req) => {
+        // Fix pass 0.1: a waiting send is stamped with the waiter's running main turn, if its harness said
+        // (Claude Code). T3 waits get none: T3 can't show the proof, so they fall back.
+        const waiterTurnId = req.wait ? sessions.turnOf(req.as) : undefined;
+        return run(api.send({ ...req, ...(waiterTurnId !== undefined ? { waiterTurnId } : {}) }));
       },
       reply: (req) => run(api.reply(req)),
       read: (req) => run(api.read(req)),
       list: (req) => run(api.list(req)),
       await: (req, aborted) => holdAwait(req, aborted),
-      ack: async (req) => {
-        await refreshPresence(req.as);
-        return run(api.ack(req));
-      },
+      ack: (req) => run(api.ack(req)),
       "message-status": (req) => run(api.messageStatus(req)),
       agents: (req) => run(api.agents(req)),
       "agents-set": (req) => run(api.agentsSet(req)),

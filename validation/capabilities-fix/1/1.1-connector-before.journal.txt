@@ -1,0 +1,5 @@
+[31m     [31m×[31m fix pass 1.1: comms send prints the answer between proof markers; the mod's answer-seen from the same turn acknowledges it[39m[32m 158[2mms[22m[39m
+[31m     [31m×[31m fix pass 1.1: a proof reported from another turn, or with no turn known at the send, confirms nothing[39m[32m 44[2mms[22m[39m
+[31m     [31m×[31m fix pass 1.1: a session re-registering mid-turn (after a connector restart) still stamps its waits[39m[32m 12[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[33m23 skipped[39m[90m (26)[39m

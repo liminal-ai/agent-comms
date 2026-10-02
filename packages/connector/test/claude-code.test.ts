@@ -15,7 +15,7 @@ const delivery = {
 
 describe("acceptance 11a: a session superseded right after it reported delivered", () => {
   it("the outcome isn't awaited from the new session (which never ran the turn): it's lost, so recovery asks", async () => {
-    const sessions = new ClaudeCodeSessions({ pollWaitMs: 1_000, homed, presence: () => {}, poke: makePoke() });
+    const sessions = new ClaudeCodeSessions({ pollWaitMs: 1_000, homed, presence: () => {}, answerSeen: () => {}, poke: makePoke() });
     await sessions.register({ participant: "b", harness: "claude-code", sessionId: "old", cwd: "/", status: "busy" });
     sessions.delivered({ sessionId: "old", deliveryId: "d_1", turnId: "t-old" });
     // The new session registers before the dispatcher starts waiting for the turn's outcome.

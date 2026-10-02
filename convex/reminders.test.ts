@@ -214,8 +214,8 @@ describe("R3 reminders over the connector", () => {
     expect((await t.query(api.connector.reminders, { machine: m1, as: "a" })).reminders.map((x) => x.id)).toEqual([r.reminder.id]);
     expect((await t.query(api.connector.reminders, { machine: m1, as: "b" })).reminders.map((x) => x.id)).toEqual([r.reminder.id]);
     expect((await t.query(api.connector.reminders, { machine: m1, as: "c" })).reminders).toEqual([]);
-    expect((await t.query(api.connector.reminder, { machine: m1, as: "c", id: r.reminder.id })).reminder.id).toBe(r.reminder.id);
-    expect(await errorCode(t.mutation(api.connector.reminderUpdate, { machine: m1, as: "c", id: r.reminder.id, action: "pause" }))).toBe("conflict");
+    expect(await errorCode(t.query(api.connector.reminder, { machine: m1, as: "c", id: r.reminder.id }))).toBe("forbidden"); // fix pass 0.4
+    expect(await errorCode(t.mutation(api.connector.reminderUpdate, { machine: m1, as: "c", id: r.reminder.id, action: "pause" }))).toBe("forbidden");
     expect((await t.mutation(api.connector.reminderUpdate, { machine: m1, as: "b", id: r.reminder.id, action: "blocked", reason: "no creds" })).reminder).toMatchObject({ state: "blocked", stateReason: "no creds" });
     expect(await errorCode(t.mutation(api.connector.remind, { machine: m1, as: "a", target: "reminders", text: "x", everyMs: MIN }))).toBe("bad_request");
     expect(await errorCode(t.query(api.connector.reminder, { machine: m1, as: "a", id: "nope" }))).toBe("unknown_reminder");
@@ -256,5 +256,129 @@ describe("R3 notices to agents", () => {
     }
     expect((await t.query(api.connector.work, { machine: m1 })).deliveries).toEqual([]);
     expect(r.reminder.state).toBe("active");
+  });
+});
+
+describe("fix pass 1.2 (contract 0.4): reminder detail access", () => {
+  it("only the creator, the target, the target's owner and the report-to read a reminder; anyone else, on any machine, is forbidden", async () => {
+    const t = await setup();
+    await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m2", secret: "m2-secret-0123456789" });
+    await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "far", kind: "agent", owner: "lee", home: { machine: "m2", harness: "t3", locator: "loc-far" } });
+    const m2 = { id: "m2", secret: "m2-secret-0123456789" };
+    const r = await t.mutation(api.connector.remind, { machine: m1, as: "a", target: "b", text: "private", everyMs: MIN, reportTo: "c" });
+    for (const as of ["a", "b", "c"]) {
+      expect((await t.query(api.connector.reminder, { machine: m1, as, id: r.reminder.id })).reminder.text, as).toBe("private");
+    }
+    expect((await t.query(api.connector.reminders, { machine: m1, as: "c" })).reminders.map((x) => x.id)).toEqual([r.reminder.id]);
+    // Alder's repro: an unrelated agent on another machine could read it.
+    expect(await errorCode(t.query(api.connector.reminder, { machine: m2, as: "far", id: r.reminder.id }))).toBe("forbidden");
+    expect((await t.query(api.connector.reminders, { machine: m2, as: "far" })).reminders).toEqual([]);
+    expect(await errorCode(t.mutation(api.connector.reminderUpdate, { machine: m2, as: "far", id: r.reminder.id, action: "pause" }))).toBe("forbidden");
+    // The report-to may read it, not change it.
+    expect(await errorCode(t.mutation(api.connector.reminderUpdate, { machine: m1, as: "c", id: r.reminder.id, action: "pause" }))).toBe("forbidden");
+  });
+});
+
+describe("fix pass 1.4: one bad reminder can't stop the rest", () => {
+  const counts = (t: T) =>
+    t.run(async (ctx) => ({
+      messages: (await ctx.db.query("messages").collect()).length,
+      deliveries: (await ctx.db.query("deliveries").collect()).length,
+      fires: (await ctx.db.query("reminderFires").collect()).length,
+    }));
+
+  it("refuses reminder text over MAX_TEXT_CHARS at creation, on every path", async () => {
+    const t = await setup();
+    const big = "x".repeat(40_000);
+    expect(await errorCode(t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: big, everyMs: MIN }))).toBe("bad_request");
+    expect(await errorCode(t.mutation(api.connector.remind, { machine: m1, as: "b", target: "a", text: big, everyMs: MIN }))).toBe("bad_request");
+  });
+
+  it("a 40,000-character reminder (from before the cap) next to a normal one: the normal one fires; the bad one is blocked with the error and leaves nothing behind", async () => {
+    const t = await setup();
+    const good = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "fine", everyMs: MIN });
+    const bad = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "b", text: "short for now", everyMs: MIN });
+    await t.run(async (ctx) => ctx.db.patch(bad.reminder.id as never, { text: "x".repeat(40_000) }));
+    const before = await counts(t);
+    at(MIN);
+    await tick(t);
+    expect((await get(t, good.reminder.id)).reminder.fires).toBe(1);
+    const b = (await get(t, bad.reminder.id)).reminder;
+    expect(b.state).toBe("blocked");
+    expect(b.stateReason).toMatch(/^the fire failed: .*32000/);
+    const after = await counts(t);
+    expect(after).toEqual({ messages: before.messages + 1, deliveries: before.deliveries + 1, fires: before.fires + 1 });
+  });
+
+  it("a failure injected after writing has begun leaves no message, delivery or fire, and blocks only that reminder", async () => {
+    const t = await setup();
+    const r = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: MIN });
+    const other = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "b", text: "y", everyMs: MIN });
+    const before = await counts(t);
+    at(MIN);
+    process.env.COMMS_TEST_FAULT = `reminder-fire-after-post:${r.reminder.id}`;
+    try {
+      await tick(t);
+    } finally {
+      delete process.env.COMMS_TEST_FAULT;
+    }
+    const x = (await get(t, r.reminder.id)).reminder;
+    expect([x.state, x.fires]).toEqual(["blocked", 0]);
+    expect(x.stateReason).toMatch(/injected/);
+    expect((await get(t, other.reminder.id)).reminder.fires).toBe(1);
+    expect(await counts(t)).toEqual({ messages: before.messages + 1, deliveries: before.deliveries + 1, fires: before.fires + 1 });
+  });
+});
+
+describe("fix pass 1.5: reports never block collecting the answer", () => {
+  const reportsTo = (t: T, name: string) =>
+    t.run(async (ctx) => {
+      const to = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", name)).unique())!;
+      return (await ctx.db.query("messages").collect()).filter((m) => m.meta?.type === "reminder-report" && m.recipientIds.includes(to._id));
+    });
+  const answersBy = (t: T, name: string) =>
+    t.run(async (ctx) => {
+      const p = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", name)).unique())!;
+      return (await ctx.db.query("messages").collect()).filter((m) => m.senderId === p._id && m.kind === "answer");
+    });
+
+  it("Alder's repro: a 32,000-character answer to a --report-to reminder is collected, and the report is posted clipped, pointing to the full answer", async () => {
+    const t = await setup();
+    const r = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: MIN, reportTo: "lee", name: "big" });
+    at(MIN);
+    await tick(t);
+    const [d] = await pendingFor(t, "a");
+    const got = await answerFire(t, d!.id, "y".repeat(32_000));
+    expect(got.duplicate).toBe(false);
+    const [report] = await reportsTo(t, "lee");
+    expect(report!.text.length).toBeLessThanOrEqual(32_000);
+    expect(report!.text).toMatch(new RegExp(`^Reminder big \\(${r.reminder.id}\\): @a answered:\\n> y+`));
+    expect(report!.text).toContain(got.answerMessageId!);
+    expect((await get(t, r.reminder.id)).fires[0]!.answer?.text.length).toBe(32_000);
+  });
+
+  it("a report failure after writing began keeps the answer (once), leaves no stray report, and a retry posts nothing twice", async () => {
+    const t = await setup();
+    const r = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: MIN, reportTo: "b" });
+    at(MIN);
+    await tick(t);
+    const [d] = await pendingFor(t, "a");
+    const { claim } = await t.mutation(api.connector.claim, { machine: m1, deliveryId: d!.id });
+    await t.mutation(api.connector.delivered, { machine: m1, deliveryId: d!.id, claimId: claim.claimId, turnId: "t1" });
+    process.env.COMMS_TEST_FAULT = `reminder-report-after-post:${r.reminder.id}`;
+    let first;
+    try {
+      first = await t.mutation(api.connector.collect, { machine: m1, deliveryId: d!.id, claimId: claim.claimId, turnId: "t1", answer: "done" });
+    } finally {
+      delete process.env.COMMS_TEST_FAULT;
+    }
+    expect(first.duplicate).toBe(false);
+    expect((await answersBy(t, "a")).map((m) => m.text)).toEqual(["done"]);
+    expect(await reportsTo(t, "b")).toEqual([]);
+    expect((await get(t, r.reminder.id)).fires[0]!.answer?.text).toBe("done");
+    const again = await t.mutation(api.connector.collect, { machine: m1, deliveryId: d!.id, claimId: claim.claimId, turnId: "t1", answer: "done" });
+    expect(again.duplicate).toBe(true);
+    expect((await answersBy(t, "a")).length).toBe(1);
+    expect((await reportsTo(t, "b")).length).toBeLessThanOrEqual(1);
   });
 });

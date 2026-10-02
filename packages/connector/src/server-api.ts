@@ -3,6 +3,7 @@
 // said no, with a loopback error code) and unavailability (couldn't ask).
 
 import type {
+  AnswerProof,
   Claim,
   Delivery,
   DeliveryState,
@@ -66,7 +67,8 @@ export interface ServerApiShape {
   readonly presence: (participant: string, status: "idle" | "busy" | "offline") => Effect.Effect<void, ApiError>;
   readonly heartbeat: Effect.Effect<void, ApiError>;
   readonly homed: Effect.Effect<Pick<Responses["status"], "participants">, ApiError>;
-  readonly send: (req: Requests["send"]) => Effect.Effect<Responses["send"], ApiError>;
+  readonly send: (req: Requests["send"] & { waiterTurnId?: string }) => Effect.Effect<Responses["send"], ApiError>;
+  readonly answerSeen: (participant: string, turnId: string, proofs: AnswerProof[]) => Effect.Effect<{ confirmed: number }, ApiError>;
   readonly reply: (req: Requests["reply"]) => Effect.Effect<Responses["reply"], ApiError>;
   readonly read: (req: Requests["read"]) => Effect.Effect<Responses["read"], ApiError>;
   readonly list: (req: Requests["list"]) => Effect.Effect<Responses["list"], ApiError>;
@@ -186,6 +188,7 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
           ...(req.key !== undefined ? { key: req.key } : {}),
           ...(req.wait ? { wait: true } : {}),
           ...(req.waitMs !== undefined ? { waitMs: req.waitMs } : {}),
+          ...(req.waiterTurnId !== undefined ? { waiterTurnId: req.waiterTurnId } : {}),
         }),
       ),
     reply: (req) =>
@@ -229,6 +232,8 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
         // The held `await` ends at its bound and reads the wait again; a watch error just stops early news.
         () => {},
       ),
+    answerSeen: (participant, turnId, proofs) =>
+      call("answer-seen", () => transport.mutation(api.connector.answerSeen, { machine, as: participant, turnId, proofs })),
     ack: (req) =>
       call("ack", () =>
         transport.mutation(api.connector.ack, {

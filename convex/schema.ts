@@ -116,8 +116,10 @@ export default defineSchema({
     .index("by_recipient_state_collect", ["recipientId", "state", "collect"])
     .index("by_target_state_collect", ["target.machine", "state", "collect"])
     .index("by_message", ["messageId"])
-    // Alerts: uncertain deliveries, and in-flight ones claimed too often.
-    .index("by_state", ["state"]),
+    // Alerts (fix pass 1.3): deliveries entering `uncertain` recently, by when they changed.
+    .index("by_state_at", ["state", "at"])
+    // Alerts (fix pass 1.3): in-flight deliveries only (answers end at `delivered` and are never in flight).
+    .index("by_state_collect", ["state", "collect"]),
 
   // -------------------------------------------------------------------------
   // Capabilities pass (docs/04-capabilities.md)
@@ -144,6 +146,8 @@ export default defineSchema({
     active: v.boolean(),
     /** The last `await` from the waiting CLI (or the send): answers are taken only while it's recent (WAIT_HELD_MS). */
     lastAwaitAt: v.number(),
+    /** Fix pass 0.1: the waiter's main turn when the wait was created; only proofs from it confirm. */
+    waiterTurnId: v.optional(v.string()),
     /** People addressed by the request: in their inbox, never waited on. */
     inInboxIds: v.array(v.id("participants")),
     endedAt: v.optional(v.number()),
@@ -152,6 +156,8 @@ export default defineSchema({
     .index("by_waiter_active", ["waiterId", "active"])
     .index("by_message", ["messageId"])
     .index("by_active_until", ["active", "until"])
+    // Fix pass 0.2: active waits whose CLI stopped checking in.
+    .index("by_active_lastAwait", ["active", "lastAwaitAt"])
     .index("by_endedAt", ["endedAt"]),
 
   /** One addressed agent's result in a wait. Every transition is a compare-and-set (WaitResultState). */
@@ -162,6 +168,10 @@ export default defineSchema({
     deliveryId: v.id("deliveries"),
     state: waitResultState,
     answerMessageId: v.optional(v.id("messages")),
+    /** Fix pass 0.1: the proof token for this answer's markers, made when it's answered. */
+    proofToken: v.optional(v.string()),
+    /** Fix pass 0.1: when the CLI said it printed the answer (provisional). */
+    printedAt: v.optional(v.number()),
     at: v.number(),
   })
     .index("by_wait", ["waitId"])
@@ -191,9 +201,12 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_state_next", ["state", "nextFireAt"])
-    .index("by_expires", ["expiresAt"])
+    // Fix pass 1.3: expiry and alerts read live states only, never finished history.
+    .index("by_state_expires", ["state", "expiresAt"])
+    .index("by_state_stateAt", ["state", "stateAt"])
     .index("by_target", ["targetId"])
-    .index("by_creator", ["createdById"]),
+    .index("by_creator", ["createdById"])
+    .index("by_reportTo", ["reportToId"]),
 
   /** One row per fire, keyed by the fire's request message. */
   reminderFires: defineTable({
@@ -203,6 +216,9 @@ export default defineSchema({
     firedAt: v.number(),
     answerMessageId: v.optional(v.id("messages")),
     answeredAt: v.optional(v.number()),
+    /** Fix pass 1.5: the report posted for the answer, or why it failed (tried once). */
+    reportMessageId: v.optional(v.id("messages")),
+    reportError: v.optional(v.string()),
   })
     .index("by_message", ["messageId"])
     .index("by_reminder", ["reminderId", "firedAt"]),

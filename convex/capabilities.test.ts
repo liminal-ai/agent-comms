@@ -312,14 +312,14 @@ describe("R1 upgrade: system participants and the owner backfill", () => {
       await ctx.db.insert("participants", { ...base, name: "owned", ownerId: sam._id, home: agentHome("owned") });
     });
     const first = await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
-    expect(first).toEqual({ systemCreated: ["reminders", "alerts"], ownersSet: 1 });
+    expect(first).toEqual({ systemCreated: ["reminders", "alerts"], systemRepaired: [], ownersSet: 1 });
     expect((await byName(t, "legacy-none")).ownerId).toBe(await idOf(t, "lee"));
     expect((await byName(t, "owned")).ownerId).toBe(await idOf(t, "sam"));
     expect((await byName(t, "sam")).ownerId).toBeUndefined();
     const reminders = await byName(t, "reminders");
     expect(reminders).toMatchObject({ kind: "system", state: "active" });
     expect(reminders.home).toBeUndefined();
-    expect(await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" })).toEqual({ systemCreated: [], ownersSet: 0 });
+    expect(await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" })).toEqual({ systemCreated: [], systemRepaired: [], ownersSet: 0 });
     expect(await errorCode(t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "a" }))).toBe("bad_request");
   });
 
@@ -422,5 +422,25 @@ describe("R1 registry over the connector", () => {
     const set = await t.mutation(api.connector.agentsSet, { machine: m1, as: "a", name: "a", description: "builds comms", duties: ["merge"] });
     expect(set.agent).toMatchObject({ description: "builds comms", duties: ["merge"] });
     expect(await errorCode(t.mutation(api.connector.agentsSet, { machine: m1, as: "a", name: "b", description: "x" }))).toBe("conflict");
+  });
+});
+
+describe("fix pass 1.6: system participants are protected", () => {
+  it("setState, rebind and setProfile refuse @alerts and @reminders; upgrade repairs one retired by a direct database edit", async () => {
+    const t = await setup();
+    await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
+    for (const name of ["alerts", "reminders"]) {
+      expect(await errorCode(t.mutation(api.directory.setState, { adminToken: ADMIN, name, state: "retired" })), name).toBe("bad_request");
+      expect(await errorCode(t.mutation(api.directory.setState, { adminToken: ADMIN, name, state: "paused" })), name).toBe("bad_request");
+      expect(await errorCode(t.mutation(api.directory.rebind, { adminToken: ADMIN, name, home: agentHome(name) })), name).toBe("bad_request");
+      expect(await errorCode(t.mutation(api.registry.setProfile, { adminToken: ADMIN, name, description: "x" })), name).toBe("bad_request");
+    }
+    await t.run(async (ctx) => {
+      const p = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "alerts")).unique())!;
+      await ctx.db.patch(p._id, { state: "retired" });
+    });
+    const r = await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
+    expect(r.systemRepaired).toEqual(["alerts"]);
+    expect((await byName(t, "alerts")).state).toBe("active");
   });
 });
