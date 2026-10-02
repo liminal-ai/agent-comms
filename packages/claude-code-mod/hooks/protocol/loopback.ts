@@ -38,6 +38,7 @@ import type {
   ParticipantState,
 } from "./model.ts";
 import { ID_PATTERN, NAME_PATTERN } from "./model.ts";
+import { PROOF_TOKEN_PATTERN } from "./proof.ts";
 import {
   MAX_DESCRIPTION_CHARS,
   MAX_DUTIES,
@@ -129,6 +130,7 @@ export type ErrorCode =
   | "unknown_message"
   | "unknown_delivery"
   | "unknown_reminder"
+  | "forbidden"
   | "unknown_session"
   | "session_superseded"
   | "poll_in_progress"
@@ -148,6 +150,7 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   unknown_message: 404,
   unknown_delivery: 404,
   unknown_reminder: 404,
+  forbidden: 403,
   unknown_session: 404,
   session_superseded: 409,
   poll_in_progress: 409,
@@ -175,6 +178,11 @@ const id = string({ pattern: ID_PATTERN, label: "an id ([A-Za-z0-9_-], 1-128)" }
 const name = string({ pattern: NAME_PATTERN, label: "a participant name (lowercase [a-z0-9_-], 1-48)" });
 /** Harness-issued ids (Claude Code session and turn ids, T3 thread ids): opaque, printable, bounded. */
 const harnessId = string({ min: 1, max: 256, pattern: /^[\x21-\x7e]+$/, label: "a harness id (printable, 1-256)" });
+const answerProof = object({
+  waitId: id,
+  messageId: id,
+  token: string({ pattern: PROOF_TOKEN_PATTERN, label: "a proof token (32 hex)" }),
+});
 const text = string({ min: 1, max: MAX_TEXT_CHARS, label: `non-empty text (at most ${MAX_TEXT_CHARS} characters)` });
 const presence = literal("idle", "busy");
 const idempotencyKey = string({ min: 8, max: 128, pattern: /^[A-Za-z0-9_-]+$/, label: "an idempotency key ([A-Za-z0-9_-], 8-128)" });
@@ -311,7 +319,24 @@ const requestDecoders = {
   },
 
   /** Idle or busy. The mod reports busy for its session's main turns, whoever started them, without any content. */
-  presence: object({ sessionId: harnessId, status: presence }),
+  presence: object({
+    sessionId: harnessId,
+    status: presence,
+    /**
+     * Fix pass 0.1: while busy, the main turn running now. The connector stamps a waiting
+     * send with it (the waiter's turn), and only proofs from that turn confirm an answer.
+     */
+    turnId: optional(harnessId),
+  }),
+
+  /**
+   * Fix pass 0.1: complete answer proofs (`findAnswerProofs`) found in a tool result of
+   * the session's **main** turn `turnId` (never a subagent's). Answered at once and
+   * written in the background, like the other reports. Convex confirms a proof only if
+   * its token matches, `turnId` is the turn the wait was created in, and the answer
+   * hasn't fallen back yet.
+   */
+  "answer-seen": object({ sessionId: harnessId, turnId: harnessId, proofs: array(answerProof, { max: 50 }) }),
 
   /**
    * Send a request. Without `conversationId`, `to` names exactly one
@@ -376,9 +401,9 @@ const requestDecoders = {
   await: object({ as: name, messageId: id, waitMs: optional(integer({ min: 0, max: MAX_POLL_WAIT_MS })) }),
 
   /**
-   * The CLI printed these answers: `answered` → `acknowledged` (compare-and-set;
-   * a result that already `fell-back` stays so). Without `recipients`, every
-   * answered result. Idempotent.
+   * Provisional (fix pass 0.1): the CLI printed these answers. Records `printedAt` on
+   * each answered result; it never makes a result `acknowledged` (only the harness's
+   * `answer-seen` does). Without `recipients`, every answered result. Idempotent.
    */
   ack: object({ as: name, messageId: id, recipients: optional(array(name, { max: 50 })) }),
 
@@ -421,10 +446,13 @@ const requestDecoders = {
     return r;
   },
 
-  /** Reminders the caller created, is the target of, or owns the target of. */
+  /** Reminders the caller created, is the target of, owns the target of, or is reported to (fix pass 0.4). */
   reminders: object({ as: name }),
 
-  /** One reminder, with its fires and skips. Errors: `unknown_reminder`. */
+  /**
+   * One reminder, with its fires and skips. Fix pass 0.4: only for its creator, its target,
+   * the target's owner and its report-to. Errors: `unknown_reminder`, `forbidden`.
+   */
   reminder: object({ as: name, id }),
 
   /**
@@ -551,6 +579,7 @@ export interface Responses {
   remind: { reminder: Reminder };
   reminders: { reminders: Reminder[] };
   reminder: { reminder: Reminder; fires: ReminderFire[]; skips: ReminderSkip[] };
+  "answer-seen": Record<string, never>;
   "reminder-update": { reminder: Reminder };
   read: { conversation: ConversationSummary; messages: MessageEnvelope[]; hasMore: boolean };
   list: { conversations: ConversationSummary[] };

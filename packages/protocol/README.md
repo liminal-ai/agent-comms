@@ -134,6 +134,7 @@ Rules that matter to clients:
 | `unknown_session` | 404 | session not registered here: register again |
 | `session_superseded` | 409 | a newer session took over this participant: stop |
 | `poll_in_progress` | 409 | this session already has a poll outstanding |
+| `forbidden` | 403 | not allowed to see or change this (a reminder that isn't yours: fix pass 0.4) |
 | `conflict` | 409 | the delivery isn't this session's, or the state change doesn't fit |
 | `unavailable` | 503 | the connector can't reach Convex right now: retry later |
 | `unsupported` | 501 | this connector doesn't implement the operation yet |
@@ -166,8 +167,8 @@ Participant `kind` gains `system`. `reminders` and `alerts` are created at deplo
 | `open` | `answered` | the recipient's answer (collected, or a `comms reply` completing the delivery) is returned to the wait; its message is stored on the result |
 | `open` | `expired` | the wait's `until` passed first, or the answer came while no CLI was awaiting (no `await` for `WAIT_HELD_MS`, 60 s): the answer goes into the thread as normal |
 | `open` | `ended` | the delivery ended `failed` or `uncertain`, or the recipient was retired: no answer is coming. *Not in the brief's list;* it's what "failed or uncertain: the wait ends for that recipient" needs as a state |
-| `answered` | `acknowledged` | the CLI printed it and called `ack` **while the waiter's turn that ran the CLI is still running**: the waiter is `busy`, its presence isn't stale, and its `busySince` is no later than the wait's creation. Otherwise the ack is ignored and the result stays `answered` (printed isn't seen: Claude Code moves a command past its timeout to the background, and a Codex agent that stops polling never reads the output; Hazel's H0) |
-| `answered` | `fell-back` | not acknowledged within `ACK_WINDOW_MS` (2 min): delivered **once** into the requester's thread, as a delivery with `fallback: true` that renders "may already have been returned to your waiting `comms send`" |
+| `answered` | `acknowledged` | the harness confirmed the agent saw it (fix pass 0.1, below): a tool result of the main turn the wait was created in carried the answer's complete proof markers. The CLI's `ack` is provisional and only records `printedAt` |
+| `answered` | `fell-back` | not confirmed within `ACK_WINDOW_MS` (2 min) **after the wait ended** (fix pass 0.2): delivered **once** into the requester's thread, as a delivery with `fallback: true` that renders "may already have been returned to your waiting `comms send`" |
 
 **Where an answer is taken (R2).** In the same Convex mutation that collects it (or that completes an `ambiguous` delivery with `comms reply`): if the wait holds an open result for that delivery and its CLI is awaiting, the result goes `open` → `answered` and the answer's delivery to the waiter is created and finished (`delivered`, detail "returned to the waiting send") in that one transaction. It's never pending, never claimed, never seen by the dispatcher, so the waiter's busy state and serial order don't matter. A connector restart loses nothing: the CLI keeps calling `await`, which reads the stored results. Before a waiting send and an `ack`, the connector refreshes the waiter's presence from T3 (its poll is every 20 s), so `busySince` is current. A minute cron (`waits.sweep`) does the fallbacks, expires waits past `until`, and deletes ended ones after the retention period.
 
@@ -245,6 +246,35 @@ All take `adminToken`. Errors are `ConvexError`s with `{code, message}` as above
 | `alerts.setConfig` | any of `connectorSilentMs`, `reminderBlockedMs`, `maxClaims` | `AlertConfig` |
 
 `directory.list` and the conversation functions are unchanged. Presence in a `RegistryEntry` is `null` for people and system participants, and `stale` when the agent's machine hasn't heartbeated for `PRESENCE_STALE_MS` (90 s); `idleSince` and `busySince` move only on the transition to idle and busy.
+
+## Fix pass contract (section 0, `docs/06-capabilities-fix-pass.md`)
+
+This replaces the R2 ack rule (busy, not stale, `busySince`), which a T3 turn ending and another starting within one presence poll defeated (Reed's and Alder's reproductions).
+
+### 0.1 Proof the agent saw an answer
+
+- **The waiter's turn.** A waiting send is stamped with the waiter's current **main** turn: Claude Code from the mod's `presence` (`turnId`, sent with every `busy`); T3 from the adapter reading the thread's running turn. The connector adds it to the Convex `send` as `waiterTurnId`. If the turn isn't known, the wait has none, nothing can confirm it, and its answers fall back.
+- **The markers** (`proof.ts`). For each answer it prints, the waiting CLI (`send` and `await`, text mode) prints `renderAnswerWithProof`: the heading, a begin line, the answer indented by two spaces, and an end line carrying the length of the indented answer. Both lines carry the wait id, the answer's message id and the result's **proof token**: 32 random hex characters, made when the result becomes `answered`, returned only in the waiter's own `send` and `await` responses (`WaitResult.proofToken`), and never in `message-status`, `read`, the web view or the thread. So a status listing, a `comms read` or quoted text can't carry a proof, and no answer line can be a marker.
+- **`findAnswerProofs`** is the one parser: both lines whole, at column 0, matching wait, message and token, with exactly `chars` characters between them. A missing end line (truncation at the end) or a cut middle (Claude Code's "[… characters truncated]") is no proof.
+- **The harness confirms; the CLI doesn't.** The tool result only exists after the CLI exits, so the CLI's `ack` is provisional (`printedAt`). Confirmation is the new loopback operation `answer-seen {sessionId, turnId, proofs[]}`:
+  - **Claude Code (the mod):** on each tool result of the main loop (no `agentId`: a helper subagent's results never reach the main model) in main turn `turnId`, run `findAnswerProofs` on the result text and, if any, send `answer-seen`. A backgrounded command's output arrives as a task notification, not a tool result, so it doesn't confirm.
+  - **T3 (the connector's adapter):** the same over the turn's tool output, if T3 exposes it to the adapter (Hazel checks this first, with evidence). If it doesn't, T3 waits are never confirmed and fall back, like Codex.
+  - **Convex** (`connector.answerSeen`) confirms each proof only if: the connector's machine is the waiter's home; for Claude Code, the session is the waiter's current session; `turnId` equals the wait's `waiterTurnId`; the token matches; and the result is still `answered` (compare-and-set to `acknowledged`; a result that already fell back stays `fell-back`). Anything else is ignored, not an error, so a stale or replayed report is harmless.
+- **No proof, falls back:** a backgrounded CLI, Codex not reading its shell, a helper's call, truncated output, `--json` (below), or a harness that can't see tool output. The cost is an occasional duplicate, never a lost answer.
+
+### 0.2 When the fallback timer starts
+
+- A wait's `endedAt` is set **once** when it ends: no result is `open` (answered counts as not open), `until` passes, or its CLI stops checking in. Stopped checking in means no `await` for `WAIT_HELD_MS` (60 s); then `endedAt` is the last check-in plus `WAIT_HELD_MS`, the wait stops being active, and its open results expire.
+- A result still `answered` at `endedAt + ACK_WINDOW_MS` falls back once (the minute sweep, over `answered` results only, so finished history isn't scanned). Not counted from when the answer arrived: an early answer in a group wait doesn't fall back while the CLI is still waiting for the others.
+- A crashed CLI can't postpone it, and a CLI reconnecting afterwards (`await` on an ended wait) doesn't move `endedAt`. The due fallback still happens, once.
+
+### 0.3 `--json`
+
+One JSON object, printed after the wait ends; the provisional `ack` follows the printing. `--json` carries no proof markers, so a `--json` waiting send is never confirmed and each answer falls back once after the window (a wrapper that wants no duplicates reads the text output).
+
+### 0.4 Reminder detail access
+
+`reminder` (the detail: text, fires, answers) and `reminders` (the list, which shows text) return only reminders the caller created, is the target of, owns the target of, or is the report-to of. Anyone else gets `forbidden` (403, new). `reminder-update` keeps its rule (creator, target, target's owner) and now refuses with `forbidden` instead of `conflict`. The web view (admin) sees all.
 
 ## Not in the contract
 

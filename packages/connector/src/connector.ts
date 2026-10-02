@@ -125,6 +125,8 @@ export const runConnector = (options: ConnectorOptions) =>
       outcome: (req) => sessions.outcome(req),
       "check-result": (req) => sessions.checkResult(req),
       presence: (req) => sessions.presence(req),
+      // Fix pass section 1 (0.1): confirmations are built after Hazel's review of the contract.
+      "answer-seen": () => Promise.reject(new LoopbackError("unsupported", "answer-seen isn't supported by this connector yet")),
       send: async (req) => {
         // The ack rule compares the waiter's busySince with the wait's start: make it current first.
         if (req.wait) await refreshPresence(req.as);
