@@ -128,3 +128,5 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
 - Claude Code tool.call text evidence (4575ff3). Section 0 reviewed and approved (Cedar 598e9e9 took the register-turnId gap).
 - 1.1 mod: 0.1.4 (tests 4b584e3, fix 18aece0). Web 1.4/2 form parts (tests 80f6b95, fix 9b9bf88).
 - Open: inbox mark-all/paging (needs Cedar's Convex calls); render.ts name escaping + report-to line (ownership agreed with Cedar first); section 4 rerun.
+- Section 4 (mine) all pass: validation/capabilities-fix/4/HAZEL.md. Web inbox fixed on a scratch deployment (fe80c5d). P3 bugs 7, 8 (e9c3e0b).
+- Fix pass complete on main (Cedar's final for review); waiting for the independent reviews (Alder, Wrenn, Reed).
