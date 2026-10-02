@@ -1,0 +1,15 @@
+{"at":"2026-10-02T17:11:14.058Z","step":"typed","marker":"TURN-CHANGE-mur7zcya"}
+{"at":"2026-10-02T17:11:18.656Z","step":"request","mid":"jn7cydg33z4dq9a231bv5hnh7d8fhbt4"}
+{"at":"2026-10-02T17:11:22.661Z","step":"turn","active":"b703e9e3-6347-4b41-a2a1-44413ac5bf85","status":"running","latest":"b703e9e3-6347-4b41-a2a1-44413ac5bf85","latestState":"running"}
+{"at":"2026-10-02T17:11:22.783Z","step":"wait","states":"open","endedAt":null,"waiterTurnId":null}
+{"at":"2026-10-02T17:13:18.701Z","step":"turn","active":null,"status":"ready","latest":"b703e9e3-6347-4b41-a2a1-44413ac5bf85","latestState":"completed"}
+{"at":"2026-10-02T17:13:56.109Z","step":"wait","states":"answered","endedAt":1790961235904,"waiterTurnId":null}
+{"at":"2026-10-02T17:14:00.121Z","step":"turn","active":"a6b8d1f2-9ec4-4781-aa91-c845b83c7bc5","status":"running","latest":"a6b8d1f2-9ec4-4781-aa91-c845b83c7bc5","latestState":"running"}
+{"at":"2026-10-02T17:14:04.248Z","step":"turn","active":null,"status":"ready","latest":"a6b8d1f2-9ec4-4781-aa91-c845b83c7bc5","latestState":"completed"}
+comms: no connector at /run/user/1000/agent-comms/connector.sock (ECONNREFUSED); is it running?
+comms: no connector at /run/user/1000/agent-comms/connector.sock (ECONNREFUSED); is it running?
+comms: no connector at /run/user/1000/agent-comms/connector.sock (ECONNREFUSED); is it running?
+{"at":"2026-10-02T17:16:12.548Z","step":"turn","active":"fce53f53-3c38-48e2-8dfe-e850b4eace6f","status":"running","latest":"fce53f53-3c38-48e2-8dfe-e850b4eace6f","latestState":"running"}
+{"at":"2026-10-02T17:16:12.705Z","step":"wait","states":"fell-back","endedAt":1790961235904,"waiterTurnId":null}
+{"at":"2026-10-02T17:16:42.818Z","step":"final","states":"fell-back","answer":"SLOW-PONG","fallbackMessagesInThread":1}
+PASS: the turn changed under the wait and the answer fell back once
