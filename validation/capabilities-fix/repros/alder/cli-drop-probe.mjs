@@ -1,0 +1,12 @@
+import {createServer} from 'node:http';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {run} from '/srv/work/agent-comms/packages/comms-cli/src/cli.ts';
+const dir=await mkdtemp(join(tmpdir(),'comms-drop-'));
+const sock=join(dir,'server.sock'); let key, out='',err='';
+const server=createServer((req,res)=> {let s='';req.on('data',c=>s+=c);req.on('end',()=>{key=JSON.parse(s).key; req.socket.destroy();});});
+await new Promise(r=>server.listen(sock,r));
+const exit=await run(['send','--as','a','--socket',sock,'@b','do work'],{env:{},stdout:s=>out+=s,stderr:s=>err+=s,readStdin:async()=>''});
+console.log(JSON.stringify({exit,keyGenerated:!!key,keyReported:out.includes(key)||err.includes(key),out,err},null,2));
+await new Promise(r=>server.close(r)); await rm(dir,{recursive:true});
