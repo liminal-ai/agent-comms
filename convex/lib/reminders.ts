@@ -53,13 +53,13 @@ export async function createReminder(ctx: MutationCtx, creator: Doc<"participant
     fail("bad_request", `--expires is between ${formatDuration(REMINDER_MIN_INTERVAL_MS)} and ${formatDuration(REMINDER_MAX_EXPIRY_MS)}`);
   }
   const expiresAt = now + expiresMs;
-  if (input.at !== undefined && (input.at <= now || input.at > expiresAt)) fail("bad_request", "--at must be in the future and before the reminder expires");
+  if (input.at !== undefined && (input.at <= now || input.at >= expiresAt)) fail("bad_request", "--at must be in the future and before the reminder expires");
   // Fix pass 2: finite whole numbers before any range check (NaN and Infinity pass `<` checks).
   for (const [flag, value] of [["--every", input.everyMs], ["--at", input.at], ["--idle-for", input.idleForMs], ["--max", input.max], ["--expires", input.expiresMs]] as const) {
     if (value !== undefined && !Number.isSafeInteger(value)) fail("bad_request", `${flag} must be a whole number`);
   }
   // Fix pass 2: a name is one line of printable characters, at most 80.
-  if (input.name !== undefined && (/[\u0000-\u001f\u007f\u2028\u2029]/.test(input.name) || input.name.trim().length === 0 || input.name.length > MAX_NAME_CHARS)) {
+  if (input.name !== undefined && (/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(input.name) || input.name.trim().length === 0 || input.name.length > MAX_NAME_CHARS)) {
     fail("bad_request", `a reminder's name is one line of 1-${MAX_NAME_CHARS} printable characters`);
   }
   if (input.text.trim().length === 0) fail("bad_request", "a reminder needs text");
@@ -276,6 +276,7 @@ async function fire(ctx: MutationCtx, r: Doc<"reminders">, target: Doc<"particip
   const maxed = r.max !== undefined && fireNumber >= r.max;
   if (r.everyMs === undefined) {
     await ctx.db.patch(r._id, { fires: fireNumber, nextFireAt: undefined, state: "done", stateReason: "fired once", stateAt: now });
+    await tellEnded(ctx, (await ctx.db.get(r._id))!);
   } else if (maxed) {
     await ctx.db.patch(r._id, {
       fires: fireNumber,
@@ -345,6 +346,11 @@ export async function step(ctx: MutationCtx, id: Id<"reminders">, now: number): 
   if (target.state === "retired") {
     await ctx.db.patch(r._id, { state: "cancelled", stateReason: `@${target.name} was retired`, stateAt: now, nextFireAt: undefined });
     await tellEnded(ctx, (await ctx.db.get(r._id))!);
+    return "ended";
+  }
+  const creator = (await ctx.db.get(r.createdById))!;
+  if (creator.state === "retired") {
+    await ctx.db.patch(r._id, { state: "cancelled", stateReason: `@${creator.name} (creator) was retired`, stateAt: now, nextFireAt: undefined });
     return "ended";
   }
   const watched = r.watchId ? await ctx.db.get(r.watchId) : null;

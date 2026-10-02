@@ -117,13 +117,20 @@ const OPTIONS = {
  */
 type OptionValue<O> = O extends { multiple: true } ? string[] : O extends { type: "string" } ? string : boolean;
 
-function parseOptions(argv: string[]): { values: { [K in keyof typeof OPTIONS]?: OptionValue<(typeof OPTIONS)[K]> }; positionals: string[] } {
+function parseOptions(argv: string[]): {
+  values: { [K in keyof typeof OPTIONS]?: OptionValue<(typeof OPTIONS)[K]> };
+  positionals: string[];
+  /** How many positionals came before `--` (all of them if there was none): later ones are always text. */
+  beforeTerminator: number;
+} {
   const { tokens } = parseArgs({ args: argv, allowPositionals: true, strict: false, tokens: true, options: OPTIONS });
   const values: Record<string, string | boolean | string[]> = {};
   const positionals: string[] = [];
   const unknownAt = new Set<number>();
+  let beforeTerminator: number | undefined;
   for (const t of tokens) {
-    if (t.kind === "positional") positionals.push(t.value);
+    if (t.kind === "option-terminator") beforeTerminator ??= positionals.length;
+    else if (t.kind === "positional") positionals.push(t.value);
     else if (t.kind === "option") {
       const spec = (OPTIONS as Record<string, { type: "string" | "boolean"; multiple?: boolean }>)[t.name];
       if (!spec) {
@@ -137,7 +144,7 @@ function parseOptions(argv: string[]): { values: { [K in keyof typeof OPTIONS]?:
       } else values[t.name] = true;
     }
   }
-  return { values: values as never, positionals };
+  return { values: values as never, positionals, beforeTerminator: beforeTerminator ?? positionals.length };
 }
 
 export async function run(argv: string[], io: Io): Promise<number> {
@@ -286,7 +293,9 @@ export async function run(argv: string[], io: Io): Promise<number> {
       case "send": {
         const to: string[] = [];
         let i = 0;
-        while (i < rest.length && rest[i]!.startsWith("@")) to.push(rest[i++]!.slice(1));
+        // P3 bug 5: after `--` everything is text, even words starting with @ (rest starts after the command).
+        const lastRecipient = parsed.beforeTerminator - 1;
+        while (i < rest.length && i < lastRecipient && rest[i]!.startsWith("@")) to.push(rest[i++]!.slice(1));
         if (!values.conversation && to.length !== 1) {
           throw new UsageError("address exactly one @name, or give --conversation <id>");
         }

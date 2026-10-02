@@ -316,7 +316,12 @@ export function formatDuration(ms: number): string {
  */
 export function parseAt(text: string, now: number): number | null {
   const t = text.trim();
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})?$/.test(t)) {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(:(\d{2})(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})?$/.exec(t);
+  if (iso) {
+    // Date.parse rolls impossible dates over (30 Feb → 2 Mar): check each part is in range (P3 bug 3).
+    const [y, mo, d, h, mi, s] = [iso[1], iso[2], iso[3], iso[4], iso[5], iso[7] ?? "0"].map(Number) as [number, number, number, number, number, number];
+    const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    if (mo < 1 || mo > 12 || d < 1 || d > daysInMonth || h > 23 || mi > 59 || s > 59) return null;
     const ms = Date.parse(t);
     return Number.isNaN(ms) ? null : ms;
   }
