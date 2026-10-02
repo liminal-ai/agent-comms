@@ -278,3 +278,54 @@ describe("fix pass 1.2 (contract 0.4): reminder detail access", () => {
     expect(await errorCode(t.mutation(api.connector.reminderUpdate, { machine: m1, as: "c", id: r.reminder.id, action: "pause" }))).toBe("forbidden");
   });
 });
+
+describe("fix pass 1.4: one bad reminder can't stop the rest", () => {
+  const counts = (t: T) =>
+    t.run(async (ctx) => ({
+      messages: (await ctx.db.query("messages").collect()).length,
+      deliveries: (await ctx.db.query("deliveries").collect()).length,
+      fires: (await ctx.db.query("reminderFires").collect()).length,
+    }));
+
+  it("refuses reminder text over MAX_TEXT_CHARS at creation, on every path", async () => {
+    const t = await setup();
+    const big = "x".repeat(40_000);
+    expect(await errorCode(t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: big, everyMs: MIN }))).toBe("bad_request");
+    expect(await errorCode(t.mutation(api.connector.remind, { machine: m1, as: "b", target: "a", text: big, everyMs: MIN }))).toBe("bad_request");
+  });
+
+  it("a 40,000-character reminder (from before the cap) next to a normal one: the normal one fires; the bad one is blocked with the error and leaves nothing behind", async () => {
+    const t = await setup();
+    const good = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "fine", everyMs: MIN });
+    const bad = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "b", text: "short for now", everyMs: MIN });
+    await t.run(async (ctx) => ctx.db.patch(bad.reminder.id as never, { text: "x".repeat(40_000) }));
+    const before = await counts(t);
+    at(MIN);
+    await tick(t);
+    expect((await get(t, good.reminder.id)).reminder.fires).toBe(1);
+    const b = (await get(t, bad.reminder.id)).reminder;
+    expect(b.state).toBe("blocked");
+    expect(b.stateReason).toMatch(/^the fire failed: .*32000/);
+    const after = await counts(t);
+    expect(after).toEqual({ messages: before.messages + 1, deliveries: before.deliveries + 1, fires: before.fires + 1 });
+  });
+
+  it("a failure injected after writing has begun leaves no message, delivery or fire, and blocks only that reminder", async () => {
+    const t = await setup();
+    const r = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: MIN });
+    const other = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "b", text: "y", everyMs: MIN });
+    const before = await counts(t);
+    at(MIN);
+    process.env.COMMS_TEST_FAULT = `reminder-fire-after-post:${r.reminder.id}`;
+    try {
+      await tick(t);
+    } finally {
+      delete process.env.COMMS_TEST_FAULT;
+    }
+    const x = (await get(t, r.reminder.id)).reminder;
+    expect([x.state, x.fires]).toEqual(["blocked", 0]);
+    expect(x.stateReason).toMatch(/injected/);
+    expect((await get(t, other.reminder.id)).reminder.fires).toBe(1);
+    expect(await counts(t)).toEqual({ messages: before.messages + 1, deliveries: before.deliveries + 1, fires: before.fires + 1 });
+  });
+});

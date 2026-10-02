@@ -1,0 +1,5 @@
+[31m     [31m×[31m refuses reminder text over MAX_TEXT_CHARS at creation, on every path[39m[32m 126[2mms[22m[39m
+[31m     [31m×[31m a 40,000-character reminder (from before the cap) next to a normal one: the normal one fires; the bad one is blocked with the error and leaves nothing behind[39m[32m 22[2mms[22m[39m
+[31m     [31m×[31m a failure injected after writing has begun leaves no message, delivery or fire, and blocks only that reminder[39m[32m 13[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[33m11 skipped[39m[90m (14)[39m
