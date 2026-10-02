@@ -159,9 +159,15 @@ function ProfileEditor({ token, entry, onDone }: { token: string; entry: Registr
 // Inbox
 
 export function Inbox({ token, human, onOpen }: { token: string; human: string; onOpen: (conversationId: string) => void }) {
-  const inbox = useQuery(api.inbox.list, { adminToken: token, human, limit: 100 });
+  // Pages of older items, by the `nextBefore` each page returns (fix pass 2): nothing unread is
+  // out of reach, whatever the count.
+  const [cursors, setCursors] = useState<number[]>([]);
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const before = cursors.at(-1);
+  const inbox = useQuery(api.inbox.list, { adminToken: token, human, limit: 100, ...(unreadOnly ? { unreadOnly } : {}), ...(before !== undefined ? { before } : {}) });
   const markRead = useMutation(api.inbox.markRead);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => setCursors([]), [human, unreadOnly]);
   if (!inbox) return <p className="muted">Loading…</p>;
   const open = (conversationId: string, messageId: string, unread: boolean) => {
     if (unread) markRead({ adminToken: token, human, messageIds: [messageId] }).catch((e: Error) => setError(e.message));
@@ -173,11 +179,15 @@ export function Inbox({ token, human, onOpen }: { token: string; human: string; 
         Inbox for @{human} <span className="muted small">{inbox.unread} unread</span>
       </h2>
       {error && <p className="error">{error}</p>}
-      {inbox.unread > 0 && (
-        <button className="small" onClick={() => markRead({ adminToken: token, human, messageIds: inbox.items.filter((i) => i.readAt === null).map((i) => i.message.id) }).catch((e: Error) => setError(e.message))}>
-          Mark all read
-        </button>
-      )}
+      <div className="inbox-tools small">
+        <label className="check">
+          <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} /> Unread only
+        </label>
+        {inbox.unread > 0 && (
+          // Every unread item, not only those on this page.
+          <button onClick={() => markRead({ adminToken: token, human, all: true }).catch((e: Error) => setError(e.message))}>Mark all read</button>
+        )}
+      </div>
       <ul className="inbox">
         {inbox.items.map(({ message: m, conversation: c, readAt }) => {
           const kind = inboxKind(m);
@@ -192,8 +202,12 @@ export function Inbox({ token, human, onOpen }: { token: string; human: string; 
             </li>
           );
         })}
-        {inbox.items.length === 0 && <li className="muted">Nothing addressed to @{human} yet.</li>}
+        {inbox.items.length === 0 && <li className="muted">{unreadOnly ? "Nothing unread." : `Nothing addressed to @${human} yet.`}</li>}
       </ul>
+      <div className="pager small">
+        {cursors.length > 0 && <button onClick={() => setCursors(cursors.slice(0, -1))}>Newer</button>}
+        {inbox.hasMore && inbox.nextBefore !== undefined && <button onClick={() => setCursors([...cursors, inbox.nextBefore!])}>Older</button>}
+      </div>
     </>
   );
 }

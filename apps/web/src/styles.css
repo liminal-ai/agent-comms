@@ -114,6 +114,9 @@ h3.group { margin-top: 14px; color: var(--muted); font-weight: 600; }
 .registry .duties li { display: list-item; border: 0; padding: 0; }
 .dot.system { background: var(--muted); border-radius: 2px; }
 .inbox, .reminders, .alerts, .history { list-style: none; margin: 0; padding: 0; }
+.inbox-tools, .pager { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.inbox-tools label.check { display: flex; gap: 4px; align-items: center; margin: 0; }
+.inbox-tools label.check input { width: auto; margin: 0; }
 .inbox li { display: flex; flex-direction: column; padding: 7px 8px; border-bottom: 1px solid var(--line); cursor: pointer; }
 .inbox li:hover { background: var(--panel); }
 .inbox li.unread { border-left: 3px solid var(--accent); }

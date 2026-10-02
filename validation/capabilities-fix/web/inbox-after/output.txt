@@ -1,0 +1,6 @@
+2026-10-02T17:21:45.060Z seeded; unread: 310
+2026-10-02T17:21:45.064Z PASS 310 unread to start
+2026-10-02T17:21:47.310Z PASS 1: the oldest unread message (group 0) is reachable in the inbox
+2026-10-02T17:21:49.028Z PASS 2: opening the group marked its 60 rows read (unread now 250)
+2026-10-02T17:21:50.626Z PASS 3: mark all read left nothing unread (unread now 0)
+2026-10-02T17:21:50.731Z ALL PASS
