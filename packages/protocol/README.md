@@ -89,7 +89,7 @@ Request shapes and their validation are in `requestDecoders` (loopback.ts); resp
 | `outcome` | mod | `sessionId`, `deliveryId`, `turnId`, then `outcome: "replied", answer` \| `"ambiguous", entered[]` \| `"failed", reason, detail?` | `delivery` state, `answerMessageId?`, `duplicate` |
 | `check-result` | mod | `sessionId`, `deliveryId`, `found: "yes", turnId, turn: "running"` \| `…turn: "completed"` + outcome fields (omit for an answer's delivery) \| `found: "no"` \| `found: "unknown", detail?` | `delivery` state |
 | `presence` | mod | `sessionId`, `status` (`idle` \| `busy`) | `{}` |
-| `send` | CLI | `as`, `to[]`, `conversationId?`, `text`, `attachments?` | `message`, `deliveries`, `skipped` |
+| `send` | CLI | `as`, `to[]`, `conversationId?`, `text`, `attachments?`, `key?` (idempotency: a repeat with the same key returns the first result and posts nothing), `wait?`, `waitMs?` | `message`, `deliveries`, `skipped`, and `wait` or `noWait` |
 | `reply` | CLI | `as`, `messageId`, `text`, `attachments?` | as `send`, plus `completed?` |
 | `read` | CLI | `as`, `conversationId`, `before?`, `limit?` (≤ 100) | `conversation`, `messages` (oldest first), `hasMore` |
 | `list` | CLI | `as` | `conversations` (most recent first) |
@@ -103,7 +103,7 @@ Request shapes and their validation are in `requestDecoders` (loopback.ts); resp
 | `reminder` | CLI | `as`, `id` | `reminder`, `fires` (newest first), `skips` (newest first) |
 | `reminder-update` | CLI | `as`, `id`, `action` (`pause` \| `resume` \| `done` \| `cancel` \| `blocked`), `reason?` (required for `blocked`) | `reminder` |
 
-`send` also takes `wait?` and `waitMs?` (1 s to 60 min) and then answers with `wait` (registered in the same Convex mutation as the send) or `noWait` (why it didn't wait). The operations from `await` on, and `send` with `wait`, are the capabilities pass (`docs/04-capabilities.md`). Until each is built (R1 to R4) the connector and the stub answer it `unsupported` (501); a waiting send is refused rather than sent without waiting.
+With `wait: true`, `send` (1 s to 60 min, `waitMs`) answers with `wait` (registered in the same Convex mutation as the send) or `noWait` (why it didn't wait). The operations from `await` on are the capabilities pass (`docs/04-capabilities.md`); the stub answers them `unsupported` (501), and the CLI then sends without waiting and says so.
 
 Rules that matter to clients:
 
@@ -137,7 +137,7 @@ Rules that matter to clients:
 | `forbidden` | 403 | not allowed to see or change this (a reminder that isn't yours: fix pass 0.4) |
 | `conflict` | 409 | the delivery isn't this session's, or the state change doesn't fit |
 | `unavailable` | 503 | the connector can't reach Convex right now: retry later |
-| `unsupported` | 501 | this connector doesn't implement the operation yet |
+| `unsupported` | 501 | this connector (the stub, or an older one) doesn't implement the operation |
 | `internal` | 500 | anything else, including a malformed response (`parseResponse`) |
 
 ## The capabilities pass
@@ -172,7 +172,11 @@ Participant `kind` gains `system`. `reminders` and `alerts` are created at deplo
 
 **Where an answer is taken (R2).** In the same Convex mutation that collects it (or that completes an `ambiguous` delivery with `comms reply`): if the wait holds an open result for that delivery and its CLI is awaiting, the result goes `open` → `answered` and the answer's delivery to the waiter is created and finished (`delivered`, detail "returned to the waiting send") in that one transaction. It's never pending, never claimed, never seen by the dispatcher, so the waiter's busy state and serial order don't matter. A connector restart loses nothing: the CLI keeps calling `await`, which reads the stored results. Before a waiting send and an `ack`, the connector refreshes the waiter's presence from T3 (its poll is every 20 s), so `busySince` is current. A minute cron (`waits.sweep`) does the fallbacks, expires waits past `until`, and deletes ended ones after the retention period.
 
-`ambiguous` keeps a result `open` (the agent will finish it with `comms reply`). An `ack` and the fallback race on the same compare-and-set, so a result ends `acknowledged` or `fell-back`, and the fallback is sent at most once. `await` reads answers from the stored results, so a restarted connector serves them. A wait stops counting as busy waiting once no result is `open` (answered ones included) or at `until`; it and its results are kept `WAIT_RETENTION_MS` (7 days) after that for `await` and `comms status`. A waiting send to an agent that is itself in an active wait doesn't wait (`noWait.reason: "busy-waiting"`, naming them); with no agent to wait for it's `"nobody-to-wait-for"`.
+`ambiguous` keeps a result `open` (the agent will finish it with `comms reply`).
+
+**Two things an agent should know (fix pass 3):**
+- **The 60-second hold.** The waiting CLI checks in with `await` every 25 s at most. If it hasn't checked in for 60 s (`WAIT_HELD_MS`), it's taken to be gone: the wait ends, its open results expire, and an answer arriving after that goes into the thread as a normal message, not into the call.
+- **Codex.** A Codex command has no time limit but hands control back after about 10 s; the result reaches the model only if the agent keeps polling the shell session until `comms` exits. An agent that stops reading its shell may never see an answer printed there. Nothing is lost: T3 waits are never confirmed (0.1), so the answer is also delivered into the thread once, about 2 minutes after the wait ends. An `ack` and the fallback race on the same compare-and-set, so a result ends `acknowledged` or `fell-back`, and the fallback is sent at most once. `await` reads answers from the stored results, so a restarted connector serves them. A wait stops counting as busy waiting once no result is `open` (answered ones included) or at `until`; it and its results are kept `WAIT_RETENTION_MS` (7 days) after that for `await` and `comms status`. A waiting send to an agent that is itself in an active wait doesn't wait (`noWait.reason: "busy-waiting"`, naming them); with no agent to wait for it's `"nobody-to-wait-for"`.
 
 `DEFAULT_WAIT_MS` is 100 s, under Claude Code's 120 s Bash default (H0 confirmed; Codex has no shell limit); `MAX_WAIT_MS` is 60 min. The usage text says: Claude Code agents raise the Bash timeout above the bound for any `--wait` over 100 s (600 s foreground maximum); Codex agents keep polling the shell session until `comms` exits.
 
@@ -215,7 +219,7 @@ Thresholds are the one `alertConfig` row (`alerts.setConfig`), defaults otherwis
 With `--json` each command prints exactly one JSON object on stdout, the connector's response (`{"ok": true, ...}`):
 
 - `comms send` (waiting, the default from R2): the `send` result with `wait` replaced by the wait as it stood when the CLI stopped; answers are acknowledged after the object is printed. With `--continue`, the `send` result as before. A connector that answers a waiting send `unsupported` (older, or the stub) gets it again without waiting, and the CLI says so on stderr.
-- `comms await <message-id> [--wait <duration>]`: reattach to a wait (after exit 4, or from another shell); prints the final `await` result.
+- `comms await <message-id>`: wait on a send that's still waiting, from another shell (a send run in the background, say), until the send's own bound; prints the final `await` result. It takes no `--wait`. After exit 4 the wait has ended (contract 0.2) and the remaining answers arrive in the thread; `comms status <id>` shows them.
 - `comms status <message-id>`: the `message-status` result. `comms status` with no id is unchanged.
 
 Durations on the command line are `<n>s|m|h|d` (`parseDuration`, `formatDuration`). `comms remind --at` takes ISO 8601 with a time (`2026-10-01T14:30Z`; no zone means local) or `HH:MM`, the next time it's that time locally (`parseAt`); a date alone is refused. `reminder-update` with `blocked` needs a non-blank `reason` (the decoder refuses it otherwise).
