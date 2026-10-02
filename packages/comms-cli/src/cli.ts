@@ -34,7 +34,7 @@ export const USAGE = `usage:
   comms send  --as <me> @name "text"                         ask one participant (their DM) and wait for the answer
   comms send  --as <me> --conversation <id> [@name…] "text"  ask in a conversation; only @named members are woken
       --wait <duration>  how long to wait (default ${formatDuration(DEFAULT_WAIT_MS)}, at most ${formatDuration(MAX_WAIT_MS)}); --continue: don't wait
-  comms await --as <me> <message-id>                         go back to waiting on a send (after exit 4, or from another shell)
+  comms await --as <me> <message-id>                         wait on a send that's still waiting (from another shell)
   comms status --as <me> <message-id>                        each recipient's delivery and answer
   comms reply --as <me> <message-id> "text"                  answer a message (sets inReplyTo)
   comms read  --as <me> <conversation-id> [--before <seq>] [--limit <n>]
@@ -379,6 +379,8 @@ export async function run(argv: string[], io: Io): Promise<number> {
       case "await": {
         const [messageId, extra] = rest;
         if (!messageId || extra) throw new UsageError("comms await needs exactly one message id");
+        // Fix pass 2: a wait's bound is set when it's sent, and an ended wait stays ended (0.2).
+        if (values.wait !== undefined) throw new UsageError("comms await takes no --wait: it waits until the send's own bound");
         const me = as();
         const first = await request("await", { as: me, messageId, waitMs: 0 }, { print: false });
         if (!first) return EXIT.refused;

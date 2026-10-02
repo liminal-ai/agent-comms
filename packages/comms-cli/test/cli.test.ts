@@ -257,3 +257,13 @@ describe("fix pass 1.7: a dropped send keeps its key", () => {
     }
   });
 });
+
+describe("fix pass 2: comms await", () => {
+  it("doesn't take --wait, and the usage text doesn't promise waiting again after exit 4", async () => {
+    const r = await comms(["await", "--as", "cedar", "--wait", "5m", "m_1"]);
+    assert.equal(r.code, EXIT.usage);
+    assert.match(r.stderr, /comms await takes no --wait/);
+    const help = await comms(["--help"]);
+    assert.doesNotMatch(help.stdout, /after exit 4/);
+  });
+});

@@ -1,0 +1,10 @@
+[31m     [31m×[31m Alder's repro: a name carrying a forged header line, or any control character, is refused on every path[39m[32m 184[2mms[22m[39m
+     [32m✓[39m a name made from the text keeps to one line[32m 5[2mms[22m[39m
+[31m     [31m×[31m a fire with --report-to carries the report-to in its metadata[39m[32m 14[2mms[22m[39m
+[31m     [31m×[31m a retired person can't be an owner[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m a retired watched agent is refused at creation; a watched agent's retirement cancels the reminder and tells its creator[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m Reed's repro: NaN, Infinity and fractions are refused before the range check[39m[32m 14[2mms[22m[39m
+[31m     [31m×[31m Alder's repro: older unread messages are reachable a page at a time[39m[32m 127[2mms[22m[39m
+[31m     [31m×[31m mark all read marks all, not only those shown[39m[32m 105[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 7 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m7 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (8)[39m

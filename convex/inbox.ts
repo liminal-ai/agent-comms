@@ -25,27 +25,38 @@ async function unread(ctx: QueryCtx, humanId: Doc<"participants">["_id"]): Promi
   ).length;
 }
 
-/** The newest `limit` (default 50, at most 200) inbox items, newest first, and the unread count. */
+/**
+ * The newest `limit` (default 50, at most 200) inbox items, newest first, and the unread
+ * count. `before` (a `nextBefore` from the previous page) reaches older ones (fix pass 2).
+ */
 export const list = query({
-  args: { adminToken: v.string(), human: v.string(), unreadOnly: v.optional(v.boolean()), limit: v.optional(v.number()) },
+  args: {
+    adminToken: v.string(),
+    human: v.string(),
+    unreadOnly: v.optional(v.boolean()),
+    limit: v.optional(v.number()),
+    before: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     await requireAdmin(args.adminToken);
     const h = await human(ctx, args.human);
-    const limit = Math.max(1, Math.min(args.limit ?? 50, MAX_LIST));
-    const rows = args.unreadOnly
-      ? (
-          await ctx.db
-            .query("inbox")
-            .withIndex("by_human_read", (q) => q.eq("humanId", h._id).eq("readAt", undefined))
-            .collect()
-        )
-          .sort((a, b) => b.createdAt - a.createdAt)
-          .slice(0, limit)
+    const limit = Math.max(1, Math.min(Math.floor(args.limit ?? 50), MAX_LIST));
+    const before = args.before;
+    const page = args.unreadOnly
+      ? await ctx.db
+          .query("inbox")
+          .withIndex("by_human_read_created", (q) => {
+            const unread = q.eq("humanId", h._id).eq("readAt", undefined);
+            return before !== undefined ? unread.lt("createdAt", before) : unread;
+          })
+          .order("desc")
+          .take(limit + 1)
       : await ctx.db
           .query("inbox")
-          .withIndex("by_human", (q) => q.eq("humanId", h._id))
+          .withIndex("by_human", (q) => (before !== undefined ? q.eq("humanId", h._id).lt("createdAt", before) : q.eq("humanId", h._id)))
           .order("desc")
-          .take(limit);
+          .take(limit + 1);
+    const rows = page.slice(0, limit);
     const items: InboxItem[] = [];
     for (const row of rows) {
       const message = await ctx.db.get(row.messageId);
@@ -53,7 +64,8 @@ export const list = query({
       if (!message || !conversation) continue;
       items.push({ message: await envelope(ctx, message), conversation: conversationRef(conversation), readAt: row.readAt ?? null });
     }
-    return { items, unread: await unread(ctx, h._id) };
+    const hasMore = page.length > limit;
+    return { items, unread: await unread(ctx, h._id), hasMore, ...(hasMore ? { nextBefore: rows.at(-1)!.createdAt } : {}) };
   },
 });
 
@@ -65,18 +77,31 @@ export const unreadCount = query({
   },
 });
 
-/** Mark items read: these messages, or everything unread in one conversation. Idempotent; returns how many changed. */
+/** Mark items read: these messages, everything unread in one conversation, or (`all`) everything unread. Idempotent; returns how many changed. */
 export const markRead = mutation({
-  args: { adminToken: v.string(), human: v.string(), messageIds: v.optional(v.array(v.string())), conversationId: v.optional(v.string()) },
+  args: {
+    adminToken: v.string(),
+    human: v.string(),
+    messageIds: v.optional(v.array(v.string())),
+    conversationId: v.optional(v.string()),
+    all: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
     await requireAdmin(args.adminToken);
     const h = await human(ctx, args.human);
-    if ((args.messageIds === undefined) === (args.conversationId === undefined)) {
-      fail("bad_request", "give exactly one of messageIds and conversationId");
+    if ([args.messageIds !== undefined, args.conversationId !== undefined, args.all === true].filter(Boolean).length !== 1) {
+      fail("bad_request", "give exactly one of messageIds, conversationId and all");
     }
     const now = Date.now();
     let marked = 0;
-    if (args.conversationId !== undefined) {
+    if (args.all) {
+      const rows = await ctx.db
+        .query("inbox")
+        .withIndex("by_human_read", (q) => q.eq("humanId", h._id).eq("readAt", undefined))
+        .collect();
+      for (const row of rows) await ctx.db.patch(row._id, { readAt: now });
+      marked = rows.length;
+    } else if (args.conversationId !== undefined) {
       const c = await getOr(ctx, "conversations", args.conversationId);
       const rows = await ctx.db
         .query("inbox")

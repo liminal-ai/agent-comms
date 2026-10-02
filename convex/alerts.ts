@@ -66,6 +66,10 @@ export const setConfig = mutation({
   },
   handler: async (ctx, { adminToken, ...change }) => {
     await requireAdmin(adminToken);
+    // Fix pass 2: finite whole numbers before the range checks (NaN fails every comparison).
+    for (const [key, value] of Object.entries(change)) {
+      if (value !== undefined && !Number.isSafeInteger(value)) fail("bad_request", `${key} must be a whole number`);
+    }
     if (change.connectorSilentMs !== undefined && (change.connectorSilentMs < 2 * MINUTE || change.connectorSilentMs > 7 * 24 * 60 * MINUTE)) {
       fail("bad_request", "connectorSilentMs is between 2 minutes and 7 days");
     }

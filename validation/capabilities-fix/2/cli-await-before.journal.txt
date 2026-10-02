@@ -1,0 +1,4 @@
+    not ok 1 - doesn't take --wait, and the usage text doesn't promise waiting again after exit 4
+not ok 7 - fix pass 2: comms await
+# pass 16
+# fail 1

@@ -54,6 +54,14 @@ export async function createReminder(ctx: MutationCtx, creator: Doc<"participant
   }
   const expiresAt = now + expiresMs;
   if (input.at !== undefined && (input.at <= now || input.at > expiresAt)) fail("bad_request", "--at must be in the future and before the reminder expires");
+  // Fix pass 2: finite whole numbers before any range check (NaN and Infinity pass `<` checks).
+  for (const [flag, value] of [["--every", input.everyMs], ["--at", input.at], ["--idle-for", input.idleForMs], ["--max", input.max], ["--expires", input.expiresMs]] as const) {
+    if (value !== undefined && !Number.isSafeInteger(value)) fail("bad_request", `${flag} must be a whole number`);
+  }
+  // Fix pass 2: a name is one line of printable characters, at most 80.
+  if (input.name !== undefined && (/[\u0000-\u001f\u007f\u2028\u2029]/.test(input.name) || input.name.trim().length === 0 || input.name.length > MAX_NAME_CHARS)) {
+    fail("bad_request", `a reminder's name is one line of 1-${MAX_NAME_CHARS} printable characters`);
+  }
   if (input.text.trim().length === 0) fail("bad_request", "a reminder needs text");
   if (input.text.length > MAX_TEXT_CHARS) fail("bad_request", `a reminder's text is at most ${MAX_TEXT_CHARS} characters (this is ${input.text.length})`);
   if (input.max !== undefined && (!Number.isInteger(input.max) || input.max < 1)) fail("bad_request", "--max is at least 1");
@@ -64,6 +72,7 @@ export async function createReminder(ctx: MutationCtx, creator: Doc<"participant
   if (target.state === "retired") fail("bad_request", `@${target.name} is retired`);
   const watch = input.watch !== undefined ? await participantByName(ctx, input.watch) : undefined;
   if (watch && watch.kind !== "agent") fail("bad_request", `@${watch.name} isn't an agent; only agents have presence to watch`);
+  if (watch && watch.state === "retired") fail("bad_request", `@${watch.name} is retired`);
   const reportTo = input.reportTo !== undefined ? await participantByName(ctx, input.reportTo) : undefined;
   if (reportTo && reportTo.kind === "system") fail("bad_request", `@${reportTo.name} can't be reported to`);
 
@@ -243,7 +252,15 @@ async function fire(ctx: MutationCtx, r: Doc<"reminders">, target: Doc<"particip
     kind: "request",
     text: r.text,
     origin: { via: "system" },
-    meta: { type: "reminder", reminderId: r._id, name: r.name, setBy: creator.name, schedule: formatSchedule(schedule), fire: fireNumber },
+    meta: {
+      type: "reminder",
+      reminderId: r._id,
+      name: r.name,
+      setBy: creator.name,
+      schedule: formatSchedule(schedule),
+      fire: fireNumber,
+      ...(r.reportToId ? { reportTo: (await ctx.db.get(r.reportToId))!.name } : {}),
+    },
   });
   // Test hook (fix pass 1.4): a failure after the fire's message and delivery are written.
   if (process.env.COMMS_TEST_FAULT === `reminder-fire-after-post:${r._id}`) throw new Error("injected failure after the fire's message was posted");
@@ -327,6 +344,12 @@ export async function step(ctx: MutationCtx, id: Id<"reminders">, now: number): 
   const target = (await ctx.db.get(r.targetId))!;
   if (target.state === "retired") {
     await ctx.db.patch(r._id, { state: "cancelled", stateReason: `@${target.name} was retired`, stateAt: now, nextFireAt: undefined });
+    await tellEnded(ctx, (await ctx.db.get(r._id))!);
+    return "ended";
+  }
+  const watched = r.watchId ? await ctx.db.get(r.watchId) : null;
+  if (watched?.state === "retired") {
+    await ctx.db.patch(r._id, { state: "cancelled", stateReason: `@${watched.name} (watched) was retired`, stateAt: now, nextFireAt: undefined });
     await tellEnded(ctx, (await ctx.db.get(r._id))!);
     return "ended";
   }
