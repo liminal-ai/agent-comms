@@ -344,3 +344,8 @@ export function parseAlertConfig(f: AlertConfigForm): Parsed<AlertConfig> {
   if (!Number.isInteger(claims) || claims < 2 || claims > 100) return { ok: false, error: "Max claims: a whole number from 2 to 100." };
   return { ok: true, value: { connectorSilentMs: Math.round(silent * MINUTE), reminderBlockedMs: Math.round(blocked * MINUTE), maxClaims: claims } };
 }
+
+/** The people an agent can be owned by (today's behaviour, App.tsx: every person). */
+export function ownerChoices(participants: readonly { name: string; kind: string; state: string }[]): string[] {
+  return participants.filter((p) => p.kind === "human").map((p) => p.name);
+}
