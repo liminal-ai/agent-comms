@@ -14,5 +14,4 @@ Cedar's items are in `README.md` / his folders here.
 Name escaping is covered by `packages/protocol/test/fix-pass-render.test.ts`. Names with newlines
 are now refused at creation (Cedar, section 2), so a forged name can't be fired live.
 
-Open: the web inbox past one page, mark all read, and opening any conversation (needs a scratch
-deployment: `../web/inbox-scratch.mjs`).
+| The web inbox past one page, on Cedar's scratch deployment | `../web/inbox-before/`, `../web/inbox-after/` | before the fix: the oldest unread unreachable; opening a conversation whose rows are all past the newest 200 marked nothing; "Mark all read" left 150. After: all three pass (oldest reached, the group's 60 cleared, 0 left) |
