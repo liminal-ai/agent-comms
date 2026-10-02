@@ -1,0 +1,11 @@
+import { chromium } from "/srv/work/chess-train-mvp/node_modules/playwright-core/index.mjs";
+const [base, out] = process.argv.slice(2);
+const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome", headless: true });
+const p = await b.newPage({ viewport: { width: 1400, height: 900 } });
+p.on("pageerror", (e) => console.log("PAGE ERROR:", e.message));
+await p.goto(base); await p.waitForSelector(".registry li"); await p.waitForTimeout(1000);
+console.log("posting as:", await p.locator("header .as select").inputValue(), "| options:", (await p.locator("header .as select option").allTextContents()).join(","));
+const tab = p.locator(".side-tabs button", { hasText: "Alerts" }); console.log("alerts tab:", await tab.innerText());
+await tab.click(); await p.locator(".pane.side h2", { hasText: "Alerts" }).waitFor();
+console.log("open listed:", await p.locator(".alerts li.open").count(), "| resolved summary:", await p.locator("details summary", { hasText: "resolved" }).allTextContents());
+await p.screenshot({ path: `${out}/p3-alerts.png` }); await b.close();

@@ -359,3 +359,24 @@ export function parseAlertConfig(f: AlertConfigForm): Parsed<AlertConfig> {
 export function ownerChoices(participants: readonly { name: string; kind: string; state: string }[]): string[] {
   return participants.filter((p) => p.kind === "human" && p.state === "active").map((p) => p.name);
 }
+
+/**
+ * The Alerts tab's badge, open list and resolved list. Open incidents come from their own query
+ * (`openOnly`), so one older than the newest page of alerts never drops out; the resolved list is
+ * the recent history, capped (P3 bug 7).
+ */
+export function alertsView(open: readonly Alert[] | undefined, recent: readonly Alert[] | undefined): { badge: string; open: Alert[]; resolved: Alert[] } {
+  const openList = open ?? (recent ?? []).filter((a) => a.resolvedAt === undefined);
+  return { badge: alertsBadge(openList), open: [...openList], resolved: (recent ?? []).filter((a) => a.resolvedAt !== undefined) };
+}
+
+/**
+ * Who the view posts as: the saved choice if it's still an active person, else @lee if it exists,
+ * else the first active person. Until the directory loads, the saved choice (P3 bug 8).
+ */
+export function defaultPostingAs(saved: string | null, participants: readonly { name: string; kind: string; state: string }[]): string {
+  const people = ownerChoices(participants);
+  if (people.length === 0) return saved ?? "";
+  if (saved !== null && people.includes(saved)) return saved;
+  return people.includes("lee") ? "lee" : people[0]!;
+}

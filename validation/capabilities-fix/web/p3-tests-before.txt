@@ -1,0 +1,94 @@
+▶ P3 bug 7: an old open alert stays visible
+  ✖ 7: an open incident older than the newest 100 is still in the badge and the open list (1.402641ms)
+  ✔ 7: an open alert in both lists is listed once; the badge counts open incidents only (0.613664ms)
+✖ P3 bug 7: an old open alert stays visible (2.945517ms)
+▶ P3 bug 8: no phantom @lee
+  ✖ 8: with no @lee, posting as defaults to the first active person (0.282352ms)
+  ✖ 8: a saved choice that's no longer an active person isn't kept (0.170388ms)
+  ✔ 8: @lee is still the default when it exists, and a saved active person wins (0.108602ms)
+  ✔ 8: before the directory has loaded, the saved choice is kept (0.08934ms)
+✖ P3 bug 8: no phantom @lee (0.864479ms)
+ℹ tests 6
+ℹ suites 2
+ℹ pass 3
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 102.285261
+
+✖ failing tests:
+
+test at test/p3.test.ts:21:3
+✖ 7: an open incident older than the newest 100 is still in the badge and the open list (1.402641ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'Alerts'
+  - 'Alerts (1)'
+           ^
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/apps/web/test/p3.test.ts:25:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at node:internal/test_runner/test:1792:71
+      at node:internal/per_context/primordials:466:82
+      at new Promise (<anonymous>)
+      at new SafePromise (node:internal/per_context/primordials:435:3)
+      at node:internal/per_context/primordials:466:9
+      at Array.map (<anonymous>) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Alerts',
+    expected: 'Alerts (1)',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/p3.test.ts:41:3
+✖ 8: with no @lee, posting as defaults to the first active person (0.282352ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'lee' !== 'pat'
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/apps/web/test/p3.test.ts:42:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at node:internal/test_runner/test:1792:71
+      at node:internal/per_context/primordials:466:82
+      at new Promise (<anonymous>)
+      at new SafePromise (node:internal/per_context/primordials:435:3)
+      at node:internal/per_context/primordials:466:9
+      at Array.map (<anonymous>) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'lee',
+    expected: 'pat',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/p3.test.ts:44:3
+✖ 8: a saved choice that's no longer an active person isn't kept (0.170388ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'gone' !== 'lee'
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/apps/web/test/p3.test.ts:45:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1794:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'gone',
+    expected: 'lee',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
