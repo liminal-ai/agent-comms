@@ -122,3 +122,9 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
 - 0.1.3: a notice is delivered and never collected (failing tests e736613, fix ee61a0d); term-a updated.
 - Acceptance 2 (both directions), 6, 9 (term-a: fire and notice), 11 web side: pass. Evidence
   `validation/capabilities/acceptance/hazel/`, `validation/capabilities/mod-0.1.3/` (59b6b81).
+
+## Capabilities fix pass (docs/06-capabilities-fix-pass.md)
+- T3 tool-output check (497732b): T3 shows a 1-line/84-char preview only; T3 never confirms.
+- Claude Code tool.call text evidence (4575ff3). Section 0 reviewed and approved (Cedar 598e9e9 took the register-turnId gap).
+- 1.1 mod: 0.1.4 (tests 4b584e3, fix 18aece0). Web 1.4/2 form parts (tests 80f6b95, fix 9b9bf88).
+- Open: inbox mark-all/paging (needs Cedar's Convex calls); render.ts name escaping + report-to line (ownership agreed with Cedar first); section 4 rerun.
