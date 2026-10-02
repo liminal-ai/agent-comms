@@ -19,7 +19,7 @@ const HISTORY = 600;
 
 async function setup() {
   process.env.COMMS_ADMIN_TOKEN = ADMIN;
-  const t = convexTest({ schema, modules, transactionLimits: { documentsRead: 400 } } as never);
+  const t = convexTest({ schema, modules, transactionLimits: { documentsRead: 400 } });
   await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m1", secret: m1.secret });
   await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "lee", kind: "human" });
   for (const name of ["a", "b"]) {

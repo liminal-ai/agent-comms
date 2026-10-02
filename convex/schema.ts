@@ -116,8 +116,10 @@ export default defineSchema({
     .index("by_recipient_state_collect", ["recipientId", "state", "collect"])
     .index("by_target_state_collect", ["target.machine", "state", "collect"])
     .index("by_message", ["messageId"])
-    // Alerts: uncertain deliveries, and in-flight ones claimed too often.
-    .index("by_state", ["state"]),
+    // Alerts (fix pass 1.3): deliveries entering `uncertain` recently, by when they changed.
+    .index("by_state_at", ["state", "at"])
+    // Alerts (fix pass 1.3): in-flight deliveries only (answers end at `delivered` and are never in flight).
+    .index("by_state_collect", ["state", "collect"]),
 
   // -------------------------------------------------------------------------
   // Capabilities pass (docs/04-capabilities.md)
@@ -199,7 +201,9 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_state_next", ["state", "nextFireAt"])
-    .index("by_expires", ["expiresAt"])
+    // Fix pass 1.3: expiry and alerts read live states only, never finished history.
+    .index("by_state_expires", ["state", "expiresAt"])
+    .index("by_state_stateAt", ["state", "stateAt"])
     .index("by_target", ["targetId"])
     .index("by_creator", ["createdById"])
     .index("by_reportTo", ["reportToId"]),

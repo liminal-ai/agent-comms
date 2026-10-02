@@ -266,18 +266,23 @@ async function fire(ctx: MutationCtx, r: Doc<"reminders">, target: Doc<"particip
   }
 }
 
+async function expire(ctx: MutationCtx, r: Doc<"reminders">, now: number): Promise<void> {
+  await ctx.db.patch(r._id, { state: "expired", stateAt: now, nextFireAt: undefined });
+  await tellEnded(ctx, (await ctx.db.get(r._id))!);
+}
+
 /** The minute cron: expiries first, then due reminders (bounded per run). */
 export async function tick(ctx: MutationCtx, now: number): Promise<{ fired: number; skipped: number; expired: number }> {
   let expired = 0;
-  const ending = await ctx.db
-    .query("reminders")
-    .withIndex("by_expires", (q) => q.lte("expiresAt", now))
-    .take(200);
-  for (const r of ending) {
-    if (r.state !== "active" && r.state !== "paused" && r.state !== "blocked") continue;
-    await ctx.db.patch(r._id, { state: "expired", stateAt: now, nextFireAt: undefined });
-    await tellEnded(ctx, (await ctx.db.get(r._id))!);
-    expired++;
+  // Live states only (fix pass 1.3): finished reminders are never read here.
+  for (const state of ["active", "paused", "blocked"] as const) {
+    for (const r of await ctx.db
+      .query("reminders")
+      .withIndex("by_state_expires", (q) => q.eq("state", state).lte("expiresAt", now))
+      .take(100)) {
+      await expire(ctx, r, now);
+      expired++;
+    }
   }
   let fired = 0;
   let skipped = 0;
@@ -287,6 +292,12 @@ export async function tick(ctx: MutationCtx, now: number): Promise<{ fired: numb
     .take(50);
   for (const r of due) {
     if (r.nextFireAt === undefined) continue;
+    // The firing loop checks expiry itself (fix pass 1.3), whatever the expiry scan reached.
+    if (r.expiresAt <= now) {
+      await expire(ctx, r, now);
+      expired++;
+      continue;
+    }
     const target = (await ctx.db.get(r.targetId))!;
     if (target.state === "retired") {
       await ctx.db.patch(r._id, { state: "cancelled", stateReason: `@${target.name} was retired`, stateAt: now, nextFireAt: undefined });

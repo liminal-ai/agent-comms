@@ -29,7 +29,6 @@ interface Condition {
   event?: boolean;
 }
 
-const keyOf = (c: { cause: string; subjectId: string; ownerId: string }) => `${c.cause}|${c.subjectId}|${c.ownerId}`;
 
 async function alertsParticipant(ctx: MutationCtx): Promise<Doc<"participants">> {
   const p = await ctx.db
@@ -70,26 +69,33 @@ async function open(ctx: MutationCtx, c: Condition, now: number): Promise<boolea
   return true;
 }
 
-/** The scan: every condition that holds now opens (or keeps) its incident; open incidents whose condition is gone resolve. */
+/** How far back the scan looks for deliveries that entered `uncertain` and reminders that expired. Well over the cron period. */
+const RECENT_MS = 60 * 60_000;
+
+/**
+ * The scan (fix pass 1.3: live rows only, never finished history). New incidents: deliveries
+ * that became `uncertain` within RECENT_MS, in-flight deliveries claimed too often, silent
+ * machines, reminders blocked too long, reminders expired within RECENT_MS. Each open
+ * incident is then checked against its own subject, so one older than the scan window
+ * stays open until its condition actually clears.
+ */
 export async function scan(ctx: MutationCtx, now: number): Promise<{ opened: number; resolved: number }> {
   const config = await alertConfig(ctx);
   const holding: Condition[] = [];
   const ownerOf = async (participantId: Id<"participants">) => (await ctx.db.get(participantId))?.ownerId;
 
-  // A delivery entering `uncertain`.
   for (const d of await ctx.db
     .query("deliveries")
-    .withIndex("by_state", (q) => q.eq("state", "uncertain"))
-    .take(500)) {
+    .withIndex("by_state_at", (q) => q.eq("state", "uncertain").gte("at", now - RECENT_MS))
+    .take(200)) {
     const ownerId = await ownerOf(d.recipientId);
     if (ownerId) holding.push({ cause: "uncertain-delivery", subjectKind: "delivery", subjectId: d._id, ownerId, subjectConversationId: d.conversationId, ...(d.detail ? { detail: d.detail } : {}) });
   }
 
-  // A delivery claimed more than maxClaims times and still in flight.
-  for (const state of ["claimed", "delivered"] as const) {
+  for (const [state, collect] of [["claimed", true], ["claimed", false], ["delivered", true]] as const) {
     for (const d of await ctx.db
       .query("deliveries")
-      .withIndex("by_state", (q) => q.eq("state", state))
+      .withIndex("by_state_collect", (q) => q.eq("state", state).eq("collect", collect))
       .take(500)) {
       if ((d.claimCount ?? 0) <= config.maxClaims) continue;
       const ownerId = await ownerOf(d.recipientId);
@@ -99,35 +105,25 @@ export async function scan(ctx: MutationCtx, now: number): Promise<{ opened: num
     }
   }
 
-  // A machine with homed agents whose connector hasn't been heard from.
   for (const m of await ctx.db.query("machines").collect()) {
-    const lastSeen = m.lastSeenAt ?? m.createdAt;
-    if (now - lastSeen < config.connectorSilentMs) continue;
-    const homed = (await ctx.db
-      .query("participants")
-      .withIndex("by_machine", (q) => q.eq("home.machine", m.machineId))
-      .collect()).filter((p) => p.kind === "agent" && p.state !== "retired");
-    const owners = new Set(homed.flatMap((p) => (p.ownerId ? [p.ownerId] : [])));
-    const minutes = Math.floor((now - lastSeen) / 60_000);
-    for (const ownerId of owners) {
-      holding.push({ cause: "connector-silent", subjectKind: "machine", subjectId: m.machineId, ownerId, detail: `not heard from for ${minutes} minutes; ${homed.length} agent${homed.length === 1 ? "" : "s"} homed there` });
+    const silent = await silentMachine(ctx, m, config, now);
+    if (!silent) continue;
+    for (const ownerId of silent.owners) {
+      holding.push({ cause: "connector-silent", subjectKind: "machine", subjectId: m.machineId, ownerId, detail: silent.detail });
     }
   }
 
-  // A reminder blocked for too long, or expired (recently: older expiries were alerted when they happened).
   for (const r of await ctx.db
     .query("reminders")
-    .withIndex("by_state_next", (q) => q.eq("state", "blocked"))
-    .take(500)) {
-    if (now - r.stateAt < config.reminderBlockedMs) continue;
+    .withIndex("by_state_stateAt", (q) => q.eq("state", "blocked").lte("stateAt", now - config.reminderBlockedMs))
+    .take(200)) {
     const ownerId = await ownerOf(r.targetId);
     if (ownerId) holding.push({ cause: "reminder-blocked", subjectKind: "reminder", subjectId: r._id, ownerId, ...(r.stateReason ? { detail: r.stateReason } : {}) });
   }
   for (const r of await ctx.db
     .query("reminders")
-    .withIndex("by_state_next", (q) => q.eq("state", "expired"))
-    .take(500)) {
-    if (now - r.stateAt > 24 * 60 * 60_000) continue;
+    .withIndex("by_state_stateAt", (q) => q.eq("state", "expired").gte("stateAt", now - RECENT_MS))
+    .take(200)) {
     const ownerId = await ownerOf(r.targetId);
     if (ownerId) holding.push({ cause: "reminder-expired", subjectKind: "reminder", subjectId: r._id, ownerId, detail: `"${r.name}", ${r.fires} fire${r.fires === 1 ? "" : "s"}`, event: true });
   }
@@ -135,16 +131,58 @@ export async function scan(ctx: MutationCtx, now: number): Promise<{ opened: num
   let opened = 0;
   for (const c of holding) if (await open(ctx, c, now)) opened++;
 
-  // Resolve open incidents whose condition no longer holds.
-  const live = new Set(holding.map(keyOf));
   let resolved = 0;
   for (const a of await ctx.db
     .query("alerts")
     .withIndex("by_resolved", (q) => q.eq("resolvedAt", undefined))
-    .take(1000)) {
-    if (live.has(keyOf({ cause: a.cause, subjectId: a.subjectId, ownerId: a.ownerId }))) continue;
+    .take(500)) {
+    if (await stillHolds(ctx, a, config, now)) continue;
     await ctx.db.patch(a._id, { resolvedAt: now });
     resolved++;
   }
   return { opened, resolved };
+}
+
+async function silentMachine(ctx: MutationCtx, m: Doc<"machines">, config: AlertConfig, now: number) {
+  const lastSeen = m.lastSeenAt ?? m.createdAt;
+  if (now - lastSeen < config.connectorSilentMs) return null;
+  const homed = (await ctx.db
+    .query("participants")
+    .withIndex("by_machine", (q) => q.eq("home.machine", m.machineId))
+    .collect()).filter((p) => p.kind === "agent" && p.state !== "retired");
+  if (homed.length === 0) return null;
+  const minutes = Math.floor((now - lastSeen) / 60_000);
+  return {
+    owners: new Set(homed.flatMap((p) => (p.ownerId ? [p.ownerId] : []))),
+    detail: `not heard from for ${minutes} minutes; ${homed.length} agent${homed.length === 1 ? "" : "s"} homed there`,
+  };
+}
+
+/** Whether an open incident's condition still holds, checked on its own subject. */
+async function stillHolds(ctx: MutationCtx, a: Doc<"alerts">, config: AlertConfig, now: number): Promise<boolean> {
+  switch (a.cause) {
+    case "uncertain-delivery": {
+      const id = ctx.db.normalizeId("deliveries", a.subjectId);
+      return (id ? await ctx.db.get(id) : null)?.state === "uncertain";
+    }
+    case "delivery-reclaimed": {
+      const id = ctx.db.normalizeId("deliveries", a.subjectId);
+      const d = id ? await ctx.db.get(id) : null;
+      return !!d && (d.state === "claimed" || d.state === "delivered") && (d.claimCount ?? 0) > config.maxClaims;
+    }
+    case "connector-silent": {
+      const m = await ctx.db
+        .query("machines")
+        .withIndex("by_machineId", (q) => q.eq("machineId", a.subjectId))
+        .unique();
+      const silent = m ? await silentMachine(ctx, m, config, now) : null;
+      return !!silent && silent.owners.has(a.ownerId);
+    }
+    case "reminder-blocked": {
+      const id = ctx.db.normalizeId("reminders", a.subjectId);
+      return (id ? await ctx.db.get(id) : null)?.state === "blocked";
+    }
+    case "reminder-expired":
+      return false;
+  }
 }
