@@ -27,7 +27,7 @@ import {
   summary,
 } from "./lib/core";
 import { machineSeen, nextPresence, profilePatch, registryEntry } from "./lib/registry";
-import { acknowledge, endResult, registerWait, requireWait, takeAnswer, touch, waitOn, waitShape } from "./lib/waits";
+import { confirm, endResult, markPrinted, registerWait, requireWait, takeAnswer, touch, waitOn, waitShape } from "./lib/waits";
 import { applyAction, createReminder, mayChange, recordFireAnswer, reminderDetail, reminderShape } from "./lib/reminders";
 import { openDm, post, replayed } from "./lib/post";
 import { attachment, enteredInput, failureReason, machineAuth, reminderAction, via } from "./validators";
@@ -433,6 +433,8 @@ export const send = mutation({
     /** Register a wait on the addressed agents' answers (send-and-wait). */
     wait: v.optional(v.boolean()),
     waitMs: v.optional(v.number()),
+    /** Fix pass 0.1: the waiter's running main turn, as its harness reported it to the connector. */
+    waiterTurnId: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Responses["send"]> => {
     const machine = await requireMachine(ctx, args.machine);
@@ -440,7 +442,7 @@ export const send = mutation({
     const earlier = await replayed(ctx, sender, args.key);
     if (earlier) {
       const wait = args.wait ? await waitOn(ctx, sender, earlier.message.id as Id<"messages">) : null;
-      return wait ? { ...earlier, wait: await waitShape(ctx, wait) } : earlier;
+      return wait ? { ...earlier, wait: await waitShape(ctx, wait, { withProofTokens: true }) } : earlier;
     }
     const waitMs = args.waitMs ?? DEFAULT_WAIT_MS;
     if (args.wait && (!Number.isInteger(waitMs) || waitMs < 1_000 || waitMs > MAX_WAIT_MS)) {
@@ -480,8 +482,10 @@ export const send = mutation({
       origin: { via: args.via ?? "cli" },
     });
     if (!args.wait) return result;
-    const registered = await registerWait(ctx, sender, result.message.id as Id<"messages">, waitMs, Date.now());
-    return "wait" in registered ? { ...result, wait: await waitShape(ctx, registered.wait) } : { ...result, noWait: registered.noWait };
+    const registered = await registerWait(ctx, sender, result.message.id as Id<"messages">, waitMs, Date.now(), args.waiterTurnId);
+    return "wait" in registered
+      ? { ...result, wait: await waitShape(ctx, registered.wait, { withProofTokens: true }) }
+      : { ...result, noWait: registered.noWait };
   },
 });
 
@@ -648,7 +652,7 @@ export const awaitWait = mutation({
     const machine = await requireMachine(ctx, args.machine);
     const me = await actingAs(ctx, machine, args.as);
     const wait = await touch(ctx, await requireWait(ctx, me, args.messageId), Date.now());
-    return { wait: await waitShape(ctx, wait) };
+    return { wait: await waitShape(ctx, wait, { withProofTokens: true }) };
   },
 });
 
@@ -668,8 +672,24 @@ export const ack = mutation({
     const machine = await requireMachine(ctx, args.machine);
     const me = await actingAs(ctx, machine, args.as);
     const wait = await requireWait(ctx, me, args.messageId);
-    await acknowledge(ctx, wait, args.recipients, Date.now());
+    await markPrinted(ctx, wait, args.recipients, Date.now());
     return { wait: await waitShape(ctx, (await ctx.db.get(wait._id))!) };
+  },
+});
+
+/** Fix pass 0.1: the harness saw these answer proofs in a tool result of the waiter's main turn `turnId`. */
+export const answerSeen = mutation({
+  args: {
+    machine: machineAuth,
+    as: v.string(),
+    turnId: v.string(),
+    proofs: v.array(v.object({ waitId: v.string(), messageId: v.string(), token: v.string() })),
+  },
+  handler: async (ctx, args) => {
+    const machine = await requireMachine(ctx, args.machine);
+    const me = await actingAs(ctx, machine, args.as);
+    if (args.proofs.length > 50) fail("bad_request", "at most 50 proofs");
+    return { confirmed: await confirm(ctx, me, args.turnId, args.proofs, Date.now()) };
   },
 });
 

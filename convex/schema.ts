@@ -144,6 +144,8 @@ export default defineSchema({
     active: v.boolean(),
     /** The last `await` from the waiting CLI (or the send): answers are taken only while it's recent (WAIT_HELD_MS). */
     lastAwaitAt: v.number(),
+    /** Fix pass 0.1: the waiter's main turn when the wait was created; only proofs from it confirm. */
+    waiterTurnId: v.optional(v.string()),
     /** People addressed by the request: in their inbox, never waited on. */
     inInboxIds: v.array(v.id("participants")),
     endedAt: v.optional(v.number()),
@@ -152,6 +154,8 @@ export default defineSchema({
     .index("by_waiter_active", ["waiterId", "active"])
     .index("by_message", ["messageId"])
     .index("by_active_until", ["active", "until"])
+    // Fix pass 0.2: active waits whose CLI stopped checking in.
+    .index("by_active_lastAwait", ["active", "lastAwaitAt"])
     .index("by_endedAt", ["endedAt"]),
 
   /** One addressed agent's result in a wait. Every transition is a compare-and-set (WaitResultState). */
@@ -162,6 +166,10 @@ export default defineSchema({
     deliveryId: v.id("deliveries"),
     state: waitResultState,
     answerMessageId: v.optional(v.id("messages")),
+    /** Fix pass 0.1: the proof token for this answer's markers, made when it's answered. */
+    proofToken: v.optional(v.string()),
+    /** Fix pass 0.1: when the CLI said it printed the answer (provisional). */
+    printedAt: v.optional(v.number()),
     at: v.number(),
   })
     .index("by_wait", ["waitId"])

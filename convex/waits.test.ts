@@ -195,17 +195,16 @@ describe("R2 ack and the one fallback", () => {
     return { sent, answerId: collected.answerMessageId! };
   }
 
-  it("an ack counts while the waiter's turn that ran the CLI is still running", async () => {
+  it("fix pass 0.1: busy in the turn that ran the CLI is no longer enough; the CLI's ack is provisional", async () => {
     const t = await setup();
     await busy(t, "a");
     at(1_000);
     const { sent } = await answered(t);
     const r = await t.mutation(api.connector.ack, { machine: m1, as: "a", messageId: sent.message.id });
-    expect(r.wait.results[0]!.state).toBe("acknowledged");
-    expect((await t.mutation(api.connector.ack, { machine: m1, as: "a", messageId: sent.message.id })).wait.results[0]!.state).toBe("acknowledged");
+    expect(r.wait.results[0]!.state).toBe("answered");
     at(1_000 + ACK_WINDOW_MS + 60_000);
     await t.mutation(internal.waits.sweep, {});
-    expect((await awaitWait(t, "a", sent.message.id)).wait.results[0]!.state).toBe("acknowledged");
+    expect((await awaitWait(t, "a", sent.message.id)).wait.results[0]!.state).toBe("fell-back");
   });
 
   it("an ack is ignored if the waiter is idle, in a later turn, or its presence is stale", async () => {
