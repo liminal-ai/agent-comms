@@ -1,0 +1,13 @@
+    not ok 1 - prints an answer between a begin and an end line, the end carrying the length of what's between
+    not ok 2 - finds a complete proof in a tool result, among other output
+    not ok 3 - finds each of several answers' proofs
+    not ok 4 - is no proof when the end marker is missing (truncated output)
+    not ok 5 - is no proof when the middle was cut (the length doesn't match)
+    not ok 6 - is no proof when a marker is quoted, indented, or mismatched
+    not ok 7 - an answer can't forge a marker: its lines are always indented
+    not ok 8 - splits only on \\n, and tolerates a \\r\\n tool result
+not ok 1 - 0.1 answer proof markers
+    not ok 1 - presence carries the main turn id while busy; answer-seen reports proofs from one turn
+not ok 2 - 0.1 contract shapes
+# pass 0
+# fail 9
