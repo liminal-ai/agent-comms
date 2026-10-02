@@ -214,8 +214,8 @@ describe("R3 reminders over the connector", () => {
     expect((await t.query(api.connector.reminders, { machine: m1, as: "a" })).reminders.map((x) => x.id)).toEqual([r.reminder.id]);
     expect((await t.query(api.connector.reminders, { machine: m1, as: "b" })).reminders.map((x) => x.id)).toEqual([r.reminder.id]);
     expect((await t.query(api.connector.reminders, { machine: m1, as: "c" })).reminders).toEqual([]);
-    expect((await t.query(api.connector.reminder, { machine: m1, as: "c", id: r.reminder.id })).reminder.id).toBe(r.reminder.id);
-    expect(await errorCode(t.mutation(api.connector.reminderUpdate, { machine: m1, as: "c", id: r.reminder.id, action: "pause" }))).toBe("conflict");
+    expect(await errorCode(t.query(api.connector.reminder, { machine: m1, as: "c", id: r.reminder.id }))).toBe("forbidden"); // fix pass 0.4
+    expect(await errorCode(t.mutation(api.connector.reminderUpdate, { machine: m1, as: "c", id: r.reminder.id, action: "pause" }))).toBe("forbidden");
     expect((await t.mutation(api.connector.reminderUpdate, { machine: m1, as: "b", id: r.reminder.id, action: "blocked", reason: "no creds" })).reminder).toMatchObject({ state: "blocked", stateReason: "no creds" });
     expect(await errorCode(t.mutation(api.connector.remind, { machine: m1, as: "a", target: "reminders", text: "x", everyMs: MIN }))).toBe("bad_request");
     expect(await errorCode(t.query(api.connector.reminder, { machine: m1, as: "a", id: "nope" }))).toBe("unknown_reminder");
@@ -256,5 +256,25 @@ describe("R3 notices to agents", () => {
     }
     expect((await t.query(api.connector.work, { machine: m1 })).deliveries).toEqual([]);
     expect(r.reminder.state).toBe("active");
+  });
+});
+
+describe("fix pass 1.2 (contract 0.4): reminder detail access", () => {
+  it("only the creator, the target, the target's owner and the report-to read a reminder; anyone else, on any machine, is forbidden", async () => {
+    const t = await setup();
+    await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m2", secret: "m2-secret-0123456789" });
+    await t.mutation(api.directory.promote, { adminToken: ADMIN, name: "far", kind: "agent", owner: "lee", home: { machine: "m2", harness: "t3", locator: "loc-far" } });
+    const m2 = { id: "m2", secret: "m2-secret-0123456789" };
+    const r = await t.mutation(api.connector.remind, { machine: m1, as: "a", target: "b", text: "private", everyMs: MIN, reportTo: "c" });
+    for (const as of ["a", "b", "c"]) {
+      expect((await t.query(api.connector.reminder, { machine: m1, as, id: r.reminder.id })).reminder.text, as).toBe("private");
+    }
+    expect((await t.query(api.connector.reminders, { machine: m1, as: "c" })).reminders.map((x) => x.id)).toEqual([r.reminder.id]);
+    // Alder's repro: an unrelated agent on another machine could read it.
+    expect(await errorCode(t.query(api.connector.reminder, { machine: m2, as: "far", id: r.reminder.id }))).toBe("forbidden");
+    expect((await t.query(api.connector.reminders, { machine: m2, as: "far" })).reminders).toEqual([]);
+    expect(await errorCode(t.mutation(api.connector.reminderUpdate, { machine: m2, as: "far", id: r.reminder.id, action: "pause" }))).toBe("forbidden");
+    // The report-to may read it, not change it.
+    expect(await errorCode(t.mutation(api.connector.reminderUpdate, { machine: m1, as: "c", id: r.reminder.id, action: "pause" }))).toBe("forbidden");
   });
 });
