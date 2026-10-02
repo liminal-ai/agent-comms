@@ -86,3 +86,8 @@ turn starts, so a waiting send is stamped with the waiter's turn. On each main-l
 reads; evidence `validation/capabilities-fix/claude-code-tool-output/`) and any complete proofs go
 to the connector as `answer-seen`, through the retried report queue. Failing tests first
 (4b584e3: 5 of 11 failing, 6 guards), 57 pass after (`validation/capabilities-fix/mod-1.1/`).
+
+## 0.1.5 (capabilities fix pass 2): rendering
+
+The synced protocol copy now renders a reminder's name on one line, clipped at 80, and a fire with
+`meta.reportTo` says "Your answer is reported to @x." (`packages/protocol` 04b5fb2, tests 54837b6).

@@ -123,8 +123,10 @@ function build(delivery: Delivery, options: RenderOptions, budget: Budget): stri
   lines.push(`Conversation: ${describeConversation(delivery)}`);
   const reminder = message.meta?.type === "reminder" ? message.meta : undefined;
   if (reminder) {
+    // The name is the creator's text: one line, clipped, so it can't add lines to this block.
+    const reportedTo = reminder.reportTo ? ` Your answer is reported to @${reminder.reportTo}.` : "";
     lines.push(
-      `Reminder: ${reminder.name} (id ${reminder.reminderId}), set by @${reminder.setBy}, ${reminder.schedule}. Fire ${reminder.fire}.`,
+      `Reminder: ${clip(oneLine(reminder.name), 80)} (id ${reminder.reminderId}), set by @${reminder.setBy}, ${reminder.schedule}. Fire ${reminder.fire}.${reportedTo}`,
     );
   }
 
