@@ -1,0 +1,1 @@
+Run exactly this one shell command with run_in_background set to true, and nothing else: comms send --as term-a @t3-native "Fix pass 4 (Hazel): what is 9 times 9? Reply with just the number."   Then end your turn. When it completes, do not read its output and run nothing else; just say it finished.

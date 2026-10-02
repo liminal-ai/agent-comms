@@ -1,0 +1,6 @@
+2026-10-02T17:20:42.070Z seeded; unread: 310
+2026-10-02T17:20:42.072Z PASS 310 unread to start
+2026-10-02T17:20:42.669Z FAIL 1: the oldest unread message (group 0) is reachable in the inbox
+2026-10-02T17:20:44.392Z FAIL 2: opening the group marked its 60 rows read (unread now 310)
+2026-10-02T17:20:45.986Z FAIL 3: mark all read left nothing unread (unread now 150)
+2026-10-02T17:20:46.124Z 3 FAILED

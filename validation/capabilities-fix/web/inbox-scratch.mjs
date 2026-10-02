@@ -1,6 +1,6 @@
 // Fix pass 2, web inbox (Alder's 101-message case), on a SCRATCH deployment only.
-// Seeds 210 unread messages to @lee from @pat: the oldest 60 in a group, the newest 150 in
-// their DM, so the group's rows all fall past the first page. Then, in the web view:
+// Seeds 310 unread messages to @lee from @pat: the oldest 60 in a group, the newest 250 in
+// their DM, so all of the group's rows fall past the newest 200 unread (the web's unread window). Then, in the web view:
 //   1. the oldest message is reachable (older pages, or unread-only);
 //   2. opening the group from the Conversations list marks all 60 of its rows read;
 //   3. "Mark all read" marks every remaining unread row, not only those shown.
@@ -27,9 +27,9 @@ await client.mutation(anyApi.inbox.markRead, { adminToken, human: "lee", all: tr
 const { conversation: group } = await client.mutation(anyApi.conversations.createGroup, { adminToken, title: `inbox-test ${Date.now()}`, members: ["lee", "pat"] });
 for (let i = 0; i < 60; i++) await client.mutation(anyApi.conversations.postAs, { adminToken, as: "pat", conversationId: group.id, to: ["lee"], text: `group ${i}` });
 const { conversation: dm } = await client.mutation(anyApi.conversations.openDm, { adminToken, a: "pat", b: "lee" });
-for (let i = 0; i < 150; i++) await client.mutation(anyApi.conversations.postAs, { adminToken, as: "pat", conversationId: dm.id, to: ["lee"], text: `dm ${i}` });
+for (let i = 0; i < 250; i++) await client.mutation(anyApi.conversations.postAs, { adminToken, as: "pat", conversationId: dm.id, to: ["lee"], text: `dm ${i}` });
 log("seeded; unread:", await unread());
-check((await unread()) === 210, "210 unread to start");
+check((await unread()) === 310, "310 unread to start");
 
 const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", headless: true });
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
@@ -55,7 +55,7 @@ try {
   await page.locator(".convs li", { hasText: group.title ?? "inbox-test" }).first().click();
   await page.locator(".messages li", { hasText: "group 59" }).waitFor();
   await page.waitForTimeout(1500);
-  check((await unread()) === 150, `2: opening the group marked its 60 rows read (unread now ${await unread()})`);
+  check((await unread()) === 250, `2: opening the group marked its 60 rows read (unread now ${await unread()})`);
 
   // 3. Mark all read marks everything.
   await page.locator(".side-tabs button", { hasText: "Inbox" }).click();

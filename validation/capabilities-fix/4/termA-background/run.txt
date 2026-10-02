@@ -1,0 +1,4 @@
+case: termA-background
+started: 2026-10-02T17:05:45Z
+turn ended: 2026-10-02T17:06:04Z (seen busy: 1)
+ended: 2026-10-02T17:06:07Z

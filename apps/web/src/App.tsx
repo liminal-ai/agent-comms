@@ -68,7 +68,6 @@ function Main({ token }: { token: string }) {
   const isPerson = people.some((p) => p.name === as);
   const unread = useQuery(api.inbox.list, isPerson ? { adminToken: token, human: as, unreadOnly: true, limit: 200 } : "skip");
   const unreadCount = unread?.unread ?? 0;
-  const unreadConversations = useMemo(() => new Set(unread?.items.map((i) => i.conversation.id) ?? []), [unread]);
   const now = useNow(15_000);
   useEffect(() => {
     document.title = titleWithUnread("agent comms", unreadCount);
@@ -144,7 +143,7 @@ function Main({ token }: { token: string }) {
             id={selected}
             as={as}
             names={directory?.participants.map((p) => p.name) ?? []}
-            unread={isPerson && unreadConversations.has(selected)}
+            readAs={isPerson}
           />
         ) : (
           <p className="muted">Pick a conversation.</p>
@@ -283,14 +282,16 @@ function Conversations(props: { token: string; list: ConversationList; names: st
 // ---------------------------------------------------------------------------
 // One conversation
 
-function ConversationView({ token, id, as, names, unread }: { token: string; id: string; as: string; names: string[]; unread: boolean }) {
+function ConversationView({ token, id, as, names, readAs }: { token: string; id: string; as: string; names: string[]; readAs: boolean }) {
   const view = useQuery(api.conversations.view, { adminToken: token, conversationId: id });
   const markRead = useMutation(api.inbox.markRead);
-  // Open is read: whatever in this conversation is in @as's inbox is marked read,
-  // including messages that arrive while it's open.
+  // Open is read: whatever in this conversation is in @as's inbox is marked read, whether or
+  // not it's among the unread the page has loaded (fix pass 2), including messages that
+  // arrive while it's open. Idempotent: a conversation with nothing unread changes nothing.
+  const messageCount = view?.messages.length;
   useEffect(() => {
-    if (unread && view) markRead({ adminToken: token, human: as, conversationId: id }).catch(() => {});
-  }, [unread, view, token, as, id, markRead]);
+    if (readAs && messageCount !== undefined) markRead({ adminToken: token, human: as, conversationId: id }).catch(() => {});
+  }, [readAs, messageCount, token, as, id, markRead]);
   const post = useMutation(api.conversations.postAs);
   const addMember = useMutation(api.conversations.addMember);
   const removeMember = useMutation(api.conversations.removeMember);

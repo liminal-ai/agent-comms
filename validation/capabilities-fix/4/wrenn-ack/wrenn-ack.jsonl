@@ -1,0 +1,6 @@
+{"at":"2026-10-02T17:07:21.703Z","step":"typed","marker":"WRENN-ACK-mur7udnw"}
+{"at":"2026-10-02T17:07:26.429Z","step":"request","mid":"jn7afpj6ec5drx80ckxzvc4yds8fhp5w","afterMs":4745}
+{"at":"2026-10-02T17:07:31.543Z","step":"state","states":["open"],"waiterTurnId":null,"endedAt":null}
+{"at":"2026-10-02T17:07:36.661Z","step":"state","states":["answered"],"waiterTurnId":null,"endedAt":1790960853795}
+{"at":"2026-10-02T17:10:15.604Z","step":"state","states":["fell-back"],"waiterTurnId":null,"endedAt":1790960853795}
+{"at":"2026-10-02T17:10:35.639Z","step":"final","states":["fell-back"],"answer":"ACK-PONG","fallbackMessagesInThread":1}

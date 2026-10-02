@@ -1,0 +1,30 @@
+{
+  "createdAt": 1790961452925,
+  "createdBy": {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+  },
+  "expiresAt": 1790963252925,
+  "fires": 0,
+  "id": "k97egxrbk0cyqekz77te9evbdh8fg4p8",
+  "max": 1,
+  "name": "fix-pass render check",
+  "nextFireAt": 1790961512925,
+  "reportTo": {
+    "id": "js77sdynag583zm44yfrxwqh4n8fdvrr",
+    "kind": "human",
+    "name": "lee"
+  },
+  "schedule": {
+    "everyMs": 60000
+  },
+  "state": "active",
+  "stateAt": 1790961452925,
+  "target": {
+    "id": "js79dhbzw3jkamzb5zdzn6mpgh8ffxa9",
+    "kind": "agent",
+    "name": "term-a"
+  },
+  "text": "Fix pass 4 render check (Hazel, mod 0.1.5): reply with the single word PONG and nothing else. Use no tools."
+}

@@ -1,0 +1,128 @@
+{
+  "ok": true,
+  "conversation": {
+    "id": "j57ej725vkhc5km7pnfp3j5gys8fea77",
+    "kind": "dm"
+  },
+  "message": {
+    "attachments": [],
+    "conversationId": "j57ej725vkhc5km7pnfp3j5gys8fea77",
+    "createdAt": 1790960555207,
+    "id": "jn79054thh113qxr3wnjwyp77s8fhnk6",
+    "kind": "request",
+    "origin": {
+      "via": "cli"
+    },
+    "recipients": [
+      {
+        "id": "js7b329w7f2w5f507797raymzd8fcfxy",
+        "kind": "agent",
+        "name": "t3-native"
+      }
+    ],
+    "sender": {
+      "id": "js79dhbzw3jkamzb5zdzn6mpgh8ffxa9",
+      "kind": "agent",
+      "name": "term-a"
+    },
+    "seq": 3,
+    "text": "Fix pass 4 (Hazel): what is 7 times 8? Reply with just the number."
+  },
+  "recipients": [
+    {
+      "answer": {
+        "attachments": [],
+        "collectedFrom": "j976zmfpq1wf61jx9vdx5rnkdd8fhqv7",
+        "conversationId": "j57ej725vkhc5km7pnfp3j5gys8fea77",
+        "createdAt": 1790960561589,
+        "id": "jn70njm792j678z06dzshpx7cn8fh2d2",
+        "inReplyTo": "jn79054thh113qxr3wnjwyp77s8fhnk6",
+        "kind": "answer",
+        "origin": {
+          "via": "t3"
+        },
+        "recipients": [
+          {
+            "id": "js79dhbzw3jkamzb5zdzn6mpgh8ffxa9",
+            "kind": "agent",
+            "name": "term-a"
+          }
+        ],
+        "sender": {
+          "id": "js7b329w7f2w5f507797raymzd8fcfxy",
+          "kind": "agent",
+          "name": "t3-native"
+        },
+        "seq": 4,
+        "text": "56"
+      },
+      "delivery": {
+        "id": "j976zmfpq1wf61jx9vdx5rnkdd8fhqv7",
+        "state": "replied"
+      },
+      "followUps": [],
+      "participant": {
+        "id": "js7b329w7f2w5f507797raymzd8fcfxy",
+        "kind": "agent",
+        "name": "t3-native"
+      }
+    }
+  ],
+  "wait": {
+    "active": false,
+    "createdAt": 1790960555207,
+    "endedAt": 1790960561589,
+    "id": "kh78bk9x6ts56jnj1h6621366x8fgmhz",
+    "inInbox": [],
+    "messageId": "jn79054thh113qxr3wnjwyp77s8fhnk6",
+    "results": [
+      {
+        "answer": {
+          "attachments": [],
+          "collectedFrom": "j976zmfpq1wf61jx9vdx5rnkdd8fhqv7",
+          "conversationId": "j57ej725vkhc5km7pnfp3j5gys8fea77",
+          "createdAt": 1790960561589,
+          "id": "jn70njm792j678z06dzshpx7cn8fh2d2",
+          "inReplyTo": "jn79054thh113qxr3wnjwyp77s8fhnk6",
+          "kind": "answer",
+          "origin": {
+            "via": "t3"
+          },
+          "recipients": [
+            {
+              "id": "js79dhbzw3jkamzb5zdzn6mpgh8ffxa9",
+              "kind": "agent",
+              "name": "term-a"
+            }
+          ],
+          "sender": {
+            "id": "js7b329w7f2w5f507797raymzd8fcfxy",
+            "kind": "agent",
+            "name": "t3-native"
+          },
+          "seq": 4,
+          "text": "56"
+        },
+        "at": 1790960561776,
+        "delivery": {
+          "id": "j976zmfpq1wf61jx9vdx5rnkdd8fhqv7",
+          "state": "replied"
+        },
+        "printedAt": 1790960561738,
+        "recipient": {
+          "id": "js7b329w7f2w5f507797raymzd8fcfxy",
+          "kind": "agent",
+          "name": "t3-native"
+        },
+        "state": "acknowledged"
+      }
+    ],
+    "until": 1790960655207,
+    "waiter": {
+      "id": "js79dhbzw3jkamzb5zdzn6mpgh8ffxa9",
+      "kind": "agent",
+      "name": "term-a"
+    },
+    "waiterTurnId": "19a24b54-e4cc-4b6d-9d63-ed065dea9a26"
+  }
+}

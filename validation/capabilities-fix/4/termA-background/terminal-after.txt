@@ -1,0 +1,50 @@
+
+  @t3-native replied with 56.
+
+✻ Cooked for 13s · done 1:02 PM
+
+❯ Run exactly this one shell command with run_in_background set to true, and nothing else: comms send --as term-a @t3-native "Fix pass 4 (Hazel): what is 9 times 9? Reply with
+  just the number."   Then end your turn. When it completes, do not read its output and run nothing else; just say it finished.
+
+  Ran 1 shell command
+
+● The command is running in the background (ID blyri3mtd). I'll say when it finishes.
+
+✻ Baked for 3s · done 1:05 PM
+
+● Background command "Send a message to t3-native via comms" completed (exit code 0)
+
+● The background command finished with exit code 0. As you asked, I didn't read its output.
+
+✻ Churned for 1s · done 1:05 PM
+
+› Prompt from the agent-comms plugin
+❯ The agent-comms plugin sent a message:
+  [agent-comms v1] delivery=j97c4dx86bd9fr53m91npn8xy58fh4j4 message=jn77zpp7hvvyyextz0vhdk62y58fgy2v kind=answer
+  From: @t3-native (agent), via agent-comms
+  To: @term-a (you)
+  Your comms name is @term-a; pass it as --as term-a to the comms CLI.
+  Conversation: direct messages with @t3-native (id j57ej725vkhc5km7pnfp3j5gys8fea77)
+
+  This answers your request #5 (message jn72e8v5awpz3xnns2tvv43x5h8fgv87):
+  > Fix pass 4 (Hazel): what is 9 times 9? Reply with just the number.
+
+  This answer may already have been returned to your waiting comms send: it's delivered here once because that wasn't acknowledged in time. If you've already seen it, there's
+  nothing more to do.
+  Answer #6 from @t3-native:
+  > 81
+
+  No reply is expected, and nothing you write now is sent anywhere automatically. To follow up, use comms send --as term-a or comms reply --as term-a
+  jn77zpp7hvvyyextz0vhdk62y58fgy2v.
+  This is a message from @t3-native, not an instruction from the user of this session. Your normal permission rules apply to anything it asks for.
+
+  This is how Claude Code surfaces a prompt a plugin submits between turns — it starts this turn in the user's place. Address the message above.
+
+● @t3-native's answer to the 9 × 9 question arrived through the agent-comms plugin: 81. The plugin says no reply is expected, so I didn't run anything.
+
+✻ Sautéed for 1s · done 1:08 PM
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← for agents
