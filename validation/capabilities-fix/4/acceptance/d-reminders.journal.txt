@@ -1,0 +1,58 @@
+2026-10-02T17:32:49.399Z @mod-b check j974t2wnmk9wa84a8hxkc72fv58fecw1 (claimed) → no 
+2026-10-02T17:32:49.440Z @smoke-a check j9713m1hg8ecmw51fwpvmwbzk18fh891 (claimed) → no 
+2026-10-02T17:32:49.497Z @mod-b drained j974t2wnmk9wa84a8hxkc72fv58fecw1: Reminder acc10max (k97fgb1n18sja99ncnw3ya42p18ffeh9) was mar
+2026-10-02T17:32:49.514Z @smoke-a drained j9713m1hg8ecmw51fwpvmwbzk18fh891: [run mur8huhh] item 8a: answer at bound -400 ms
+2026-10-02T17:32:49.681Z @smoke-a drained j97dw7yggnmrrgggww2hhr00jh8fgefq: [run mur8huhh] item 8a: answer at bound -150 ms
+2026-10-02T17:32:49.824Z @smoke-a drained j9733sjqs7tn11k55w5vk8d4g58fgj4k: [run mur8huhh] item 8a: answer at bound -50 ms
+2026-10-02T17:32:49.969Z @smoke-a drained j976wpaj93cf2cv87bkmagn2298fgj9d: [run mur8huhh] item 8b: phase probe: answer
+2026-10-02T17:32:50.109Z @smoke-a drained j974d1qj3ztsk1awagpem17h718fg2v0: [run mur8huhh] item 8b: ack at sweep +250 ms: answer
+2026-10-02T17:32:50.259Z @smoke-a drained j97221m9efgrzdstfb7p17ajwn8fgabb: [run mur8huhh] item 8b: ack at sweep +500 ms: answer
+2026-10-02T17:32:50.481Z @smoke-a drained j97840ryzekzbcryfyjc891gcs8fhn6k: [run mur8huhh] item 8b: ack at sweep +750 ms: answer
+2026-10-02T17:32:50.637Z @smoke-a drained j97fx6nqrmcwmsvp8ryfvts92n8fh91n: [run mur8huhh] item 8b: ack at sweep +1000 ms: answer
+2026-10-02T17:32:50.851Z @smoke-a drained j97d6mjk4kna18ch70tb3381dn8fh67z: [run mur8huhh] item 8b: ack at sweep +1250 ms: answer
+2026-10-02T17:32:50.999Z @smoke-a drained j97b22xz28n3mtsatgpdc0bvzh8fhz7p: [run mur8huhh] item 8b: ack at sweep +1500 ms: answer
+2026-10-02T17:32:51.131Z @smoke-a drained j975gkjxjhqn4yy761791s7cvd8fgyzm: [run mur8huhh] item 8b: ack at sweep +1750 ms: answer
+2026-10-02T17:32:51.333Z @smoke-a drained j978v8m5b92skyezmz5z5ygn1n8fgv2y: [run mur8huhh] item 8b: ack at sweep +2000 ms: answer
+2026-10-02T17:32:51.502Z @smoke-a drained j9759sk6pdrj1q5fgmcxgbym998fgppt: [run mur8huhh] item 8b: ack at sweep +2250 ms: answer
+2026-10-02T17:32:51.640Z @smoke-a drained j9734z24x5j8zvrjc5ecxkrgrd8fg95w: [run mur8huhh] item 8b: ack at sweep +2500 ms: answer
+2026-10-02T17:32:51.871Z @smoke-a drained j976t9bp6vve1rsa1qjbhz74kh8fgvqv: [run mur8huhh] item 8b: ack at sweep +2750 ms: answer
+2026-10-02T17:32:52.077Z @smoke-a drained j974hj2rfqmdkd01x3xnqqrf718fhssd: [run mur8huhh] item 8b: ack at sweep +3000 ms: answer
+2026-10-02T17:32:52.220Z @smoke-a drained j974bvb1spxbb6yde6wfr8z94x8fhdzp: [run mur8huhh] item 8b: ack at sweep +3250 ms: answer
+2026-10-02T17:32:52.357Z @smoke-a drained j976vdebn8fa5rcar8h5nrzks58fhhz3: [run mur8huhh] item 8b: ack at sweep +3500 ms: answer
+2026-10-02T17:32:52.503Z @smoke-a drained j97d7xek25gyj7dkdrj4b53k3d8fhsr3: [run mur8huhh] item 8b: ack at sweep +3750 ms: answer
+2026-10-02T17:32:52.655Z @smoke-a drained j975r2rmcgr6en6nfatpvfhsg18fhpkr: [run mur8huhh] item 8b: ack at sweep +4000 ms: answer
+2026-10-02T17:32:59.670Z start item9t3
+2026-10-02T17:32:59.675Z start item9slow
+2026-10-02T17:32:59.678Z start item9ambiguous
+2026-10-02T17:32:59.679Z start item10idle
+2026-10-02T17:32:59.679Z start item10watch
+2026-10-02T17:32:59.679Z start item10max
+2026-10-02T17:32:59.680Z start item10stop
+2026-10-02T17:34:54.661Z PASS 10 the target marks it done with the command the fire told it k97725wmdqv3bp1c4eqzz2wcks8fgvgb done "acc10done" → @fp1-term-lccbe every 1m; 1 fire
+
+2026-10-02T17:35:30.321Z PASS 10 --idle-for defers while the target is busy (skips: not-idle) ["not-idle"]
+2026-10-02T17:35:30.337Z PASS 10 --watch defers on the watched agent's activity ["not-idle: @mod-b is busy"]
+2026-10-02T17:36:04.978Z PASS 9 a fire to a T3 agent is a request from @reminders labelled with its creator and schedule {"fire":1,"name":"acc9-mur8r4cv","reminderId":"k975s7yptznd6x9b6dfdespjg18fgnb2","reportTo":"lee","schedule":"every 2m","setBy":"lee","type":"reminder"}
+2026-10-02T17:36:04.978Z PASS 9 its answer is collected onto the fire reminder 9 ok
+2026-10-02T17:36:04.991Z PASS 9 the answer is reported to @lee's inbox Reminder acc9-mur8r4cv (k975s7yptznd6x9b6dfdespjg18fgnb2): @t3-native answered:
+> reminder 9 ok
+2026-10-02T17:36:05.008Z end item9t3
+2026-10-02T17:36:54.655Z PASS 9 an ambiguous fire blocks one interval, then the next fire comes {"after":120169,"skips":["previous-fire-not-final"]}
+2026-10-02T17:36:54.697Z PASS 10 once the target has been idle a minute, it fires 84045
+2026-10-02T17:36:54.701Z PASS 10 once the watched agent is idle long enough, the target gets the fire 
+2026-10-02T17:36:54.900Z end item10watch
+2026-10-02T17:36:54.903Z end item10idle
+2026-10-02T17:37:24.694Z PASS 9 a slow answer: no second fire while the first is unanswered, and the skips are logged {"fires":1,"skips":["previous-fire-not-final","previous-fire-not-final"]}
+2026-10-02T17:37:54.214Z PASS 9 once answered, the next fire comes on schedule 
+2026-10-02T17:38:25.258Z PASS 10 pausing while a fire's turn runs stops later fires and the running turn's answer is still recorded 
+2026-10-02T17:38:25.400Z end item9ambiguous
+2026-10-02T17:38:26.003Z PASS 10 done and blocked stop further fires ["done","blocked","k971tqqk75j5dx8p05ghxtytjs8fgxzs blocked (no credentials for the CI) \"acc10blocked\" → @fp1-term-lccbe every 1m; 1 fire"]
+2026-10-02T17:38:34.761Z PASS 10 --max 3 stops after three fires {"createdAt":1790962379817,"createdBy":{"id":"js75wg3cct947sy623eg3c569x8fdbt1","kind":"agent","name":"mod-b"},"expiresAt":1791567179817,"fires":3,"id":"k97cx55ajy2jbm594h1crt4fks8fhfen","lastFire":{"deliveryState":"replied","firedAt":1790962613900,"messageId":"jn7ej1f48pbjnsp47xxr1fck358fgm3k"},"max":3,"name":"acc10max","schedule":{"everyMs":60000},"state":"done","stateAt":1790962613900,"stateReason":"fired 3 times (--max 3)","target":{"id":"js7d10yr0j6t32x0v6phjc25458fdsrp","kind":"agent","name":"cc-b"},"text":"[run mur8r4cv] item 10 max"}
+2026-10-02T17:38:34.762Z @mod-b finished notice j977thg12dxarpdgh9g0rjzs058fgtan: Reminder acc10done (k97725wmdqv3bp1c4eqzz2wcks8fgvgb) was ma
+2026-10-02T17:38:35.263Z PASS 10 its creator (an agent) is told with a notice, never collected Reminder acc10max (k97cx55ajy2jbm594h1crt4fks8fhfen) was marked done: fired 3 times (--max 3). It won't fire again.
+2026-10-02T17:38:35.263Z end item10max
+2026-10-02T17:39:24.775Z PASS 10 cancelling while a fire's turn runs stops later fires and the running turn's answer is still recorded 
+2026-10-02T17:39:24.775Z end item9slow
+2026-10-02T17:39:54.361Z PASS 10 a short expiry ends it and tells the creator ["expired","Reminder acc10exp (k97b8mytt8q6h3mpf0hr2wem458fg7v2) expired. It won't fire again."]
+2026-10-02T17:39:54.361Z end item10stop
+2026-10-02T17:39:54.815Z ALL PASS

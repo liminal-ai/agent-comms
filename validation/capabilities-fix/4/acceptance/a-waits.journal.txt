@@ -1,0 +1,39 @@
+2026-10-02T17:13:14.450Z @cc-a check j97b44v6ajybsn11gp5a824sqd8fe8qp (claimed) → no 
+2026-10-02T17:13:14.572Z @cc-a drained j97b44v6ajybsn11gp5a824sqd8fe8qp: Reminder acc10exp (k9714zhpt5xqyt4h9f1bt1a5dn8feemp) expired
+2026-10-02T17:13:28.245Z item 3
+2026-10-02T17:13:33.642Z cli {"code":4,"signal":null,"stdout":"sent jn79tsze38jv3zdg37xee877js8fgmey (#167 in j570v4nve0nsrgamney96m9v8d8fc55c), waiting up to 5s for @smoke-b\nno answer from @smoke-b within 5s; it will arrive in your thread. Check with `comms status jn79tsze38jv3zdg37xee877js8fgmey --as smoke-a`.\n","stderr":""}
+2026-10-02T17:13:33.642Z PASS 3 exit 4 at the bound, with the id and the status command 
+2026-10-02T17:13:33.794Z PASS 3 the late answer arrives as a normal answer delivery 
+2026-10-02T17:13:33.815Z PASS 3 comms status shows the answer, the result expired {"at":1790961213365,"delivery":{"id":"j97ax6wtx78fb30mjyvvathjxh8fhs28","state":"replied"},"recipient":{"id":"js7c1bgnzc2stqhmsmdf1xv57s8fcke1","kind":"agent","name":"smoke-b"},"state":"expired"}
+2026-10-02T17:13:33.933Z status cli jn79tsze38jv3zdg37xee877js8fgmey (#167 in j570v4nve0nsrgamney96m9v8d8fc55c) from @smoke-a: [run mur8281c] item 3: answer me slowly
+@smoke-b: replied · answered: [run mur8281c] item 3: the slow answer
+wait: answered 0 of 1, ended
+
+2026-10-02T17:13:33.933Z item 4a
+2026-10-02T17:13:34.372Z B's send {"code":0,"signal":null,"stdout":"sent jn7b2rdwap5093bapaj92c56d98fhyng (#170 in j570v4nve0nsrgamney96m9v8d8fc55c)\n  → @smoke-a: delivery j979byh2fg661nc1536vpyjab18fhrw2 pending\n@smoke-a is waiting on another request, so this send didn't wait. Your message is queued; check with `comms status jn7b2rdwap5093bapaj92c56d98fhyng --as smoke-b`.\n","stderr":""}
+2026-10-02T17:13:34.372Z PASS 4a B's send returns at once with the busy-waiting message 
+2026-10-02T17:13:34.576Z A's cli {"code":0,"signal":null,"stdout":"sent jn7dev2pqb750g2h2s7z1kgtw58fgjs5 (#169 in j570v4nve0nsrgamney96m9v8d8fc55c), waiting up to 1m for @smoke-b\n@smoke-b answered (jn7edtwgqv64h0qw3mxafepgr98fg9gk):\n[agent-comms proof v1 begin wait=kh7dkxfetw7ph3r7kk1za4y5p98fhc0n message=jn7edtwgqv64h0qw3mxafepgr98fg9gk token=406b45869c4e44dba8fd585fa83ffeb7]\n  [run mur8281c] item 4a: B's answer\n[agent-comms proof v1 end wait=kh7dkxfetw7ph3r7kk1za4y5p98fhc0n message=jn7edtwgqv64h0qw3mxafepgr98fg9gk token=406b45869c4e44dba8fd585fa83ffeb7 chars=36]\n","stderr":""}
+2026-10-02T17:13:34.576Z PASS 4a A's send gets B's answer in the call 
+2026-10-02T17:13:34.577Z PASS 4a B's request reaches A once A's wait is over 
+2026-10-02T17:13:34.841Z PASS 4a and B gets A's answer 
+2026-10-02T17:13:34.842Z item 4b
+2026-10-02T17:13:35.564Z A {"code":0,"wait":true} B {"code":0,"wait":false,"noWait":{"busy":["smoke-a"],"reason":"busy-waiting"}}
+2026-10-02T17:13:35.564Z PASS 4b exactly one of the two simultaneous sends waited; the other said busy-waiting 
+2026-10-02T17:13:35.564Z PASS 4b both exit 0 
+2026-10-02T17:13:35.687Z PASS 4b the non-waiting sender gets its answer as a normal delivery 
+2026-10-02T17:13:35.688Z PASS 4b the waiter got its answer in the call 
+2026-10-02T17:13:35.688Z item 4c
+2026-10-02T17:13:36.453Z PASS 4c C's send to A doesn't wait (A is busy waiting) sent jn7598sp4gx2f31q47fysc0bfs8fhhb0 (#3 in j5711krkkqj95t95dd0hmde26s8feb76)
+  → @smoke-a: delivery j9708z59hbrzzmaq4zjhqebk0s8fgk70 pending
+@smoke-a is waiting on another request, so this send didn't wait. Your message is queued; check with `comms status jn7598sp4gx2f31q47fysc0bfs8fhhb0 --as cc-a`.
+
+2026-10-02T17:13:36.630Z PASS 4c B's wait on C returns C's answer 
+2026-10-02T17:13:36.789Z PASS 4c A's wait on B returns B's answer 
+2026-10-02T17:13:36.789Z PASS 4c the cycle closed without waiting out a bound 1101 ms
+2026-10-02T17:13:37.166Z PASS 4c C's request to A completes too 
+2026-10-02T17:13:37.166Z item 5
+2026-10-02T17:13:38.811Z cli {"code":0,"signal":null,"stdout":"sent jn715r8fwxyn6c3pjshgvn9fzd8fh3rr (#1 in j57baqw00wa96sc3ncc692ac8d8fh400), waiting up to 100s for @smoke-b, @cc-a\n  → @lee: in their inbox (people read in the web view)\n@smoke-b answered (jn77qn4scygw1q4srbbm1qtbc58fhd6n):\n[agent-comms proof v1 begin wait=kh7831rs1y8n6s9pr3888qz4hh8fhh74 message=jn77qn4scygw1q4srbbm1qtbc58fhd6n token=d0c6cab5682946878c3a77679da7e250]\n  [run mur8281c] item 5: B here\n[agent-comms proof v1 end wait=kh7831rs1y8n6s9pr3888qz4hh8fhh74 message=jn77qn4scygw1q4srbbm1qtbc58fhd6n token=d0c6cab5682946878c3a77679da7e250 chars=31]\n@cc-a answered (jn7a5dvwbzyy3zs91wv27zwc6n8fh39g):\n[agent-comms proof v1 begin wait=kh7831rs1y8n6s9pr3888qz4hh8fhh74 message=jn7a5dvwbzyy3zs91wv27zwc6n8fh39g token=11624874f5334223996edda4ae87ed77]\n  [run mur8281c] item 5: C here\n[agent-comms proof v1 end wait=kh7831rs1y8n6s9pr3888qz4hh8fhh74 message=jn7a5dvwbzyy3zs91wv27zwc6n8fh39g token=11624874f5334223996edda4ae87ed77 chars=31]\n","stderr":""}
+2026-10-02T17:13:38.811Z PASS 5 both agents' answers come back in the call; Lee is listed in their inbox 
+2026-10-02T17:13:38.837Z PASS 5 one answer didn't close the other's result: both answered/acknowledged separately [["smoke-b","answered"],["cc-a","answered"]]
+2026-10-02T17:13:38.863Z PASS 5 the message is in Lee's inbox, unread 
+2026-10-02T17:13:38.892Z ALL PASS

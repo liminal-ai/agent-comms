@@ -4,12 +4,12 @@
 // from the waits sweep (a Convex cron; its phase is measured from a fallback first).
 import { ACK_WINDOW_MS } from "@agent-comms/protocol";
 import { admin, api, call, check, comms, journalTo, log, ok, Session, sleep, status, until } from "./lib.mjs";
-journalTo(new URL("./c-races.journal.txt", import.meta.url).pathname);
+journalTo(process.env.JOURNAL ?? new URL("./c-races.journal.txt", import.meta.url).pathname);
 
 const A = await new Session("smoke-a").register();
 const B = await new Session("smoke-b").register();
 for (const s of [A, B]) await s.drain(10_000);
-await A.presence("busy");
+await A.presence("busy", "acc-race-turn");
 const RUN_ID = Date.now().toString(36);
 const T = (text) => `[run ${RUN_ID}] ${text}`;
 const at = (ms) => sleep(Math.max(0, ms - Date.now()));
@@ -58,7 +58,9 @@ async function answered(label) {
     const x = await call("await", { as: "smoke-a", messageId: sent.message.id, waitMs: 0 });
     return x.ok && x.wait.results[0].state === "answered" ? x.wait : null;
   });
-  return { sent, answeredAt: w.results[0].at };
+  // Fix pass 0.1: what the harness would report if it saw the CLI's output in this turn.
+  const proof = { waitId: w.id, messageId: w.results[0].answer.id, token: w.results[0].proofToken };
+  return { sent, answeredAt: w.results[0].at, proof };
 }
 log("measuring the sweep phase");
 const probe = await answered("item 8b: phase probe");
@@ -72,8 +74,8 @@ await Promise.all(pollers);
 const phase = fell % 60_000;
 log(`sweep phase: ${phase} ms past the minute (fallback written ${new Date(fell).toISOString()})`);
 
-// --- 8b. Acks fired around the sweep that falls back: never two fallbacks; acknowledged or fell-back.
-await A.presence("busy");
+// --- 8b. Confirmations (answer-seen) fired around the sweep that falls back: never two fallbacks; acknowledged or fell-back.
+await A.presence("busy", "acc-race-turn");
 // The sweep's start drifts by up to a few seconds from minute to minute: spread the acks across it.
 const ackOffsets = Array.from({ length: 19 }, (_, i) => -500 + i * 250);
 const rounds = [];
@@ -87,8 +89,9 @@ const keep = [keepPolling(B, busyUntil)];
 await Promise.all(
   rounds.map(async (r) => {
     await at(sweepAt + r.off);
-    r.ack = await call("ack", { as: "smoke-a", messageId: r.sent.message.id });
-    r.ackSaw = r.ack.ok ? r.ack.wait.results[0].state : r.ack.error.code;
+    // Fix pass: the race is now the harness's confirmation (answer-seen) against the sweep's fallback.
+    r.ack = await A.op("answer-seen", { turnId: "acc-race-turn", proofs: [r.proof] });
+    r.ackSaw = r.ack.ok ? "answer-seen accepted" : r.ack.error.code;
   }),
 );
 await Promise.all(keep);

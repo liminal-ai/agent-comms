@@ -136,8 +136,8 @@ export class Session {
   op(op, body = {}) {
     return call(op, { sessionId: this.sessionId, ...body });
   }
-  async presence(status) {
-    const r = await this.op("presence", { status });
+  async presence(status, turnId) {
+    const r = await this.op("presence", { status, ...(turnId ? { turnId } : {}) });
     if (!r.ok) throw new Error(`presence: ${r.error.message}`);
     await until(`@${this.participant} ${status} in Convex`, async () => {
       const { agents } = await admin.query(api.registry.list);

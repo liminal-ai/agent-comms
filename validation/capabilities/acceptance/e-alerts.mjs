@@ -3,7 +3,7 @@
 // no system participant ever receives a delivery. The silent-connector threshold is lowered
 // to 2 minutes for the test (alertConfig) and put back to 10 afterwards.
 import { admin, api, check, comms, connector, connectorUp, journalTo, log, ok, Session, sleep, until } from "./lib.mjs";
-journalTo(new URL("./e-alerts.journal.txt", import.meta.url).pathname);
+journalTo(process.env.JOURNAL ?? new URL("./e-alerts.journal.txt", import.meta.url).pathname);
 
 const RUN_ID = Date.now().toString(36);
 const T = (text) => `[run ${RUN_ID}] ${text}`;

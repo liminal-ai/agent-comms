@@ -1,7 +1,7 @@
 // Acceptance items 9 and 10 (reminders) on the installed services. The minute cron
 // fires them; each sub-test has its own target so they run side by side.
 import { admin, api, check, comms, journalTo, log, ok, Session, sleep, until } from "./lib.mjs";
-journalTo(new URL("./d-reminders.journal.txt", import.meta.url).pathname);
+journalTo(process.env.JOURNAL ?? new URL("./d-reminders.journal.txt", import.meta.url).pathname);
 
 const RUN_ID = Date.now().toString(36);
 const T = (text) => `[run ${RUN_ID}] ${text}`;

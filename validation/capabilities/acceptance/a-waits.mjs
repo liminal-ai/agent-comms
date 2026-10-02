@@ -1,7 +1,7 @@
 // Acceptance items 3, 4, 5 (send-and-wait) on the installed services, with scripted
 // Claude Code sessions for @smoke-a, @smoke-b and @cc-a, and the real comms CLI.
 import { admin, api, check, comms, journalTo, log, Session, sleep, status, until } from "./lib.mjs";
-journalTo(new URL("./a-waits.journal.txt", import.meta.url).pathname);
+journalTo(process.env.JOURNAL ?? new URL("./a-waits.journal.txt", import.meta.url).pathname);
 
 const A = await new Session("smoke-a").register();
 const B = await new Session("smoke-b").register();

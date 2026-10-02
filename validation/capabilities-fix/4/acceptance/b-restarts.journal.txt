@@ -1,0 +1,21 @@
+2026-10-02T17:19:55.025Z item 7a
+2026-10-02T17:19:55.650Z connector: systemctl kill -s KILL agent-comms-connector.service (exit 1: Failed to kill unit agent-comms-connector.service: Failed to send signal SIGKILL to auxiliary processes: Invalid argument)
+2026-10-02T17:20:07.945Z cli {"code":0,"signal":null,"stdout":"@smoke-b answered (jn7eqsn9dnmpfxtz9adft85bz58fhq9j):\n[agent-comms proof v1 begin wait=kh7d4a51q6fs87se8gp5ykvy958fhtzs message=jn7eqsn9dnmpfxtz9adft85bz58fhq9j token=a959311cb37545c8aa9a6226de0b684b]\n  [run mur8aiz5] item 7a: stored before the kill\n[agent-comms proof v1 end wait=kh7d4a51q6fs87se8gp5ykvy958fhtzs message=jn7eqsn9dnmpfxtz9adft85bz58fhq9j token=a959311cb37545c8aa9a6226de0b684b chars=48]\n","stderr":""}
+2026-10-02T17:20:07.945Z PASS 7a after the restart, comms await gets the stored answer 
+2026-10-02T17:20:07.945Z item 7a'
+2026-10-02T17:20:10.326Z connector: systemctl kill -s KILL agent-comms-connector.service (exit 1: Failed to kill unit agent-comms-connector.service: Failed to send signal SIGKILL to auxiliary processes: Invalid argument)
+2026-10-02T17:21:08.933Z cli {"code":0,"signal":null,"stdout":"sent jn71mpa8nf3cvm6pkwytbpc0bn8fg0a8 (#189 in j570v4nve0nsrgamney96m9v8d8fc55c), waiting up to 2m for @smoke-b\n@smoke-b answered (jn72r6856bqrx74snc9xg6668d8fg42m):\n[agent-comms proof v1 begin wait=kh712xq5bf5wmjcqnsfq6t34ks8fgp35 message=jn72r6856bqrx74snc9xg6668d8fg42m token=f5b0b7ed1b614d4cb0ee14765e4ba9cb]\n  [run mur8aiz5] item 7a': answered after the restart\n[agent-comms proof v1 end wait=kh712xq5bf5wmjcqnsfq6t34ks8fgp35 message=jn72r6856bqrx74snc9xg6668d8fg42m token=f5b0b7ed1b614d4cb0ee14765e4ba9cb chars=53]\n","stderr":""}
+2026-10-02T17:21:08.933Z PASS 7a' the CLI keeps waiting through the restart and prints the answer 
+2026-10-02T17:21:08.933Z item 7b
+2026-10-02T17:21:09.319Z CLI killed (SIGKILL); waiting 60s + 30s
+2026-10-02T17:22:39.328Z @smoke-a finished answer j975eeprxfw280dwejk8nsdsr58fgp3q (fallback): [run mur8aiz5] item 7a: stored before the kill
+2026-10-02T17:22:39.620Z PASS 7b the answer arrives in A's thread as a normal answer (not a fallback) 
+2026-10-02T17:22:39.643Z PASS 7b status shows the answer; the wait's result is expired {"at":1790961729332,"delivery":{"id":"j977xt5hram26dr1zj5pjf515x8fg07t","state":"replied"},"recipient":{"id":"js7c1bgnzc2stqhmsmdf1xv57s8fcke1","kind":"agent","name":"smoke-b"},"state":"expired"}
+2026-10-02T17:22:39.644Z item 7c
+2026-10-02T17:22:39.966Z PASS 7c the answer is stored (answered), and no ack comes 
+2026-10-02T17:23:10.800Z @smoke-a finished answer j972nxph2n1d122v67d70m9kwx8fg2aj (fallback): [run mur8aiz5] item 7a': answered after the restart
+2026-10-02T17:25:10.865Z fallback delivery j97dechtcae995hwq2xrmbbs298fh126 after 151 s
+2026-10-02T17:25:10.908Z PASS 7c the result fell back once into the thread and stays readable with comms status {"state":"fell-back","at":1790961910653}
+2026-10-02T17:25:11.001Z PASS 7c exactly two deliveries of the answer to A: the returned one and one fallback ["delivered","delivered"]
+2026-10-02T17:25:11.002Z sweep phase: the fallback was written at 2026-10-02T17:25:10.653Z
+2026-10-02T17:25:11.003Z ALL PASS

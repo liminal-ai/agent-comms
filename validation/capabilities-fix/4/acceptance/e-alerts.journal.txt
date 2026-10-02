@@ -1,0 +1,19 @@
+2026-10-02T17:39:54.906Z item 11a
+2026-10-02T17:40:05.540Z check answered unknown {"id":"j97fb69yfh0xn3tvsy5g71jgvd8fh0zt","recipient":"smoke-a","state":"uncertain"}
+2026-10-02T17:42:50.725Z PASS 11a an uncertain delivery gives exactly one alert to its owner, with the delivery and its conversation [{"owner":"lee","summary":"Alert: delivery j97fb69yfh0xn3tvsy5g71jgvd8fh0zt is uncertain: it can't be told whether it ran, and it won't be re-run (acceptance 11a: injected)."}]
+2026-10-02T17:43:45.938Z PASS 11a completing it with comms reply resolves the incident (not announced) 
+2026-10-02T17:43:45.939Z item 11b
+2026-10-02T17:43:45.944Z alertConfig before {"connectorSilentMs":600000,"maxClaims":5,"reminderBlockedMs":3600000}
+2026-10-02T17:43:45.973Z alertConfig lowered for the test {"connectorSilentMs":120000,"maxClaims":5,"reminderBlockedMs":3600000}
+2026-10-02T17:43:45.996Z connector: systemctl stop agent-comms-connector.service
+2026-10-02T17:46:51.157Z PASS 11b a stopped connector gives one alert (not one per scan) ["Alert: the connector on lim-builder hasn't been heard from (not heard from for 2 minutes; 18 agents homed there)."]
+2026-10-02T17:46:51.176Z connector: systemctl start agent-comms-connector.service
+2026-10-02T17:47:46.798Z resolved; stopping again
+2026-10-02T17:47:46.851Z connector: systemctl stop agent-comms-connector.service
+2026-10-02T17:50:52.020Z PASS 11b stop, start, stop gives exactly two alerts [["2026-10-02T17:49:42.908Z","open"],["2026-10-02T17:45:42.906Z","resolved"]]
+2026-10-02T17:50:52.041Z connector: systemctl start agent-comms-connector.service
+2026-10-02T17:50:52.597Z alertConfig restored {"connectorSilentMs":600000,"maxClaims":5,"reminderBlockedMs":3600000}
+2026-10-02T17:50:52.597Z PASS 11b the threshold is back to 10 minutes 
+2026-10-02T17:50:52.597Z item 12
+2026-10-02T17:50:53.624Z PASS 12 no system participant ever received a delivery (673 deliveries in 78 conversations) []
+2026-10-02T17:50:53.624Z ALL PASS

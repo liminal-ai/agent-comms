@@ -1,7 +1,7 @@
 // Acceptance item 7 (restart while waiting) on the installed services.
 import { ACK_WINDOW_MS, WAIT_HELD_MS } from "@agent-comms/protocol";
 import { admin, api, call, check, comms, connector, connectorUp, journalTo, log, ok, Session, sleep, status, until } from "./lib.mjs";
-journalTo(new URL("./b-restarts.journal.txt", import.meta.url).pathname);
+journalTo(process.env.JOURNAL ?? new URL("./b-restarts.journal.txt", import.meta.url).pathname);
 
 const A = await new Session("smoke-a").register();
 const B = await new Session("smoke-b").register();
@@ -70,7 +70,7 @@ const answerStored = (as, id) =>
   log(`CLI killed (${killed.signal}); waiting ${WAIT_HELD_MS / 1000}s + 30s`);
   await Promise.all([A.idle(WAIT_HELD_MS + 30_000), B.idle(WAIT_HELD_MS + 30_000)]);
   await B.reply(d, T("item 7b: answered after the CLI died"));
-  const got = await A.next(RUN, 60_000);
+  const got = await A.next((x) => x.message.text === T("item 7b: answered after the CLI died"), 60_000);
   check("7b the answer arrives in A's thread as a normal answer (not a fallback)", got.message.text === T("item 7b: answered after the CLI died") && !got.fallback);
   if (!A.turns.has(got.id)) await A.delivered(got);
   const s = await until("status", async () => ((await status("smoke-a", id)).recipients[0].answer ? status("smoke-a", id) : null));
