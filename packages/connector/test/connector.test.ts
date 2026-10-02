@@ -487,7 +487,7 @@ describe("capabilities R3: reminders through the connector and the CLI", () => {
     const at = await cli(w.socket, ["remind", "--as", "a", "@b", "once", "--at", when]);
     expect(at.stdout, at.stderr).toContain(`: ${formatSchedule({ at: Date.parse(when) })}, from `);
     const bad = await cli(w.socket, ["remind", "--as", "a", "@b", "x", "--every", "30s"]);
-    expect(bad.code).toBe(EXIT.refused);
+    expect(bad.code).toBe(EXIT.usage); // P3 bug 9b
   });
 });
 

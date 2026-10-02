@@ -209,7 +209,7 @@ Thresholds are the one `alertConfig` row (`alerts.setConfig`), defaults otherwis
 
 | Code | Name | Meaning |
 |---|---|---|
-| 0 | `ok` | done; for a waiting `send` or `await`, every result `answered` (or nobody to wait for) |
+| 0 | `ok` | done; for a waiting `send` or `await`, every awaited answer arrived. Also 0 when the send went out without waiting: people only (in their inbox), `--continue`, or an addressee itself busy waiting (`noWait`); the output says which, and `comms status <id>` follows it |
 | 1 | `refused` | the connector refused (the error code and message are on stderr) |
 | 2 | `usage` | bad arguments |
 | 3 | `unreachable` | no connector on the socket |

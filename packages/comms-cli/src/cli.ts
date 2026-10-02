@@ -15,6 +15,8 @@ import {
   type MessageStatus,
   parseAt,
   parseDuration,
+  REMINDER_MAX_EXPIRY_MS,
+  REMINDER_MIN_INTERVAL_MS,
   renderAnswerWithProof,
   type Op,
   PARTICIPANT_ENV,
@@ -72,7 +74,9 @@ export const USAGE = `usage:
   answers unavailable or the connection drops, comms retries with the same key, then
   prints it; rerunning with that --key can't post twice.
 
-exit codes: 0 ok (every awaited answer arrived), 1 the connector refused, 2 usage,
+exit codes: 0 ok (every awaited answer arrived, or the send went out without waiting: to people
+  only, with --continue, or because an addressee is itself waiting; the output says which),
+  1 the connector refused, 2 usage,
   3 connector unreachable, 4 the wait ended with answers still to come (they'll arrive in
   your thread), 5 a recipient's delivery ended without an answer (failed, uncertain, retired)`;
 
@@ -223,6 +227,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
      * Calls `await` until no result is open, printing each answer as it arrives and
      * acknowledging what was printed. Retries while the connector is restarting.
      */
+    let refused = false;
     const awaitAnswers = async (me: string, initial: Wait): Promise<Wait> => {
       let wait = initial;
       const printed = new Set<string>();
@@ -259,6 +264,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
         if (!response.ok) {
           if (response.error.code !== "unavailable") {
             io.stderr(`comms await: ${response.error.code}: ${response.error.message}\n`);
+            refused = true; // P3 bug 9a: exits 1, not 4
             break;
           }
           await new Promise((r) => setTimeout(r, 1_000));
@@ -277,6 +283,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
 
     /** Reports what didn't come back, and picks the exit code. */
     const finish = (me: string, wait: Wait, waitMs: number): number => {
+      if (refused) return EXIT.refused;
       const waiting = wait.results.filter((x) => x.state === "open" || x.state === "expired");
       const ended = wait.results.filter((x) => x.state === "ended");
       if (!values.json) {
@@ -418,8 +425,13 @@ export async function run(argv: string[], io: Io): Promise<number> {
           return value.slice(1);
         };
         const everyMs = duration("--every", values.every);
+        // P3 bug 9b: the CLI's own limits, so a mistake is a usage error naming the flag.
+        if (everyMs !== undefined && everyMs < REMINDER_MIN_INTERVAL_MS) throw new UsageError(`--every is at least ${formatDuration(REMINDER_MIN_INTERVAL_MS)}`);
         const idleForMs = duration("--idle-for", values["idle-for"]);
         const expiresMs = duration("--expires", values.expires);
+        if (expiresMs !== undefined && (expiresMs < REMINDER_MIN_INTERVAL_MS || expiresMs > REMINDER_MAX_EXPIRY_MS)) {
+          throw new UsageError(`--expires is between ${formatDuration(REMINDER_MIN_INTERVAL_MS)} and ${formatDuration(REMINDER_MAX_EXPIRY_MS)}`);
+        }
         const watch = handle("--watch", values.watch);
         const reportTo = handle("--report-to", values["report-to"]);
         const max = values.max === undefined ? undefined : integerOption("--max", values.max);
