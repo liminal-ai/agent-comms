@@ -153,11 +153,11 @@ async function system(ctx: MutationCtx, name: "reminders"): Promise<Doc<"partici
  * Posts a notice from @reminders to a participant in their DM: people get it in
  * their inbox, agents a delivery that ends at `delivered` and is never collected.
  */
-async function notify(ctx: MutationCtx, to: Doc<"participants">, text: string, meta: MessageMeta): Promise<void> {
-  if (to.kind === "system" || to.state === "retired") return;
+async function notify(ctx: MutationCtx, to: Doc<"participants">, text: string, meta: MessageMeta): Promise<Id<"messages"> | undefined> {
+  if (to.kind === "system" || to.state === "retired") return undefined;
   const from = await system(ctx, "reminders");
   const conversation = await openDm(ctx, from, to);
-  await post(ctx, {
+  const sent = await post(ctx, {
     sender: from,
     conversation,
     recipients: [to],
@@ -166,6 +166,7 @@ async function notify(ctx: MutationCtx, to: Doc<"participants">, text: string, m
     origin: { via: "system" },
     meta,
   });
+  return sent.message.id as Id<"messages">;
 }
 
 async function tellEnded(ctx: MutationCtx, r: Doc<"reminders">): Promise<void> {
@@ -352,16 +353,49 @@ export async function recordFireAnswer(ctx: MutationCtx, requestDelivery: Doc<"d
   await ctx.db.patch(f._id, { answerMessageId: answerId, answeredAt: now });
   const r = await ctx.db.get(f.reminderId);
   if (!r?.reportToId) return;
+  // The report runs in its own sub-transaction (fix pass 1.5): if it fails, its writes are
+  // rolled back and the answer (collected or replied) stands. It's tried once per answer.
+  try {
+    await ctx.runMutation(internal.reminders.report, { fireId: f._id });
+  } catch (error) {
+    const message = error instanceof ConvexError ? (error.data as { message?: string }).message : (error as Error).message;
+    await ctx.db.patch(f._id, { reportError: String(message ?? error).slice(0, 1_000) });
+  }
+}
+
+/** Posts a fire's answer to the reminder's report-to, clipped to fit (fix pass 1.5). */
+export async function report(ctx: MutationCtx, fireId: Id<"reminderFires">): Promise<void> {
+  const f = (await ctx.db.get(fireId))!;
+  const r = (await ctx.db.get(f.reminderId))!;
+  if (!r.reportToId || !f.answerMessageId || f.reportMessageId) return;
   const reportTo = (await ctx.db.get(r.reportToId))!;
   const target = (await ctx.db.get(r.targetId))!;
-  const answer = (await ctx.db.get(answerId))!;
-  await notify(ctx, reportTo, renderReminderReport({ reminderName: r.name, reminderId: r._id, target: target.name, answer: answer.text }), {
+  const answer = (await ctx.db.get(f.answerMessageId))!;
+  const text = clippedReport(r, target.name, answer);
+  const posted = await notify(ctx, reportTo, text, {
     type: "reminder-report",
     reminderId: r._id,
     name: r.name,
     target: target.name,
     fireMessageId: f.messageId,
   });
+  // Test hook (fix pass 1.5): a failure after the report is written.
+  if (process.env.COMMS_TEST_FAULT === `reminder-report-after-post:${r._id}`) throw new Error("injected failure after the report was posted");
+  if (posted) await ctx.db.patch(f._id, { reportMessageId: posted });
+}
+
+/** The report text, the answer cut so the whole fits MAX_TEXT_CHARS, saying where the full answer is. */
+function clippedReport(r: Doc<"reminders">, target: string, answer: Doc<"messages">): string {
+  const base = { reminderName: r.name, reminderId: r._id, target };
+  let text = renderReminderReport({ ...base, answer: answer.text });
+  if (text.length <= MAX_TEXT_CHARS) return text;
+  let keep = answer.text.length - (text.length - MAX_TEXT_CHARS) - 400;
+  for (;;) {
+    const note = `[… ${answer.text.length - keep} more characters; the full answer is message ${answer._id} in conversation ${answer.conversationId}]`;
+    text = `${renderReminderReport({ ...base, answer: answer.text.slice(0, Math.max(0, keep)) })}\n${note}`;
+    if (text.length <= MAX_TEXT_CHARS || keep <= 0) return text.slice(0, MAX_TEXT_CHARS);
+    keep -= text.length - MAX_TEXT_CHARS + 100;
+  }
 }
 
 /** Who may read a reminder (fix pass 0.4): those who may change it, and its report-to. */

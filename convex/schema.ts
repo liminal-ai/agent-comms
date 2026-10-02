@@ -216,6 +216,9 @@ export default defineSchema({
     firedAt: v.number(),
     answerMessageId: v.optional(v.id("messages")),
     answeredAt: v.optional(v.number()),
+    /** Fix pass 1.5: the report posted for the answer, or why it failed (tried once). */
+    reportMessageId: v.optional(v.id("messages")),
+    reportError: v.optional(v.string()),
   })
     .index("by_message", ["messageId"])
     .index("by_reminder", ["reminderId", "firedAt"]),
