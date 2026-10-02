@@ -1,0 +1,12 @@
+[31m     [31m×[31m a Claude Code foreground answer confirmed by its own turn's proof is acknowledged, and never falls back[39m[32m 128[2mms[22m[39m
+[31m     [31m×[31m the CLI's ack alone is provisional: it records printedAt, and the answer still falls back once[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m a proof from another turn (a stale waiterTurnId, or a later turn), a wrong token, or another participant confirms nothing[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m a wait with no known turn (T3, or a turn not yet reported) is never confirmed[39m[32m 17[2mms[22m[39m
+[31m     [31m×[31m Reed's repro: a T3 turn ending and another starting under a waiting command falls back (no ack can count)[39m[32m 17[2mms[22m[39m
+[31m     [31m×[31m Alder's repro: old CLI output isn't acknowledged when a different T3 turn is busy[39m[32m 10[2mms[22m[39m
+[31m     [31m×[31m the proof token is only in the waiter's own await and send: not in message-status, nor to anyone else[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m Reed's repro: an early group answer doesn't fall back while the CLI is still waiting on the other[39m[32m 12[2mms[22m[39m
+[31m     [31m×[31m a CLI that disappears mid-wait: the wait ends a hold after its last check-in, and the window runs from there[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m a CLI reconnecting after the wait ended doesn't postpone the due fallback, which happens once[39m[32m 4[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 10 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m10 failed[39m[22m[90m (10)[39m
