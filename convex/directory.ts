@@ -2,11 +2,17 @@
 
 import { NAME_PATTERN, RESERVED_NAMES, SYSTEM_PARTICIPANTS } from "@agent-comms/protocol";
 import { v } from "convex/values";
+import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { fail, participantByName, ref, requireAdmin, sha256Hex } from "./lib/core";
 import { profilePatch } from "./lib/registry";
 import { endResult } from "./lib/waits";
 import { home, promotableKind } from "./validators";
+
+/** System participants are created at deploy and never changed by hand (fix pass 1.6). */
+export function notSystem(p: Doc<"participants">): void {
+  if (p.kind === "system") fail("bad_request", `@${p.name} is a system participant; it can't be paused, retired, moved or edited`);
+}
 
 /** Create or rotate a machine's connector credential. Only the hash is stored. */
 export const registerMachine = mutation({
@@ -78,6 +84,7 @@ export const rebind = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(args.adminToken);
     const p = await participantByName(ctx, args.name);
+    notSystem(p);
     if (p.kind !== "agent") fail("bad_request", `@${p.name} is a person; people have no home`);
     await ctx.db.patch(p._id, { home: args.home, presence: { status: "offline", at: Date.now() } });
     return { participant: ref(p) };
@@ -95,6 +102,7 @@ export const setState = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(args.adminToken);
     const p = await participantByName(ctx, args.name);
+    notSystem(p);
     if (p.state === "retired" && args.state !== "retired") fail("conflict", `@${p.name} is retired`);
     await ctx.db.patch(p._id, { state: args.state });
     if (args.state === "retired") {
@@ -145,13 +153,21 @@ export const upgrade = mutation({
     if (fallback.kind !== "human") fail("bad_request", `@${fallback.name} isn't a person`);
     const now = Date.now();
     const systemCreated: string[] = [];
+    const systemRepaired: string[] = [];
     for (const name of SYSTEM_PARTICIPANTS) {
       const existing = await ctx.db
         .query("participants")
         .withIndex("by_name", (q) => q.eq("name", name))
         .unique();
       if (existing && existing.kind !== "system") fail("conflict", `@${name} is taken by a ${existing.kind}; rename it before upgrading`);
-      if (existing) continue;
+      if (existing) {
+        // Fix pass 1.6: repair one retired or paused by a direct database edit.
+        if (existing.state !== "active") {
+          await ctx.db.patch(existing._id, { state: "active" });
+          systemRepaired.push(name);
+        }
+        continue;
+      }
       await ctx.db.insert("participants", { name, kind: "system", state: "active", presence: { status: "offline", at: now }, createdAt: now });
       systemCreated.push(name);
     }
@@ -161,6 +177,6 @@ export const upgrade = mutation({
       await ctx.db.patch(p._id, { ownerId: fallback._id });
       ownersSet++;
     }
-    return { systemCreated, ownersSet };
+    return { systemCreated, systemRepaired, ownersSet };
   },
 });

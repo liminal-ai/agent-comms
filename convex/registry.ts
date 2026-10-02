@@ -4,6 +4,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { participantByName, requireAdmin } from "./lib/core";
+import { notSystem } from "./directory";
 import { machineSeen, profilePatch, registryEntry } from "./lib/registry";
 
 /** Every participant (any state, any kind) as a registry entry, with homes. */
@@ -25,6 +26,7 @@ export const setProfile = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(args.adminToken);
     const p = await participantByName(ctx, args.name);
+    notSystem(p);
     await ctx.db.patch(p._id, profilePatch(args));
     const updated = (await ctx.db.get(p._id))!;
     return { agent: await registryEntry(ctx, updated, await machineSeen(ctx), Date.now(), { long: true }) };

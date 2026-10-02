@@ -312,14 +312,14 @@ describe("R1 upgrade: system participants and the owner backfill", () => {
       await ctx.db.insert("participants", { ...base, name: "owned", ownerId: sam._id, home: agentHome("owned") });
     });
     const first = await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
-    expect(first).toEqual({ systemCreated: ["reminders", "alerts"], ownersSet: 1 });
+    expect(first).toEqual({ systemCreated: ["reminders", "alerts"], systemRepaired: [], ownersSet: 1 });
     expect((await byName(t, "legacy-none")).ownerId).toBe(await idOf(t, "lee"));
     expect((await byName(t, "owned")).ownerId).toBe(await idOf(t, "sam"));
     expect((await byName(t, "sam")).ownerId).toBeUndefined();
     const reminders = await byName(t, "reminders");
     expect(reminders).toMatchObject({ kind: "system", state: "active" });
     expect(reminders.home).toBeUndefined();
-    expect(await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" })).toEqual({ systemCreated: [], ownersSet: 0 });
+    expect(await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" })).toEqual({ systemCreated: [], systemRepaired: [], ownersSet: 0 });
     expect(await errorCode(t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "a" }))).toBe("bad_request");
   });
 
