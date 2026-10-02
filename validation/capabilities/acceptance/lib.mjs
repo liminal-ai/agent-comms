@@ -260,3 +260,18 @@ export function connector(action) {
 export async function connectorUp() {
   await until("connector answering", async () => (await call("status", {}, 3_000)).ok, 60_000, 500);
 }
+
+/** The connector unit's main PID (0 when not running). */
+export function connectorPid() {
+  const env = { ...process.env, XDG_RUNTIME_DIR: "/run/user/1000", DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus" };
+  return Number(execFileSync("systemctl", ["--user", "show", "-p", "MainPID", "--value", "agent-comms-connector.service"], { env }).toString().trim());
+}
+/** Whether a process exists. */
+export function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}

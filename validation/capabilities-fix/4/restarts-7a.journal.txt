@@ -1,0 +1,19 @@
+2026-10-02T17:00:08.542Z @smoke-a drained j974qjrg915a9j1afb6q74a7gh8ff2we: (acceptance cleanup: this test delivery from an aborted item
+2026-10-02T17:00:18.577Z @smoke-b check j978a7qsmm464m2kbswcsb6jfx8fe56w (claimed) → no 
+2026-10-02T17:00:18.691Z @smoke-b drained j978a7qsmm464m2kbswcsb6jfx8fe56w: (stale: left over from an aborted acceptance run)
+2026-10-02T17:00:18.840Z @smoke-b drained j9756xehhadhyp0m0t0sy3qd5d8fff1d: (stale: left over from an aborted acceptance run)
+2026-10-02T17:00:18.967Z @smoke-b drained j97659m4mzcbxdfmzn3q3p9qj58ffvyh: [run mupy7ahd] item 11a: it did run, here's the answer
+2026-10-02T17:00:28.991Z 7a
+2026-10-02T17:00:29.306Z connector: systemctl kill -s KILL agent-comms-connector.service (exit 1: Failed to kill unit agent-comms-connector.service: Failed to send signal SIGKILL to auxiliary processes: Invalid argument)
+2026-10-02T17:00:34.979Z PASS 7a: the connector process died (pid 3488186 gone) and a new one (pid 3490127) serves 
+2026-10-02T17:00:41.179Z PASS 7a after the restart, comms await prints the stored answer with its proof markers @smoke-b answered (jn7f3xez0dr8y202r8m29krvbn8fgmas):
+[agent-comms proof v1 begin wait=kh72xhfxp0sj8fkw8knfezv6f18fgsbj message=jn7f3xez0dr8y202r8m29krvbn8fgmas token=2ff158e3d3ce4e6498391a2146def084]
+  [run mur7lj97] 7a answer
+[agent-comms proof v1 end wait=kh72xhfxp0sj8fkw8knfezv6f18fgsbj message=jn7f3xez0dr8y202r8m29krvbn8fgmas token=2ff158e3d3ce4e6498391a2146def084 chars=26]
+
+2026-10-02T17:00:41.179Z 7a'
+2026-10-02T17:00:43.474Z connector: systemctl kill -s KILL agent-comms-connector.service
+2026-10-02T17:00:49.224Z PASS 7a': the connector process died (pid 3490127 gone) and a new one (pid 3490779) serves 
+2026-10-02T17:01:42.091Z PASS 7a' the CLI keeps waiting through the restart and prints the answer {"code":0,"stderr":""}
+2026-10-02T17:01:42.091Z 7c
+2026-10-02T17:01:42.473Z PASS 7c the CLI printed the answer and was killed (SIGKILL) {"signal":"SIGKILL"}
