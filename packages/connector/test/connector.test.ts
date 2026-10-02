@@ -1,6 +1,6 @@
 import { EXIT, run as comms } from "@agent-comms/comms-cli";
 import { call } from "@agent-comms/comms-cli/client";
-import { formatSchedule, parseDeliveryHeader, renderDelivery } from "@agent-comms/protocol";
+import { findAnswerProofs, formatSchedule, parseDeliveryHeader, renderDelivery } from "@agent-comms/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import { api } from "../../../convex/_generated/api.js";
 import { ADMIN, type Convex, Mod, type Running, sleep, startConnector, until, world } from "./harness.ts";
@@ -335,25 +335,61 @@ describe("capabilities R2: send-and-wait through the connector and the CLI", () 
     return d;
   }
 
-  it("comms send waits, prints the answer, and acks it in the turn that ran it; the answer never arrives as a turn", async () => {
+  it("fix pass 1.1: comms send prints the answer between proof markers; the mod's answer-seen from the same turn acknowledges it", async () => {
     const w = await world();
     await start(w.api, w.socket);
     const a = new Mod(w.socket, "a");
     const b = new Mod(w.socket, "b");
     await a.register();
     await b.register();
-    await a.ok("presence", { status: "busy" } as never);
+    await a.ok("presence", { status: "busy", turnId: "turn-a1" } as never);
     await presenceIs(w, "a", "busy");
 
     const [r] = await Promise.all([cli(w.socket, ["send", "--as", "a", "@b", "what's", "2+2?"]), answers(b, "4")]);
     expect(r.code, r.stderr).toBe(EXIT.ok);
     expect(r.stdout).toMatch(/^sent \S+ \(#1 in \S+\), waiting up to 100s for @b$/m);
-    expect(r.stdout).toMatch(/^@b answered \(\S+\):\n  4$/m);
+    expect(r.stdout).toMatch(/^@b answered \(\S+\):\n\[agent-comms proof v1 begin wait=\S+ message=\S+ token=[0-9a-f]{32}\]\n  4\n\[agent-comms proof v1 end .* chars=3\]$/m);
     const id = /^sent (\S+)/m.exec(r.stdout)![1]!;
-    const status = await call(w.socket, "message-status", { as: "a", messageId: id });
-    expect(status.ok && status.wait?.results[0]!.state).toBe("acknowledged");
-    expect(status.ok && status.recipients[0]!.answer?.text).toBe("4");
+    // The CLI's own ack is provisional.
+    const before = await call(w.socket, "message-status", { as: "a", messageId: id });
+    expect(before.ok && before.wait?.results[0]).toMatchObject({ state: "answered" });
+    expect(before.ok && before.wait?.results[0]!.printedAt).toBeGreaterThan(0);
+    // The mod finds the proof in the tool result of the main turn that ran the CLI.
+    const proofs = findAnswerProofs(r.stdout);
+    expect(proofs).toHaveLength(1);
+    await a.ok("answer-seen", { turnId: "turn-a1", proofs } as never);
+    await until("acknowledged", async () => {
+      const s = await call(w.socket, "message-status", { as: "a", messageId: id });
+      return s.ok && s.wait?.results[0]!.state === "acknowledged";
+    });
     expect(await a.poll(300)).toEqual([]);
+  });
+
+  it("fix pass 1.1: a proof reported from another turn, or with no turn known at the send, confirms nothing", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const a = new Mod(w.socket, "a");
+    const b = new Mod(w.socket, "b");
+    await a.register();
+    await b.register();
+    await a.ok("presence", { status: "busy", turnId: "turn-a1" } as never);
+    await presenceIs(w, "a", "busy");
+    const [r] = await Promise.all([cli(w.socket, ["send", "--as", "a", "@b", "q"]), answers(b, "4")]);
+    const id = /^sent (\S+)/m.exec(r.stdout)![1]!;
+    await a.ok("answer-seen", { turnId: "turn-a2", proofs: findAnswerProofs(r.stdout) } as never);
+    await sleep(500);
+    const s = await call(w.socket, "message-status", { as: "a", messageId: id });
+    expect(s.ok && s.wait?.results[0]!.state).toBe("answered");
+    expect(s.ok && s.wait?.waiterTurnId).toBe("turn-a1");
+  });
+
+  it("fix pass 1.1: a session re-registering mid-turn (after a connector restart) still stamps its waits", async () => {
+    const w = await world();
+    await start(w.api, w.socket);
+    const a = new Mod(w.socket, "a");
+    await a.ok("register", { participant: "a", harness: "claude-code", cwd: "/", status: "busy", turnId: "turn-a9" } as never);
+    const sent = await call(w.socket, "send", { as: "a", to: ["b"], text: "q", wait: true });
+    expect(sent.ok && sent.wait?.waiterTurnId).toBe("turn-a9");
   });
 
   it("--continue returns at once; a send to a person returns at once with the inbox; --json prints one object", async () => {
