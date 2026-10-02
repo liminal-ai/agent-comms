@@ -280,6 +280,7 @@ describe("fix pass 3.1", () => {
       checkDeadlineMs: 200,
       homed: async () => [{ participant: { id: "p", name: "b", kind: "agent" }, home: { machine: "box", harness: "claude-code", locator: "b" }, state: "active" }],
       presence: () => {},
+      answerSeen: () => {},
       poke: makePoke(),
     });
     await sessions.register({ participant: "b", harness: "claude-code", sessionId: "s", cwd: "/", status: "idle" });
@@ -448,7 +449,7 @@ describe("capabilities R2: send-and-wait through the connector and the CLI", () 
     if (!sent.ok) throw new Error(sent.error.message);
     const [r] = await Promise.all([cli(w.socket, ["await", "--as", "a", sent.message.id]), answers(b, "here")]);
     expect(r.code, r.stderr).toBe(EXIT.ok);
-    expect(r.stdout).toMatch(/^@b answered \(\S+\):\n  here$/m);
+    expect(r.stdout).toMatch(/^@b answered \(\S+\):\n\[agent-comms proof v1 begin [^\n]+\]\n  here\n\[agent-comms proof v1 end [^\n]+\]$/m);
     const s = await cli(w.socket, ["status", "--as", "a", sent.message.id]);
     expect(s.code).toBe(EXIT.ok);
     expect(s.stdout).toMatch(/^@b: replied · answered: here$/m);
@@ -521,6 +522,6 @@ describe("capabilities acceptance 7a': the connector dies while the CLI waits", 
     await b.ok("outcome", { deliveryId: d.id, turnId: "t1", outcome: "replied", answer: "still here" } as never);
     const code = await run;
     expect(code, stderr).toBe(EXIT.ok);
-    expect(stdout).toMatch(/^@b answered \(\S+\):\n  still here$/m);
+    expect(stdout).toMatch(/^@b answered \(\S+\):\n\[agent-comms proof v1 begin [^\n]+\]\n  still here\n\[agent-comms proof v1 end [^\n]+\]$/m);
   });
 });

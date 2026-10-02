@@ -7,7 +7,7 @@
 // if the report arrived first or came from a session the previous connector
 // process handed the delivery to.
 
-import type { DeliveryCheck, HomedParticipant, OutcomeBody, PollItem, Requests, Responses } from "@agent-comms/protocol";
+import type { AnswerProof, DeliveryCheck, HomedParticipant, OutcomeBody, PollItem, Requests, Responses } from "@agent-comms/protocol";
 import * as Effect from "effect/Effect";
 import type { Check, HandOff, HarnessAdapter, Outcome, PokeShape, Target } from "./adapter.ts";
 import { LoopbackError } from "./loopback-error.ts";
@@ -17,6 +17,8 @@ interface Session {
   participant: string;
   cwd: string;
   status: "idle" | "busy";
+  /** Fix pass 0.1: the main turn running now, as the mod reported it (busy only). */
+  turnId?: string;
   superseded: boolean;
   lastSeen: number;
   polling: boolean;
@@ -50,6 +52,8 @@ export interface ClaudeCodeOptions {
   homed: () => Promise<HomedParticipant[]>;
   /** Presence updates, written in the background. */
   presence: (participant: string, status: "idle" | "busy" | "offline") => void;
+  /** Answer proofs (fix pass 0.1), written in the background. */
+  answerSeen: (participant: string, turnId: string, proofs: AnswerProof[]) => void;
   poke: PokeShape;
   now?: () => number;
 }
@@ -97,6 +101,7 @@ export class ClaudeCodeSessions {
       outbox: [],
     };
     Object.assign(session, { cwd: req.cwd, status: req.status, superseded: false, lastSeen: this.now() });
+    session.turnId = req.status === "busy" ? req.turnId : undefined;
     this.sessions.set(req.sessionId, session);
     this.current.set(req.participant, req.sessionId);
     this.options.presence(req.participant, req.status);
@@ -203,7 +208,22 @@ export class ClaudeCodeSessions {
   presence(req: Requests["presence"]): Responses["presence"] {
     const s = this.live(req.sessionId);
     s.status = req.status;
+    s.turnId = req.status === "busy" ? req.turnId : undefined;
     this.options.presence(s.participant, req.status);
+    return {};
+  }
+
+  /** Fix pass 0.1: the main turn a participant's current session is running, if it said. */
+  turnOf(participant: string): string | undefined {
+    const id = this.current.get(participant);
+    const s = id ? this.sessions.get(id) : undefined;
+    return s && !s.superseded && s.status === "busy" ? s.turnId : undefined;
+  }
+
+  /** Fix pass 0.1: answer proofs the mod found in a tool result of its main turn; written in the background. */
+  answerSeen(req: Requests["answer-seen"]): Responses["answer-seen"] {
+    const s = this.live(req.sessionId);
+    this.options.answerSeen(s.participant, req.turnId, req.proofs);
     return {};
   }
 

@@ -15,6 +15,7 @@ import {
   type MessageStatus,
   parseAt,
   parseDuration,
+  renderAnswerWithProof,
   type Op,
   PARTICIPANT_ENV,
   type RegistryEntry,
@@ -207,7 +208,15 @@ export async function run(argv: string[], io: Io): Promise<number> {
         if (fresh.length === 0) return;
         for (const x of fresh) {
           printed.add(x.recipient.name);
-          if (!values.json) io.stdout(`@${x.recipient.name} answered (${x.answer!.id}):\n${x.answer!.text.split("\n").map((l) => `  ${l}`).join("\n")}\n`);
+          if (!values.json) {
+            const heading = `@${x.recipient.name} answered (${x.answer!.id}):`;
+            // Fix pass 0.1: the markers let the harness confirm this output reached the model.
+            io.stdout(
+              (x.proofToken
+                ? renderAnswerWithProof({ waitId: wait.id, messageId: x.answer!.id, token: x.proofToken }, heading, x.answer!.text)
+                : `${heading}\n${x.answer!.text.split("\n").map((l) => `  ${l}`).join("\n")}`) + "\n",
+            );
+          }
         }
         if (values.json) return;
         const acked = await call(socket, "ack", { as: me, messageId: wait.messageId, recipients: fresh.map((x) => x.recipient.name) }).catch(() => null);

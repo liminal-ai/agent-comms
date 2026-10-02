@@ -1,0 +1,5 @@
+ [32m✓[39m [30m[45m connector [49m[39m packages/connector/test/connector.test.ts [2m([22m[2m23 tests[22m[2m | [22m[33m20 skipped[39m[2m)[22m[33m 1001[2mms[22m[39m
+   [32m✓[39m capabilities R2: send-and-wait through the connector and the CLI [2m(7)[22m
+     [33m[2m✓[22m[39m fix pass 1.1: comms send prints the answer between proof markers; the mod's answer-seen from the same turn acknowledges it[33m 448[2mms[22m[39m
+     [33m[2m✓[22m[39m fix pass 1.1: a proof reported from another turn, or with no turn known at the send, confirms nothing[33m 541[2mms[22m[39m
+[2m      Tests [22m [1m[32m3 passed[39m[22m[2m | [22m[33m23 skipped[39m[90m (26)[39m
