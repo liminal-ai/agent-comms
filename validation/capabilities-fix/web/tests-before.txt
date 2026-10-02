@@ -1,0 +1,122 @@
+▶ fix pass 1.4: reminder text capped on the web form
+  ✖ 1.4: text over MAX_TEXT_CHARS is refused before it's sent; at the cap it's accepted (1.38441ms)
+✖ fix pass 1.4: reminder text capped on the web form (2.147458ms)
+▶ fix pass 2: reminder names are one line
+  ✖ 2 names: a name with a newline (a forged header line) or a control character is refused (0.254393ms)
+✖ fix pass 2: reminder names are one line (0.349444ms)
+▶ fix pass 2: retired people can't own agents
+  ✖ 2 owners: the owner picker lists active people only (0.811601ms)
+✖ fix pass 2: retired people can't own agents (0.919176ms)
+▶ fix pass 2: thresholds are finite whole numbers
+  ✖ 2 thresholds: NaN, Infinity, blanks and fractions are refused before the range check (0.248478ms)
+✖ fix pass 2: thresholds are finite whole numbers (0.337738ms)
+ℹ tests 4
+ℹ suites 4
+ℹ pass 0
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 101.650066
+
+✖ failing tests:
+
+test at test/fix-pass.test.ts:11:3
+✖ 1.4: text over MAX_TEXT_CHARS is refused before it's sent; at the cap it's accepted (1.38441ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/apps/web/test/fix-pass.test.ts:12:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at node:internal/test_runner/test:1792:71
+      at node:internal/per_context/primordials:466:82
+      at new Promise (<anonymous>)
+      at new SafePromise (node:internal/per_context/primordials:435:3)
+      at node:internal/per_context/primordials:466:9
+      at Array.map (<anonymous>) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/fix-pass.test.ts:18:3
+✖ 2 names: a name with a newline (a forged header line) or a control character is refused (0.254393ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/apps/web/test/fix-pass.test.ts:19:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at node:internal/test_runner/test:1792:71
+      at node:internal/per_context/primordials:466:82
+      at new Promise (<anonymous>)
+      at new SafePromise (node:internal/per_context/primordials:435:3)
+      at node:internal/per_context/primordials:466:9
+      at Array.map (<anonymous>) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/fix-pass.test.ts:27:3
+✖ 2 owners: the owner picker lists active people only (0.811601ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      'lee',
+  +   'old'
+    ]
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/apps/web/test/fix-pass.test.ts:34:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at node:internal/test_runner/test:1792:71
+      at node:internal/per_context/primordials:466:82
+      at new Promise (<anonymous>)
+      at new SafePromise (node:internal/per_context/primordials:435:3)
+      at node:internal/per_context/primordials:466:9
+      at Array.map (<anonymous>) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'lee', 'old' ],
+    expected: [ 'lee' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/fix-pass.test.ts:39:3
+✖ 2 thresholds: NaN, Infinity, blanks and fractions are refused before the range check (0.248478ms)
+  AssertionError [ERR_ASSERTION]: connector silent "10.5"
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/apps/web/test/fix-pass.test.ts:43:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at node:internal/test_runner/test:1792:71
+      at node:internal/per_context/primordials:466:82
+      at new Promise (<anonymous>)
+      at new SafePromise (node:internal/per_context/primordials:435:3)
+      at node:internal/per_context/primordials:466:9
+      at Array.map (<anonymous>) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

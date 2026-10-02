@@ -7,7 +7,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Component, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Alerts, Inbox, Registry, Reminders } from "./Capabilities.tsx";
-import { alertsBadge, inboxBadge, parsePromotion, titleWithUnread } from "./lib/view.ts";
+import { alertsBadge, inboxBadge, ownerChoices, parsePromotion, titleWithUnread } from "./lib/view.ts";
 
 const TOKEN_KEY = "agent-comms.adminToken";
 const AS_KEY = "agent-comms.as";
@@ -124,7 +124,7 @@ function Main({ token }: { token: string }) {
           ))}
         </div>
         {side === "agents" &&
-          (directory ? <Registry token={token} directory={directory} now={now} promote={<Promote token={token} machines={directory.machines.map((m) => m.machineId)} people={people.map((p) => p.name)} />} /> : <p className="muted">Loading…</p>)}
+          (directory ? <Registry token={token} directory={directory} now={now} promote={<Promote token={token} machines={directory.machines.map((m) => m.machineId)} people={ownerChoices(directory.participants)} />} /> : <p className="muted">Loading…</p>)}
         {side === "inbox" && (isPerson ? <Inbox token={token} human={as} onOpen={open} /> : <p className="muted">Pick a person to post as; the inbox is theirs.</p>)}
         {side === "reminders" && <Reminders token={token} as={as} now={now} />}
         {side === "alerts" && <Alerts token={token} alerts={alerts?.alerts} now={now} onOpen={open} />}

@@ -3,6 +3,7 @@
 // turns and presence to the connector. register.ts binds it to the engine;
 // tests bind it to fakes.
 
+import { findAnswerProofs } from "../protocol/proof.ts";
 import { renderDelivery, renderUnmatchedNotice } from "../protocol/render.ts";
 import {
   MAX_POLL_WAIT_MS,
@@ -55,7 +56,7 @@ const DEFAULT_CALL_TIMEOUT_MS = 10_000;
 /** A plugin prompt runs as soon as the session is idle; idle this long without it starting, it isn't coming. */
 const DEFAULT_START_DEADLINE_MS = 60_000;
 
-type Report = { op: "delivered" | "outcome" | "check-result" | "presence"; body: Record<string, unknown> };
+type Report = { op: "delivered" | "outcome" | "check-result" | "presence" | "answer-seen"; body: Record<string, unknown> };
 
 const JOURNAL_KEEP = 200;
 /** Delivery ids remembered for restart checks; past this the journal is marked incomplete. */
@@ -89,6 +90,9 @@ export class CommsMod {
   private polling = false;
   private stopped = false;
   private busy = false;
+  /** The main turn running now (fix pass 0.1): stamps a waiting send, and only its tool results confirm an answer. */
+  private mainTurnId: string | undefined;
+  private presenceTurnSent: string | undefined;
   private presenceSent: "idle" | "busy" | undefined;
   private reports: Report[] = [];
   private flushing = false;
@@ -155,10 +159,12 @@ export class CommsMod {
           sessionId: this.options.sessionId,
           cwd: this.options.cwd,
           status: this.busy ? "busy" : "idle",
+          ...(this.busy && this.mainTurnId ? { turnId: this.mainTurnId } : {}),
         });
         if (res.ok) {
           this.registered = true;
           this.presenceSent = this.busy ? "busy" : "idle";
+          this.presenceTurnSent = this.busy ? this.mainTurnId : undefined;
           this.host.log(`registered as @${res.participant.name}`);
           return true;
         }
@@ -309,6 +315,7 @@ export class CommsMod {
   // Engine events
 
   onTurnStart(turnId: string, text: string): void {
+    this.mainTurnId = turnId;
     this.setBusy(true);
     const actions = this.tracker.turnStart(turnId, text, this.host.now());
     for (const a of actions) {
@@ -323,8 +330,18 @@ export class CommsMod {
     this.tracker.promptSubmit({ ...input, at: this.host.now() });
   }
 
-  onToolResult(input: { toolUseId?: string; result?: unknown }): void {
-    this.tracker.toolResult(input);
+  /**
+   * `text` is the result as the model reads it. A complete answer proof in a main-loop
+   * result (no `agentId`: a helper's results never reach the main model) during a main
+   * turn confirms that the model saw that answer (fix pass 0.1).
+   */
+  onToolResult(input: { toolUseId?: string; agentId?: string; result?: unknown; text?: string }): void {
+    this.tracker.toolResult({ toolUseId: input.toolUseId, result: input.result });
+    if (input.agentId || !this.mainTurnId || typeof input.text !== "string") return;
+    const proofs = findAnswerProofs(input.text).slice(0, 50);
+    if (proofs.length === 0) return;
+    this.host.log(`answer-seen: ${proofs.map((p) => `${p.waitId}/${p.messageId}`).join(", ")} in turn ${this.mainTurnId}`);
+    this.queue({ op: "answer-seen", body: { sessionId: this.options.sessionId, turnId: this.mainTurnId, proofs } });
   }
 
   onAgentSpawned(input: { agentId?: string; parentAgentId?: string; engine: boolean }): void {
@@ -360,7 +377,10 @@ export class CommsMod {
   }
 
   onTurnComplete(input: { turnId: string; agentId?: string; reason: "answer" | "aborted" | "refusal" | "error"; answer: string }): void {
-    if (!input.agentId) this.setBusy(false);
+    if (!input.agentId) {
+      if (this.mainTurnId === input.turnId) this.mainTurnId = undefined;
+      this.setBusy(false);
+    }
     this.apply(this.tracker.turnComplete({ ...input, at: this.host.now() }));
   }
 
@@ -369,9 +389,11 @@ export class CommsMod {
     if (busy) this.idleSince = undefined;
     else this.idleSince ??= this.host.now();
     const status = busy ? "busy" : "idle";
-    if (this.presenceSent === status) return;
+    const turnId = busy ? this.mainTurnId : undefined;
+    if (this.presenceSent === status && this.presenceTurnSent === turnId) return;
     this.presenceSent = status;
-    this.queue({ op: "presence", body: { sessionId: this.options.sessionId, status } });
+    this.presenceTurnSent = turnId;
+    this.queue({ op: "presence", body: { sessionId: this.options.sessionId, status, ...(turnId ? { turnId } : {}) } });
   }
 
   private apply(actions: Action[]): void {

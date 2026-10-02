@@ -1,0 +1,59 @@
+Scope: all 8 workspace projects
+✓ Lockfile passes supply-chain policies (verified 1d ago)
+
+Done in 616ms using pnpm v11.8.0
+$ node --test 'test/**/*.test.ts'
+▶ fix pass 1.4: reminder text capped on the web form
+  ✔ 1.4: text over MAX_TEXT_CHARS is refused before it's sent; at the cap it's accepted (12.186451ms)
+✔ fix pass 1.4: reminder text capped on the web form (12.962884ms)
+▶ fix pass 2: reminder names are one line
+  ✔ 2 names: a name with a newline (a forged header line) or a control character is refused (0.205769ms)
+✔ fix pass 2: reminder names are one line (0.300175ms)
+▶ fix pass 2: retired people can't own agents
+  ✔ 2 owners: the owner picker lists active people only (0.613729ms)
+✔ fix pass 2: retired people can't own agents (0.719957ms)
+▶ fix pass 2: thresholds are finite whole numbers
+  ✔ 2 thresholds: NaN, Infinity, blanks and fractions are refused before the range check (0.26498ms)
+✔ fix pass 2: thresholds are finite whole numbers (0.354634ms)
+▶ W registry
+  ✔ W registry: an idle agent shows how long it has been idle (1.130666ms)
+  ✔ W registry: a stale machine is never shown as idle, whatever was last written (12.363189ms)
+  ✔ W registry: busy, offline, people and system participants (0.195917ms)
+  ✔ W registry: a profile edit is one description line and one duty per line, blanks dropped (0.316859ms)
+  ✔ W registry: a profile edit over the protocol's limits is refused before it's sent (0.17678ms)
+✔ W registry (15.130191ms)
+▶ W registry, promotion (R1 API)
+  ✔ W promote: an agent is promoted with its owner (a person), as R1's directory.promote requires (0.260061ms)
+  ✔ W promote: reserved names, bad names, a missing thread id or machine, and an owner who isn't a person are refused (0.156264ms)
+✔ W registry, promotion (R1 API) (0.572851ms)
+▶ W registry, live
+  ✔ W registry: a machine that stops heartbeating turns stale on the clock, not only when Convex next writes (0.195008ms)
+✔ W registry, live (0.326212ms)
+▶ W reminders
+  ✔ W reminders: the controls offered follow the state; ended reminders have none (0.209727ms)
+  ✔ W reminders: the schedule reads like the rendering (every 30m, once at a time), with its conditions (0.390186ms)
+  ✔ W reminders: the status line says the state, fires, next fire and why it's blocked (0.173387ms)
+  ✔ W reminders: the list shows the last fire's delivery state and the last skip, whichever is newer (0.163754ms)
+  ✔ W reminders: the create form becomes reminders.create arguments (0.415415ms)
+  ✔ W reminders: the create form refuses what Convex would (both or neither schedule, under a minute, past, too long) (0.171151ms)
+✔ W reminders (1.754051ms)
+▶ W inbox
+  ✔ W inbox: the badge and the page title carry the unread count (0.096768ms)
+✔ W inbox (0.16729ms)
+▶ W inbox, kinds
+  ✔ W inbox: messages from system participants are labelled by what they are (0.139928ms)
+✔ W inbox, kinds (0.195663ms)
+▶ W alerts
+  ✔ W alerts: each cause has a plain label, and resolved incidents say so (0.212395ms)
+  ✔ W alerts: the badge counts open incidents only (0.115297ms)
+  ✔ W alerts: thresholds are edited in minutes and checked against Convex's ranges (0.222473ms)
+✔ W alerts (0.649097ms)
+ℹ tests 23
+ℹ suites 11
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 120.356176
+$ tsc -p tsconfig.json

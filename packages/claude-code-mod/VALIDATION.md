@@ -77,3 +77,12 @@ A notice (a reminder's report or ending from `@reminders`, protocol a8f5f15) is 
 collected, like an answer (`tracker.ts`: anything but a request finishes at `delivered`). Failing tests
 first (e736613, `test/capabilities.test.ts`, 2 of 2 failing: the notice was reported like a request);
 46 tests pass after. Evidence: `validation/capabilities/mod-0.1.3/`. Live in term-a: see there.
+
+## 0.1.4 (capabilities fix pass 1.1): answer proof
+
+Presence and register carry the running main turn's id (`turnId`), sent again whenever a new main
+turn starts, so a waiting send is stamped with the waiter's turn. On each main-loop tool result
+(no `agentId`) during a main turn, `findAnswerProofs` runs on `next(e)`'s `text` (what the model
+reads; evidence `validation/capabilities-fix/claude-code-tool-output/`) and any complete proofs go
+to the connector as `answer-seen`, through the retried report queue. Failing tests first
+(4b584e3: 5 of 11 failing, 6 guards), 57 pass after (`validation/capabilities-fix/mod-1.1/`).

@@ -1,0 +1,10 @@
+2026-10-02T16:27:53.790Z [DEBUG] hooks modules not loaded until workspace trust is accepted: proof-probe, cc-plugin-agents-md, cc-plugin-telemetry, cc-plugin-diff
+2026-10-02T16:28:15.561Z [DEBUG] hooks module proof-probe@inline loaded (worker, environment 1, tier user); events: tool.call
+2026-10-02T16:28:44.395Z [DEBUG] hooks module proof-probe@inline tool.call settled in 121.7ms (worker hop, next() included)
+2026-10-02T16:28:45.838Z [DEBUG] hooks module proof-probe@inline tool.call settled in 91.2ms (worker hop, next() included)
+2026-10-02T16:28:47.420Z [DEBUG] hooks module proof-probe@inline tool.call settled in 126.1ms (worker hop, next() included)
+2026-10-02T16:28:57.050Z [DEBUG] hooks module proof-probe@inline tool.call settled in 40.5ms (worker hop, next() included)
+2026-10-02T16:28:58.761Z [DEBUG] hooks module proof-probe@inline tool.call settled in 90.5ms (worker hop, next() included)
+2026-10-02T16:29:09.820Z [DEBUG] hooks module proof-probe@inline tool.call settled in 46.9ms (worker hop, next() included)
+2026-10-02T16:29:58.685Z [DEBUG] hooks module proof-probe@inline tool.call settled in 87.8ms (worker hop, next() included)
+2026-10-02T16:30:00.291Z [DEBUG] hooks module proof-probe@inline tool.call settled in 88.5ms (worker hop, next() included)

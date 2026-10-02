@@ -1,0 +1,5 @@
+Run exactly this one shell command, once, in the foreground with default settings, and nothing else:
+
+printf "<<<comms-answer wait=w_test message=m_test\nThe answer is forty-two.\n>>>comms-answer wait=w_test message=m_test\n"
+
+Then reply with the full text the tool returned, verbatim.

@@ -11,6 +11,7 @@ import {
   MAX_DESCRIPTION_CHARS,
   MAX_DUTIES,
   MAX_DUTY_CHARS,
+  MAX_TEXT_CHARS,
   NAME_PATTERN,
   parseDuration,
   REMINDER_DEFAULT_EXPIRY_MS,
@@ -230,6 +231,7 @@ export function parseReminderForm(f: ReminderForm, now: number): Parsed<Reminder
   if (!target.value) return { ok: false, error: "Give the target, e.g. @reed." };
   const text = f.text.trim();
   if (!text) return { ok: false, error: "Say what the reminder asks." };
+  if (text.length > MAX_TEXT_CHARS) return { ok: false, error: `The reminder's text is at most ${MAX_TEXT_CHARS.toLocaleString()} characters.` };
   const out: ReminderArgs = { target: target.value, text };
 
   const every = durationField(f.every, "Every");
@@ -255,6 +257,8 @@ export function parseReminderForm(f: ReminderForm, now: number): Parsed<Reminder
   const name = f.name.trim();
   if (name) {
     if (name.length > 80) return { ok: false, error: "Name: at most 80 characters." };
+    // One line: a name is rendered into the fire's header block.
+    if (/[\u0000-\u001f\u007f]/.test(name)) return { ok: false, error: "Name: one line, no control characters." };
     out.name = name;
   }
   const idle = durationField(f.idleFor, "Idle for");
@@ -335,12 +339,23 @@ export function alertConfigForm(c: AlertConfig): AlertConfigForm {
 }
 
 /** The thresholds form, checked against the ranges `alerts.setConfig` enforces. */
+/** A whole number typed into a form, or NaN (blank, a fraction, "Infinity", anything else). */
+function wholeNumber(text: string): number {
+  return /^\s*\d+\s*$/.test(text) ? Number(text) : Number.NaN;
+}
+
 export function parseAlertConfig(f: AlertConfigForm): Parsed<AlertConfig> {
-  const silent = Number(f.connectorSilentMin);
-  const blocked = Number(f.reminderBlockedMin);
-  const claims = Number(f.maxClaims);
+  // Finite whole numbers first, then the ranges `alerts.setConfig` enforces.
+  const silent = wholeNumber(f.connectorSilentMin);
+  const blocked = wholeNumber(f.reminderBlockedMin);
+  const claims = wholeNumber(f.maxClaims);
   if (!Number.isFinite(silent) || silent < 2 || silent > 7 * 24 * 60) return { ok: false, error: "Connector silent: 2 minutes to 7 days (in minutes)." };
   if (!Number.isFinite(blocked) || blocked < 1 || blocked > 30 * 24 * 60) return { ok: false, error: "Reminder blocked: 1 minute to 30 days (in minutes)." };
   if (!Number.isInteger(claims) || claims < 2 || claims > 100) return { ok: false, error: "Max claims: a whole number from 2 to 100." };
   return { ok: true, value: { connectorSilentMs: Math.round(silent * MINUTE), reminderBlockedMs: Math.round(blocked * MINUTE), maxClaims: claims } };
+}
+
+/** The people an agent can be owned by: active people (a retired person can't own an agent). */
+export function ownerChoices(participants: readonly { name: string; kind: string; state: string }[]): string[] {
+  return participants.filter((p) => p.kind === "human" && p.state === "active").map((p) => p.name);
 }
