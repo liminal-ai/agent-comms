@@ -1,0 +1,5 @@
+    not ok 1 - a connector that drops after reading the send: the retry, with the same key, posts once
+    not ok 2 - Alder's repro: when it gives up, it prints the --key line and exits 3 (unreachable), not 1 (refused)
+not ok 6 - fix pass 1.7: a dropped send keeps its key
+# pass 14
+# fail 2

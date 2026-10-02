@@ -1,6 +1,7 @@
 import { CLI_EXIT } from "@agent-comms/protocol";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createServer, request as httpRequest } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -183,5 +184,76 @@ describe("capabilities R1: comms agents", () => {
     assert.match(other.stderr, /conflict/);
     const json = await comms(["agents", "--as", "cedar", "@hazel", "--json"]);
     assert.equal(JSON.parse(json.stdout).agents[0].participant.name, "hazel");
+  });
+});
+
+describe("fix pass 1.7: a dropped send keeps its key", () => {
+  /** A socket in front of `target` that drops the connection after forwarding the first `drops` sends (or every send). */
+  async function dropProxy(path: string, target: string, drops: number) {
+    let dropped = 0;
+    const keys: string[] = [];
+    const server = createServer((req, res) => {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        const isSend = req.url === "/v1/send";
+        if (isSend) keys.push(JSON.parse(body).key);
+        const forward = httpRequest({ socketPath: target, path: req.url, method: "POST", headers: req.headers }, (up) => {
+          let out = "";
+          up.on("data", (c) => (out += c));
+          up.on("end", () => {
+            if (isSend && dropped < drops) {
+              dropped++;
+              req.socket.destroy();
+              return;
+            }
+            res.writeHead(up.statusCode ?? 500, { "content-type": "application/json" });
+            res.end(out);
+          });
+        });
+        forward.end(body);
+      });
+    });
+    await new Promise<void>((r) => server.listen(path, r));
+    return { keys, close: () => new Promise<void>((r) => server.close(() => r())) };
+  }
+
+  it("a connector that drops after reading the send: the retry, with the same key, posts once", async () => {
+    const proxySock = join(root, "drop-once.sock");
+    const proxy = await dropProxy(proxySock, socket, 1);
+    try {
+      let stdout = "";
+      let stderr = "";
+      const text = `posted once ${Date.now()}`;
+      const code = await run(["--socket", proxySock, "send", "--as", "cedar", "--continue", "@hazel", text], {
+        env: {}, stdout: (t) => (stdout += t), stderr: (t) => (stderr += t), readStdin: async () => "",
+      });
+      assert.equal(code, EXIT.ok, stderr);
+      assert.equal(proxy.keys.length, 2);
+      assert.equal(proxy.keys[0], proxy.keys[1]);
+      const list = await comms(["list", "--as", "cedar", "--json"]);
+      const dm = JSON.parse(list.stdout).conversations.find((c: { kind: string; members: { name: string }[] }) => c.kind === "dm" && c.members.some((m) => m.name === "hazel"));
+      const read = await comms(["read", "--as", "cedar", dm.id, "--json", "--limit", "100"]);
+      assert.equal(JSON.parse(read.stdout).messages.filter((m: { text: string }) => m.text === text).length, 1);
+    } finally {
+      await proxy.close();
+    }
+  });
+
+  it("Alder's repro: when it gives up, it prints the --key line and exits 3 (unreachable), not 1 (refused)", async () => {
+    const proxySock = join(root, "drop-always.sock");
+    const proxy = await dropProxy(proxySock, socket, Infinity);
+    try {
+      let stdout = "";
+      let stderr = "";
+      const code = await run(["--socket", proxySock, "send", "--as", "cedar", "--continue", "@hazel", "never answered"], {
+        env: {}, stdout: (t) => (stdout += t), stderr: (t) => (stderr += t), readStdin: async () => "",
+      });
+      assert.equal(code, EXIT.unreachable, stderr);
+      assert.match(stderr, new RegExp(`--key ${proxy.keys[0]}`));
+      assert.ok(proxy.keys.every((k) => k === proxy.keys[0]));
+    } finally {
+      await proxy.close();
+    }
   });
 });
