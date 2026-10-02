@@ -98,3 +98,11 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - A connector that answers a waiting send `unsupported` gets it again unwaited, and the CLI says so (stub, older connectors).
 - The overview's definition of `delivered` needs its one exception ("returned to the waiting send"); that's Reed's document.
 - [x] Live acceptance 2-12 with Hazel: all pass (`validation/capabilities/acceptance/README.md`); three connector/CLI bugs found and fixed (02a8343, 77474ff, 8fb9b85)
+
+## Capabilities fix pass (docs/06-capabilities-fix-pass.md)
+- [x] Section 0 contract (proof markers, answer-seen, provisional ack, fallback clock from the wait's end, reminder access), Hazel-approved
+- [x] Section 1 (1.1-1.7), section 2 (Convex and CLI parts), section 3 docs (incl. docs/deploy-checklist.md)
+- [x] Section 4 (Cedar): restarts with the kill proven, 7c with a real CLI kill, the scale run on a scratch deployment, acceptance 3-12 rerun: all pass (`validation/capabilities-fix/4/`)
+- [x] P3 agreed bugs 1-6, 9a-c, C1 (Hazel: 7, 8)
+- Main final for the independent reviews: c33c58a (deployed code as of 6abde30)
+
