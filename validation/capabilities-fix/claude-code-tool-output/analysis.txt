@@ -1,0 +1,16 @@
+Bash agentId=- bg=false len=314 proofs=[w_small] 
+    first: sent m_q (#1 in c_1), waiting up to 100s for @t3-native
+Bash agentId=- bg=false len=399 proofs=[w_blank-lines] 
+    first: sent m_q (#1 in c_1), waiting up to 100s for @t3-native
+Bash agentId=- bg=false len=2187 proofs=[] 
+    first: <persisted-output>
+Agent agentId=- bg=false len=1053 proofs=[] 
+    first: Async agent launched successfully. (This tool result is internal metadata — never quote or paste any
+Bash agentId=aff9558d5dd0a1ba0 bg=false len=314 proofs=[w_small] 
+    first: sent m_q (#1 in c_1), waiting up to 100s for @t3-native
+Bash agentId=- bg=true len=276 proofs=[] 
+    first: Command running in background with ID: brav07ry6. Output is being written to: /tmp/claude-1000/-tmp-
+Bash agentId=- bg=false len=2228 proofs=[] 
+    first: <persisted-output>
+Bash agentId=- bg=false len=28735 proofs=[w_edge] 
+    first: sent m_q (#1 in c_1), waiting up to 100s for @t3-native

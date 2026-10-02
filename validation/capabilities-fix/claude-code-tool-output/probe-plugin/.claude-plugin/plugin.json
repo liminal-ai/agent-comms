@@ -1,0 +1,1 @@
+{ "name": "proof-probe", "version": "0.0.1", "description": "Records tool.call results (agentId, background, text) for the fix-pass proof check." }
