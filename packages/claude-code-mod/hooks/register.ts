@@ -135,7 +135,7 @@ export function register(on: any) {
   on("tool.call", async ($: Dollar, e: any, next: any) => {
     mod?.onToolCall({ toolUseId: e.tool_use_id, agentId: e.agentId, background: e.run_in_background === true, tool: e.tool });
     const result = await next(e);
-    mod?.onToolResult({ toolUseId: e.tool_use_id, result: result?.result });
+    mod?.onToolResult({ toolUseId: e.tool_use_id, agentId: e.agentId, result: result?.result, text: result?.text });
     return result;
   });
 
