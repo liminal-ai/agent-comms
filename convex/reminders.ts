@@ -6,7 +6,7 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { fail, getOr, participantByName, requireAdmin } from "./lib/core";
-import { applyAction, createReminder, reminderDetail, reminderShape, tick as fireDue } from "./lib/reminders";
+import { applyAction, createReminder, reminderDetail, reminderShape, step as stepOne, tick as fireDue } from "./lib/reminders";
 import { reminderAction, reminderState } from "./validators";
 
 /** Every reminder, or those in one state, newest first. */
@@ -72,4 +72,10 @@ export const update = mutation({
 export const tick = internalMutation({
   args: {},
   handler: async (ctx) => fireDue(ctx, Date.now()),
+});
+
+/** One due reminder, as a sub-transaction of the tick (fix pass 1.4). */
+export const step = internalMutation({
+  args: { id: v.id("reminders") },
+  handler: async (ctx, args) => stepOne(ctx, args.id, Date.now()),
 });
