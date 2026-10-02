@@ -1,0 +1,64 @@
+== setup 17:07:22.264
+{
+  "ownersSet": 0,
+  "systemCreated": [
+    "reminders",
+    "alerts"
+  ],
+  "systemRepaired": []
+}
+== seeding 17:07:25.269
+== counts after seeding 17:07:46.606
+{
+  "alerts": 2000,
+  "deliveries": 10500,
+  "messages": 31,
+  "reminders": 3000,
+  "waitResults": 2000,
+  "waits": 2000
+}
+== new items to find among the history 17:07:51.272
+{
+  "reclaimed": "jd7at4pdz40g0htgbxv9yhvv2h8fh47e",
+  "uncertain": "jd7f522yy6pht6ddgf7nz98z158fg06a"
+}
+waiting 75 s for the reminders to come due (and for the crons to run on their own too)
+reminders:tick -> {
+  "expired": 0,
+  "fired": 0,
+  "skipped": 0
+} (553 ms including the CLI)
+alerts:scan -> {
+  "opened": 1,
+  "resolved": 0
+} (591 ms including the CLI)
+waits:sweep -> {
+  "deleted": 0,
+  "expired": 0,
+  "fellBack": 0
+} (573 ms including the CLI)
+== results 17:09:10.317
+{
+  "openAlerts": [
+    {
+      "cause": "uncertain-delivery",
+      "subjectId": "jd7f522yy6pht6ddgf7nz98z158fg06a"
+    },
+    {
+      "cause": "delivery-reclaimed",
+      "subjectId": "jd7at4pdz40g0htgbxv9yhvv2h8fh47e"
+    }
+  ],
+  "reminders": [
+    {
+      "fires": 0,
+      "id": "k97frfqrj0prp78ref1mp7x8118fgbzd",
+      "state": "expired"
+    },
+    {
+      "fires": 1,
+      "id": "k97926m6ekk5ecw80a8q84vkz18fgmm5",
+      "state": "active"
+    }
+  ]
+}
