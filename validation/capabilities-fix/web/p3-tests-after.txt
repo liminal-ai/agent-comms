@@ -1,0 +1,65 @@
+$ tsc -p tsconfig.json
+$ node --test 'test/**/*.test.ts'
+▶ fix pass 1.4: reminder text capped on the web form
+  ✔ 1.4: text over MAX_TEXT_CHARS is refused before it's sent; at the cap it's accepted (12.425465ms)
+✔ fix pass 1.4: reminder text capped on the web form (13.179233ms)
+▶ fix pass 2: reminder names are one line
+  ✔ 2 names: a name with a newline (a forged header line) or a control character is refused (0.201285ms)
+✔ fix pass 2: reminder names are one line (0.294787ms)
+▶ fix pass 2: retired people can't own agents
+  ✔ 2 owners: the owner picker lists active people only (0.649264ms)
+✔ fix pass 2: retired people can't own agents (0.767526ms)
+▶ fix pass 2: thresholds are finite whole numbers
+  ✔ 2 thresholds: NaN, Infinity, blanks and fractions are refused before the range check (0.30398ms)
+✔ fix pass 2: thresholds are finite whole numbers (0.410294ms)
+▶ P3 bug 7: an old open alert stays visible
+  ✔ 7: an open incident older than the newest 100 is still in the badge and the open list (1.763449ms)
+  ✔ 7: an open alert in both lists is listed once; the badge counts open incidents only (0.207986ms)
+✔ P3 bug 7: an old open alert stays visible (3.148355ms)
+▶ P3 bug 8: no phantom @lee
+  ✔ 8: with no @lee, posting as defaults to the first active person (0.338874ms)
+  ✔ 8: a saved choice that's no longer an active person isn't kept (0.150703ms)
+  ✔ 8: @lee is still the default when it exists, and a saved active person wins (0.165191ms)
+  ✔ 8: before the directory has loaded, the saved choice is kept (0.138747ms)
+✔ P3 bug 8: no phantom @lee (1.114587ms)
+▶ W registry
+  ✔ W registry: an idle agent shows how long it has been idle (1.128812ms)
+  ✔ W registry: a stale machine is never shown as idle, whatever was last written (12.521353ms)
+  ✔ W registry: busy, offline, people and system participants (0.19085ms)
+  ✔ W registry: a profile edit is one description line and one duty per line, blanks dropped (0.323917ms)
+  ✔ W registry: a profile edit over the protocol's limits is refused before it's sent (0.191227ms)
+✔ W registry (15.304347ms)
+▶ W registry, promotion (R1 API)
+  ✔ W promote: an agent is promoted with its owner (a person), as R1's directory.promote requires (0.286644ms)
+  ✔ W promote: reserved names, bad names, a missing thread id or machine, and an owner who isn't a person are refused (0.16416ms)
+✔ W registry, promotion (R1 API) (0.61808ms)
+▶ W registry, live
+  ✔ W registry: a machine that stops heartbeating turns stale on the clock, not only when Convex next writes (0.197933ms)
+✔ W registry, live (0.333868ms)
+▶ W reminders
+  ✔ W reminders: the controls offered follow the state; ended reminders have none (0.212085ms)
+  ✔ W reminders: the schedule reads like the rendering (every 30m, once at a time), with its conditions (0.397368ms)
+  ✔ W reminders: the status line says the state, fires, next fire and why it's blocked (0.177662ms)
+  ✔ W reminders: the list shows the last fire's delivery state and the last skip, whichever is newer (0.168596ms)
+  ✔ W reminders: the create form becomes reminders.create arguments (0.656678ms)
+  ✔ W reminders: the create form refuses what Convex would (both or neither schedule, under a minute, past, too long) (0.167688ms)
+✔ W reminders (1.990979ms)
+▶ W inbox
+  ✔ W inbox: the badge and the page title carry the unread count (0.103732ms)
+✔ W inbox (0.177697ms)
+▶ W inbox, kinds
+  ✔ W inbox: messages from system participants are labelled by what they are (0.143849ms)
+✔ W inbox, kinds (0.207358ms)
+▶ W alerts
+  ✔ W alerts: each cause has a plain label, and resolved incidents say so (0.217961ms)
+  ✔ W alerts: the badge counts open incidents only (0.110893ms)
+  ✔ W alerts: thresholds are edited in minutes and checked against Convex's ranges (0.22922ms)
+✔ W alerts (0.658205ms)
+ℹ tests 29
+ℹ suites 13
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 124.953626

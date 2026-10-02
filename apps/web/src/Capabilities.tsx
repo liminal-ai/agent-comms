@@ -371,10 +371,10 @@ function NewReminder({ token, as }: { token: string; as: string }) {
 // ---------------------------------------------------------------------------
 // Alerts
 
-export function Alerts({ token, alerts, now, onOpen }: { token: string; alerts: Alert[] | undefined; now: number; onOpen: (conversationId: string) => void }) {
-  if (!alerts) return <p className="muted">Loading…</p>;
-  const open = alerts.filter((a) => a.resolvedAt === undefined);
-  const resolved = alerts.filter((a) => a.resolvedAt !== undefined);
+/** Open incidents (all of them, from their own query) and the recent resolved ones. */
+export function Alerts(props: { token: string; open: Alert[] | undefined; resolved: Alert[]; now: number; onOpen: (conversationId: string) => void }) {
+  const { token, open, resolved, now, onOpen } = props;
+  if (!open) return <p className="muted">Loading…</p>;
   const row = (a: Alert) => (
     <li key={a.id} className={a.resolvedAt === undefined ? "open" : "resolved"} data-alert={a.id}>
       <div>

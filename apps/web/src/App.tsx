@@ -7,7 +7,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Component, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Alerts, Inbox, Registry, Reminders } from "./Capabilities.tsx";
-import { alertsBadge, inboxBadge, ownerChoices, parsePromotion, titleWithUnread } from "./lib/view.ts";
+import { alertsView, defaultPostingAs, inboxBadge, ownerChoices, parsePromotion, titleWithUnread } from "./lib/view.ts";
 
 const TOKEN_KEY = "agent-comms.adminToken";
 const AS_KEY = "agent-comms.as";
@@ -59,12 +59,21 @@ function Main({ token }: { token: string }) {
   const directory = useQuery(api.directory.list, { adminToken: token });
   const conversations = useQuery(api.conversations.list, { adminToken: token });
   const alerts = useQuery(api.alerts.list, { adminToken: token, limit: 100 });
+  const openAlerts = useQuery(api.alerts.list, { adminToken: token, openOnly: true, limit: 200 });
+  const alertTab = alertsView(openAlerts?.alerts, alerts?.alerts);
   const [selected, setSelected] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("conversations");
   const [side, setSide] = useState<Side>("agents");
-  const people = directory?.participants.filter((p) => p.kind === "human") ?? [];
-  const [as, setAs] = useState(() => localStorage.getItem(AS_KEY) ?? "lee");
-  useEffect(() => localStorage.setItem(AS_KEY, as), [as]);
+  // Active people only: a retired person can't post or own an agent.
+  const people = directory?.participants.filter((p) => p.kind === "human" && p.state === "active") ?? [];
+  const [as, setAs] = useState(() => localStorage.getItem(AS_KEY) ?? "");
+  // Once the directory is known, post as an active person: never a phantom @lee (P3 bug 8).
+  useEffect(() => {
+    if (directory) setAs((current) => defaultPostingAs(current || null, directory.participants));
+  }, [directory]);
+  useEffect(() => {
+    if (as) localStorage.setItem(AS_KEY, as);
+  }, [as]);
   const isPerson = people.some((p) => p.name === as);
   const unread = useQuery(api.inbox.list, isPerson ? { adminToken: token, human: as, unreadOnly: true, limit: 200 } : "skip");
   const unreadCount = unread?.unread ?? 0;
@@ -85,7 +94,7 @@ function Main({ token }: { token: string }) {
     ["agents", "Agents"],
     ["inbox", inboxBadge(unreadCount)],
     ["reminders", "Reminders"],
-    ["alerts", alertsBadge(alerts?.alerts ?? [])],
+    ["alerts", alertTab.badge],
   ];
 
   return (
@@ -109,7 +118,7 @@ function Main({ token }: { token: string }) {
         <label className="as">
           posting as
           <select value={as} onChange={(e) => setAs(e.target.value)}>
-            {people.length === 0 && <option value={as}>@{as}</option>}
+            {people.length === 0 && as && <option value={as}>@{as}</option>}
             {people.map((p) => <option key={p.id} value={p.name}>@{p.name}</option>)}
           </select>
         </label>
@@ -126,7 +135,7 @@ function Main({ token }: { token: string }) {
           (directory ? <Registry token={token} directory={directory} now={now} promote={<Promote token={token} machines={directory.machines.map((m) => m.machineId)} people={ownerChoices(directory.participants)} />} /> : <p className="muted">Loading…</p>)}
         {side === "inbox" && (isPerson ? <Inbox token={token} human={as} onOpen={open} /> : <p className="muted">Pick a person to post as; the inbox is theirs.</p>)}
         {side === "reminders" && <Reminders token={token} as={as} now={now} />}
-        {side === "alerts" && <Alerts token={token} alerts={alerts?.alerts} now={now} onOpen={open} />}
+        {side === "alerts" && <Alerts token={token} open={openAlerts && alerts ? alertTab.open : undefined} resolved={alertTab.resolved} now={now} onOpen={open} />}
       </section>
       <section className="pane conversations">
         {conversations && directory ? (
