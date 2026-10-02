@@ -161,8 +161,9 @@ describe("fix pass 3.1", () => {
 });
 
 describe("capabilities R0", () => {
-  it("uses the protocol's exit codes, including the ones send-and-wait adds", () => {
+  it("uses the protocol's exit codes, including the ones send-and-wait adds (P3 bug 6: literal values, so it can fail)", () => {
     assert.deepEqual(EXIT, CLI_EXIT);
+    assert.deepEqual({ ...CLI_EXIT }, { ok: 0, refused: 1, usage: 2, unreachable: 3, pending: 4, endedWithoutAnswer: 5 });
   });
 });
 
@@ -265,5 +266,16 @@ describe("fix pass 2: comms await", () => {
     assert.match(r.stderr, /comms await takes no --wait/);
     const help = await comms(["--help"]);
     assert.doesNotMatch(help.stdout, /after exit 4/);
+  });
+});
+
+describe("P3 bug 5: -- protects text starting with @", () => {
+  it("only @names before -- are recipients; after it, @words are text", async () => {
+    const r = await comms(["send", "--as", "cedar", "--continue", "@hazel", "--", "@lee", "is", "text", "here"]);
+    assert.equal(r.code, EXIT.ok, r.stderr);
+    assert.match(r.stdout, /→ @hazel: delivery/);
+    assert.doesNotMatch(r.stdout, /@lee: in their inbox/);
+    const read = await comms(["read", "--as", "cedar", /\(#\d+ in (\S+)\)/.exec(r.stdout)![1]!, "--json"]);
+    assert.equal(JSON.parse(read.stdout).messages.at(-1).text, "@lee is text here");
   });
 });

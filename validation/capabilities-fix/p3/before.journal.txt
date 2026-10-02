@@ -1,0 +1,12 @@
+[31m     [31m×[31m bug 1: a one-time --at reminder tells its creator when it ends[39m[32m 161[2mms[22m[39m
+[31m     [31m×[31m bug 2: --at at or after the expiry is refused at creation (it could never fire)[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m bug 4: a retired creator's reminders are cancelled at the next tick[39m[32m 32[2mms[22m[39m
+[31m     [31m×[31m C1 control characters (NEL and the rest of U+0080-U+009F) are refused in names[39m[32m 4[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 4 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m4 failed[39m[22m[90m (4)[39m
+    not ok 1 - doesn't roll 30 February or 31 April over into the next month
+# pass 65
+# fail 1
+    not ok 1 - only @names before -- are recipients; after it, @words are text
+# pass 17
+# fail 1

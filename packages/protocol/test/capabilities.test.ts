@@ -143,3 +143,14 @@ describe("R3 notices (agreed with Hazel)", () => {
     }
   });
 });
+
+describe("P3 bug 3: --at refuses impossible dates", () => {
+  it("doesn't roll 30 February or 31 April over into the next month", () => {
+    const now = Date.UTC(2026, 0, 1);
+    assert.equal(P.parseAt("2026-02-30T10:00Z", now), null);
+    assert.equal(P.parseAt("2026-04-31T10:00Z", now), null);
+    assert.equal(P.parseAt("2026-02-28T24:00Z", now), null);
+    assert.equal(P.parseAt("2026-02-28T10:00Z", now), Date.UTC(2026, 1, 28, 10, 0));
+    assert.equal(P.parseAt("2028-02-29T10:00Z", now), Date.UTC(2028, 1, 29, 10, 0));
+  });
+});
