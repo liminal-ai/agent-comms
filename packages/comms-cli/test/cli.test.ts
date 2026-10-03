@@ -307,3 +307,68 @@ describe("P3 bug 9a: a refused await mid-wait", () => {
     }
   });
 });
+
+describe("follow-up 1: the key survives every transport failure after a drop", () => {
+  /** In front of the stub: forwards the first send, then drops the connection and takes the socket away; back after `downMs` (or never). */
+  async function dyingProxy(path: string, downMs: number | null) {
+    const keys: string[] = [];
+    let proxy: ReturnType<typeof createServer> | undefined;
+    const listen = () => {
+      proxy = createServer((req, res) => {
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          if (req.url === "/v1/send") keys.push(JSON.parse(body).key);
+          const fwd = httpRequest({ socketPath: socket, path: req.url, method: "POST", headers: req.headers }, (up) => {
+            let out = "";
+            up.on("data", (c) => (out += c));
+            up.on("end", () => {
+              if (keys.length === 1 && req.url === "/v1/send") {
+                req.socket.destroy();
+                proxy!.close();
+                if (downMs !== null) setTimeout(listen, downMs);
+                return;
+              }
+              res.writeHead(up.statusCode ?? 500, { "content-type": "application/json" });
+              res.end(out);
+            });
+          });
+          fwd.end(body);
+        });
+      });
+      proxy.listen(path);
+    };
+    listen();
+    return { keys, close: () => proxy?.close() };
+  }
+  const textOf = async (text: string) => {
+    const list = await comms(["list", "--as", "cedar", "--json"]);
+    const dm = JSON.parse(list.stdout).conversations.find((c: { kind: string; members: { name: string }[] }) => c.kind === "dm" && c.members.some((m) => m.name === "hazel"));
+    const read = await comms(["read", "--as", "cedar", dm.id, "--json", "--limit", "100"]);
+    return JSON.parse(read.stdout).messages.filter((m: { text: string }) => m.text === text).length;
+  };
+
+  it("Reed's repro: the connector dies mid-send and is back in 3 s; the retry with the same key posts it once", async () => {
+    const path = join(root, "dies-back.sock");
+    const proxy = await dyingProxy(path, 3_000);
+    const text = `followup-1 back ${Date.now()}`;
+    let stderr = "";
+    try {
+      const code = await run(["--socket", path, "send", "--as", "cedar", "--continue", "@hazel", text], { env: {}, stdout: () => {}, stderr: (t) => (stderr += t), readStdin: async () => "" });
+      assert.equal(code, EXIT.ok, stderr);
+      assert.ok(proxy.keys.length >= 2 && proxy.keys.every((k) => k === proxy.keys[0]), JSON.stringify(proxy.keys));
+      assert.equal(await textOf(text), 1);
+    } finally {
+      proxy.close();
+    }
+  });
+
+  it("Alder's repro: the connector dies mid-send and stays down; the CLI gives up with exit 3 and prints the --key line", async () => {
+    const path = join(root, "dies-down.sock");
+    const proxy = await dyingProxy(path, null);
+    let stderr = "";
+    const code = await run(["--socket", path, "send", "--as", "cedar", "--continue", "@hazel", "followup-1 down"], { env: {}, stdout: () => {}, stderr: (t) => (stderr += t), readStdin: async () => "" });
+    assert.equal(code, EXIT.unreachable);
+    assert.match(stderr, new RegExp(`--key ${proxy.keys[0]}`));
+  });
+});
