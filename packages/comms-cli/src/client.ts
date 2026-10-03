@@ -50,7 +50,11 @@ export function call<K extends Op>(socket: string, op: K, body: Requests[K]): Pr
         const chunks: Buffer[] = [];
         res.on("data", (c: Buffer) => chunks.push(c));
         res.on("end", () => resolve(parseResponse<K>(res.statusCode ?? 0, Buffer.concat(chunks).toString("utf8"))));
-        res.on("error", reject);
+        // Follow-up 1: a response cut off mid-stream is a dropped connection too.
+        res.on("aborted", () => reject(new ConnectionLost(`the connection to the connector at ${socket} dropped mid-response; it may have restarted`)));
+        res.on("error", (error: NodeJS.ErrnoException) =>
+          reject(error.code === "ECONNRESET" || error.message === "aborted" ? new ConnectionLost(`the connection to the connector at ${socket} dropped mid-response (${error.code ?? error.message})`) : error),
+        );
       },
     );
     req.on("error", (error: NodeJS.ErrnoException) => {

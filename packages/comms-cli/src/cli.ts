@@ -183,21 +183,29 @@ export async function run(argv: string[], io: Io): Promise<number> {
       // have posted it and died before answering). Giving up prints the key: exit 3 if the
       // connector couldn't be reached, 1 if it said it was unavailable.
       const keyed = (body as { key?: string }).key;
+      // Follow-up 1: once an attempt may have reached the connector (a dropped connection),
+      // every later transport failure, unreachable included, is retried with the same key,
+      // and giving up always prints it.
+      let mayHavePosted = false;
       const attempt = async () => {
         try {
           return await call(socket, op, body);
         } catch (error) {
-          if (keyed && error instanceof ConnectionLost) return error;
+          if (keyed && error instanceof ConnectionLost) {
+            mayHavePosted = true;
+            return error;
+          }
+          if (keyed && mayHavePosted && error instanceof ConnectorUnreachable) return error;
           throw error;
         }
       };
       let response = await attempt();
-      for (const delayMs of keyed ? [2_000, 5_000] : []) {
-        if (!(response instanceof ConnectionLost) && (response.ok || response.error.code !== "unavailable")) break;
+      for (const delayMs of keyed ? [2_000, 5_000, 10_000] : []) {
+        if (!(response instanceof ConnectorUnreachable) && (response.ok || response.error.code !== "unavailable")) break;
         await new Promise((r) => setTimeout(r, delayMs));
         response = await attempt();
       }
-      if (response instanceof ConnectionLost) {
+      if (response instanceof ConnectorUnreachable) {
         io.stderr(`comms ${command}: ${response.message}\nIt may or may not have been posted. Retry with the same key, which can't post twice: --key ${keyed}\n`);
         throw new GaveUp();
       }
