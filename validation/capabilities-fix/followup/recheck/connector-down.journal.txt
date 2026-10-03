@@ -1,0 +1,11 @@
+2026-10-03T00:52:47.633Z connector pid 180363; freezing it
+2026-10-03T00:52:49.136Z stopping the connector (and keeping it down)
+2026-10-03T00:53:06.170Z cli {"code":3,"signal":null,"stdout":"","stderr":"comms send: no connector at /run/user/1000/agent-comms/connector.sock (ENOENT); is it running?\nIt may or may not have been posted. Retry with the same key, which can't post twice: --key 296434b5-1b82-4350-bb52-3ad95c794bb9\n"}
+2026-10-03T00:53:06.170Z PASS the CLI gave up with exit 3 (unreachable) and printed its --key {"code":3,"key":"296434b5-1b82-4350-bb52-3ad95c794bb9"}
+2026-10-03T00:53:06.173Z connector state while the CLI gave up: inactive
+2026-10-03T00:53:06.756Z connector back, pid 181100
+2026-10-03T00:53:07.075Z rerun sent jn745c9z17jrwa19ry7h8w9fp18fks8r (#251 in j570v4nve0nsrgamney96m9v8d8fc55c)
+  → @smoke-b: delivery j973s6f8y1fcty49eekjvpnc1d8fkpn4 pending | rerun again sent jn745c9z17jrwa19ry7h8w9fp18fks8r (#251 in j570v4nve0nsrgamney96m9v8d8fc55c)
+  → @smoke-b: delivery j973s6f8y1fcty49eekjvpnc1d8fkpn4 pending
+2026-10-03T00:53:07.307Z PASS a rerun with the key posts it once (and a second rerun returns the same message) {"id1":"jn745c9z17jrwa19ry7h8w9fp18fks8r","id2":"jn745c9z17jrwa19ry7h8w9fp18fks8r","copies":1}
+2026-10-03T00:53:07.307Z ALL PASS

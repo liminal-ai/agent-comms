@@ -1,0 +1,9 @@
+# Follow-up: the targeted re-check (docs/07-fix-pass-followup.md)
+
+| Check | Where | Result |
+|---|---|---|
+| Connector down on retry, installed CLI | live; `connector-down.mjs`, `connector-down.journal.txt` | PASS. The connector was frozen with the send connected, then stopped and kept down. The CLI retried with its key, gave up with exit 3 and printed `--key`. With the connector back, a rerun with the key posted it once, and a second rerun returned the same message. Runs 1 and 2 crashed in the script's own cleanup after the key check had passed: `kill ESRCH`, then `is-active` exiting non-zero; both are fixed. The connector was started again each time |
+| Fire and report isolation, injected | live; `injected.mjs`, `injected.journal.txt`, using `COMMS_TEST_FAULT` on the live deployment for one reminder at a time, removed after | PASS. The faulty fire was blocked with the injected error, 0 fires, with no message and no fire row left; the other reminder fired in the same tick. The faulty report left the collected answer recorded once, and no report reached @lee |
+| Items 2, 3, 4, 5 at volume | scratch deployment (127.0.0.1:3212, never the live one); `scale.sh`, `scaleFollowup.ts` (scratch only), `scale.journal.txt` | PASS. **2:** a reclaimed delivery behind 600 in-flight deliveries was alerted, and a cleared incident behind 600 open ones resolved on scan 2. **3:** an uncertain delivery 2 h old, never reported, was alerted once, after the upgrade marked the scratch's 1,500 old uncertain deliveries as history. **4:** 60 expiring and 50 due reminders of 32,000 CJK characters, under the backend's real limits: each tick stopped at its budget (`deferred`) and carried on; all were handled in 5 ticks, with no failures. **5:** 300 inbox items with one timestamp, pages of 50: all 300 reached, both views |
+
+The live deployment ran main e375c24 for these, with the upgrade's alert-history migration done in one batch: nothing old was alerted.

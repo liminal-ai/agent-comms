@@ -1,0 +1,30 @@
+== upgrade (marks the scratch's existing history: 1,500 old uncertain, the expired reminders) 00:57:52
+{
+  "alertHistoryDone": false,
+  "ownersSet": 0,
+  "systemCreated": [],
+  "systemRepaired": []
+}
+== item 2 volume: 600 in-flight deliveries (claimCount 1); 600 open uncertain incidents 00:57:56
+== item 2 and 3: a reclaimed delivery, a cleared incident, an uncertain delivery 2 h old never reported 00:57:57
+{
+  "clearedAlert": "j5711c3v3rsfdddzm1yph3b3rn8fjnxk",
+  "outage": "jd76d8f63twwmfa10zf2c5nssx8fkqzr",
+  "reclaimed": "jd77ahtvvrwkhgbth6vdxpgntd8fkaj3"
+}
+scan 1: {"opened":2,"resolved":0}
+scan 2: {"opened":0,"resolved":1}
+outcome: {"clearedIncidentResolved":true,"openIncidents":605,"outageAlerts":1,"reclaimedAlerts":1}
+== item 4: 60 expiring + 50 due reminders of 32,000 CJK characters, real limits 00:58:00
+created 110 reminders; waiting 70 s for them to come due 00:59:08
+tick 1: {"deferred":true,"expired":28,"fired":2,"skipped":0}
+tick 2: {"deferred":true,"expired":0,"fired":16,"skipped":0}
+tick 3: {"deferred":true,"expired":0,"fired":15,"skipped":1}
+tick 4: {"deferred":true,"expired":0,"fired":16,"skipped":0}
+tick 5: {"deferred":false,"expired":0,"fired":1,"skipped":0}
+tick 6: {"deferred":false,"expired":0,"fired":0,"skipped":0}
+reminder outcomes: {"expired":60,"active+fired":50}
+== item 5: 300 inbox items with one timestamp, pages of 50, both views 01:00:23
+unreadOnly=false: 300 of 300 'same tick' items reached in 25 pages
+unreadOnly=true: 300 of 300 'same tick' items reached in 8 pages
+== done 01:00:44

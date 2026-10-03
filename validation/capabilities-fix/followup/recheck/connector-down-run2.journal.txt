@@ -1,0 +1,4 @@
+2026-10-03T00:52:16.551Z connector pid 178444; freezing it
+2026-10-03T00:52:18.053Z stopping the connector (and keeping it down)
+2026-10-03T00:52:35.085Z cli {"code":3,"signal":null,"stdout":"","stderr":"comms send: no connector at /run/user/1000/agent-comms/connector.sock (ENOENT); is it running?\nIt may or may not have been posted. Retry with the same key, which can't post twice: --key aeb103a6-2722-4f43-9a15-9e6c4893358c\n"}
+2026-10-03T00:52:35.085Z PASS the CLI gave up with exit 3 (unreachable) and printed its --key {"code":3,"key":"aeb103a6-2722-4f43-9a15-9e6c4893358c"}

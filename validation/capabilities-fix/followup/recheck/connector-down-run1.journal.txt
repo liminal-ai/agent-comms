@@ -1,0 +1,2 @@
+2026-10-03T00:51:51.290Z connector pid 176960; freezing it
+2026-10-03T00:51:52.793Z stopping the connector (and keeping it down)

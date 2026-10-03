@@ -1,0 +1,11 @@
+2026-10-03T00:53:40.855Z COMMS_TEST_FAULT = reminder-fire-after-post:k975tvq84r5swb6epjxsb361x98fkt3r
+2026-10-03T00:54:56.074Z PASS fire: the faulty reminder is blocked with the injected error, 0 fires {"state":"blocked","reason":"the fire failed: Uncaught Error: injected failure after the fire's message was posted\n    at fire (../../convex/lib/reminders.ts:267:38)\n    at async step (../../convex/lib/reminders.ts:393:0)\n","fires":0}
+2026-10-03T00:54:56.398Z PASS fire: no stray message or fire row was left (the sub-transaction rolled back) 
+2026-10-03T00:54:56.398Z PASS fire: the other reminder fired in the same tick {"fires":1}
+2026-10-03T00:54:56.974Z COMMS_TEST_FAULT removed
+2026-10-03T00:56:54.704Z COMMS_TEST_FAULT = reminder-report-after-post:k971w4nktafg5a3gp77h39q6458fkqeq
+2026-10-03T00:56:58.814Z PASS report: the collected answer is recorded on the fire 
+2026-10-03T00:56:58.977Z PASS report: the answer exists once, and no report reached @lee 
+2026-10-03T00:56:59.534Z COMMS_TEST_FAULT removed
+2026-10-03T00:56:59.573Z marked read (re-check notices to @lee) {"marked":3,"unread":0}
+2026-10-03T00:56:59.573Z ALL PASS
