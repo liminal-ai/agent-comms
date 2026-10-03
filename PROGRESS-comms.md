@@ -104,5 +104,11 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - [x] Section 1 (1.1-1.7), section 2 (Convex and CLI parts), section 3 docs (incl. docs/deploy-checklist.md)
 - [x] Section 4 (Cedar): restarts with the kill proven, 7c with a real CLI kill, the scale run on a scratch deployment, acceptance 3-12 rerun: all pass (`validation/capabilities-fix/4/`)
 - [x] P3 agreed bugs 1-6, 9a-c, C1 (Hazel: 7, 8)
-- Main final for the independent reviews: c33c58a (deployed code as of 6abde30)
+- Main final for the independent reviews: c33c58a (deployed then as 6abde30)
+
+## Fix pass follow-up (docs/07) and close-out (docs/08)
+- [x] Follow-up items 1-5, docs 8-10, Reed's scope (a), (b) x3, (c); targeted re-check passed (`validation/capabilities-fix/followup/`)
+- [x] Close-out 1: one shared per-tick item cap (100) beside the byte budget; 1,500 short reminders expiring or due all finish across ticks (`validation/capabilities-fix/closeout/`)
+- [x] Close-out 2: the upgrade's history migration and fallback-due backfill run on live and recorded (`closeout/live-upgrade.journal.txt`)
+- Deployed code: see `closeout/live-upgrade.journal.txt` (updated at every deploy)
 

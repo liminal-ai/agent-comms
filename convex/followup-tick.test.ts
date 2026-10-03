@@ -67,8 +67,7 @@ for (const kind of ["expiring", "due"] as const) {
     const t = await setup();
     const { reminder } = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a0", text: "x", everyMs: 60 * MIN, expiresMs: 120 * MIN });
     const ids = await t.run(async (ctx) => {
-      const r = (await ctx.db.get(reminder.id as never)) as Record<string, unknown> & { _id: string };
-      const { _id, _creationTime, ...fields } = r as never as Record<string, unknown>;
+      const { _id, _creationTime, ...fields } = (await ctx.db.get(reminder.id as never)) as unknown as Record<string, unknown>;
       const agents = await Promise.all(Array.from({ length: 50 }, async (_, i) => (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", `a${i}`)).unique())!));
       const lee = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "lee")).unique())!;
       await ctx.db.delete(_id as never);
@@ -77,7 +76,7 @@ for (const kind of ["expiring", "due"] as const) {
         const when = kind === "expiring" ? { expiresAt: NOW + MIN } : { nextFireAt: NOW + MIN };
         // Half made by a person (an inbox notice when it ends), half by an agent (a delivered notice).
         const createdById = i % 2 ? lee._id : agents[(i + 1) % 50]!._id;
-        out.push(await ctx.db.insert("reminders", { ...(fields as never), ...when, targetId: agents[i % 50]!._id, createdById, name: `short ${i}` }));
+        out.push(await ctx.db.insert("reminders", { ...fields, ...when, targetId: agents[i % 50]!._id, createdById, name: `short ${i}` } as never));
       }
       return out;
     });

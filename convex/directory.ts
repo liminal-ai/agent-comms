@@ -182,8 +182,8 @@ export const upgrade = mutation({
     }
     // Follow-up 3: one batch of the alert-history migration; scripts/upgrade.ts runs `markAlertHistory` until done.
     const history = await markHistory(ctx, now);
-    await backfillFallbackDue(ctx);
-    return { systemCreated, systemRepaired, ownersSet, alertHistoryDone: history.done };
+    const fallbackDueBackfilled = await backfillFallbackDue(ctx);
+    return { systemCreated, systemRepaired, ownersSet, alertHistoryDone: history.done, fallbackDueBackfilled };
   },
 });
 
