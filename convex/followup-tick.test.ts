@@ -93,5 +93,5 @@ for (const kind of ["expiring", "due"] as const) {
       const notices = await t.run(async (ctx) => (await ctx.db.query("messages").collect()).filter((m) => m.meta?.type === "reminder-ended").length);
       expect(notices).toBe(1_500);
     }
-  });
+  }, 180_000);
 }

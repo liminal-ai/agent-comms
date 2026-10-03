@@ -311,20 +311,28 @@ async function expire(ctx: MutationCtx, r: Doc<"reminders">, now: number): Promi
  * rest are handled by the next tick, a minute later.
  */
 const TICK_BUDGET_BYTES = 6 * 1024 * 1024;
+/**
+ * How many reminders one tick handles, expiring and firing together (close-out 1). The byte
+ * budget doesn't bound how many queries a tick makes: each item opens a DM and posts a
+ * message or notice (about 20 index ranges), against Convex's 4,096 per transaction.
+ */
+const TICK_ITEM_CAP = 100;
 const encoder = new TextEncoder();
 /** A reminder document's size, near enough: its text dominates. */
 const sizeOf = (r: Doc<"reminders">) => encoder.encode(r.text).length + encoder.encode(r.name).length + 2_048;
 
 export async function tick(ctx: MutationCtx, now: number): Promise<{ fired: number; skipped: number; expired: number; deferred: boolean }> {
   let used = 0;
+  let items = 0;
   let deferred = false;
-  /** Whether `cost` more fits in this tick's budget; counts it if so. */
+  /** Whether one more item costing `cost` bytes fits in this tick's budgets; counts it if so. */
   const fits = (cost: number) => {
-    if (used > 0 && used + cost > TICK_BUDGET_BYTES) {
+    if (items >= TICK_ITEM_CAP || (used > 0 && used + cost > TICK_BUDGET_BYTES)) {
       deferred = true;
       return false;
     }
     used += cost;
+    items++;
     return true;
   };
   let expired = 0;
