@@ -561,3 +561,47 @@ describe("T3 V2 adapter: stream", () => {
     assert.deepEqual(await outcome, { _tag: "ambiguous", entered: [{ origin: "t3-user-message" }] });
   });
 });
+
+describe("docs/09: V2 adapter fixes", () => {
+  // Alder's repro (review 2026-10-03): the first attempt never reached T3, then the claim is lost.
+  it("P1: no retry dispatch after the claim is lost", async () => {
+    const t3 = new FakeV2();
+    const abort = new AbortController();
+    const original = t3.dispatch.bind(t3);
+    let attempts = 0;
+    t3.dispatch = async (id, m) => {
+      attempts++;
+      if (attempts === 1) {
+        abort.abort();
+        throw new Error("socket closed before send");
+      }
+      return original(id, m);
+    };
+    const adapter = makeT3AdapterV2({ client: t3, ...options });
+    const h = await adapter.handOff(target, delivery("retry-claim"), { signal: abort.signal, confirm: async () => true });
+    assert.equal(t3.dispatched.length, 0, "a claim-lost connector must not issue a new dispatch");
+    assert.equal(h._tag, "lost", "the first attempt may have reached T3: lost, so the restart check decides");
+  });
+
+  it("P1: the claim is confirmed again before the retry; refused there, nothing is sent", async () => {
+    const t3 = new FakeV2();
+    t3.unreachable = 1;
+    const confirms: (string | undefined)[] = [];
+    const adapter = makeT3AdapterV2({ client: t3, ...options });
+    const h = await adapter.handOff(target, delivery(), { signal: new AbortController().signal, confirm: async (c) => (confirms.push(c), confirms.length === 1) });
+    assert.equal(confirms.length, 2, "confirmed before the first dispatch and again before the retry");
+    assert.equal(t3.dispatched.length, 0);
+    assert.equal(h._tag, "lost");
+  });
+
+  it("P1: a retry whose message is already in the thread needs no new dispatch, so no confirm", async () => {
+    const t3 = new FakeV2();
+    t3.dropResponse = 1;
+    const confirms: (string | undefined)[] = [];
+    const adapter = makeT3AdapterV2({ client: t3, ...options });
+    const h = await adapter.handOff(target, delivery(), { signal: new AbortController().signal, confirm: async (c) => (confirms.push(c), true) });
+    assert.equal(h._tag, "accepted");
+    assert.equal(confirms.length, 1);
+    assert.equal(t3.dispatched.length, 1);
+  });
+});

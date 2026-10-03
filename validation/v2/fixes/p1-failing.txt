@@ -1,0 +1,94 @@
+▶ T3 V2 adapter: live
+  ✔ dispatches our message as its own run on an idle thread; the run is the turn (7.349036ms)
+  ✔ collects the run's last finished assistant message, never a streaming one (55.7472ms)
+  ✔ waits for a busy thread as a courtesy, then runs as its own run (124.956953ms)
+  ✔ losing the idle race queues our message as its own run: accepted, not ambiguous (88.953947ms)
+  ✔ is ambiguous when Lee steers into our run, or restarts it with his message; reports only that it happened (49.53687ms)
+  ✔ isn't ambiguous when Lee's message queues behind ours as its own run (24.401152ms)
+  ✔ reports interrupted, cancelled and failed runs as failed, never collecting a partial answer (19.525013ms)
+  ✔ a run that ends with no answer has failed (24.274565ms)
+  ✔ a run stuck in waiting (checkpoint never lands) is read after the settle window (303.61485ms)
+  ✔ rejects a refused dispatch (confirmed by the same commandId) and a missing thread (12.20021ms)
+  ✔ a lost dispatch response is retried with the same commandId: one message, one run (10.912566ms)
+  ✔ Reed: the retry doesn't depend on T3 remembering the command: our message in the thread means sent (11.318535ms)
+  ✔ T3 unreachable on send and on retry: lost; the next handoff sends once (15.016343ms)
+  ✔ a second handoff of a delivery already dispatched finds its run and sends nothing (claim lost and re-claimed) (1.640769ms)
+  ✔ reports presence from the runs: queued and waiting are busy (0.238727ms)
+  ✔ sends the unmatched notice once, as its own run, after the thread is idle (0.325253ms)
+  ✔ an answer's delivery leaves no subscription behind (33.091408ms)
+✔ T3 V2 adapter: live (784.82264ms)
+▶ T3 V2 adapter: gate
+  ✔ re-checks the claim right before sending; a lost claim sends nothing (1.739402ms)
+  ✔ an aborted handoff (claim lost during the courtesy wait) sends nothing (160.57269ms)
+✔ T3 V2 adapter: gate (162.522626ms)
+▶ T3 V2 adapter: restart check (from one snapshot)
+  ✔ absent when our message never arrived (0.236715ms)
+  ✔ running while its run runs, then completed with the outcome, in a new process (124.969625ms)
+  ✔ queued counts as running (1.189942ms)
+  ✔ sees foreign input that entered our run while the connector was down (65.09484ms)
+  ✔ an interrupted run is completed as failed (aborted), its partial answer never collected (2.566667ms)
+  ✔ a rolled-back run is unknown: its outcome no longer stands (64.119973ms)
+  ✔ T3 down: later; thread gone: unknown (1.132031ms)
+  ✔ never reads a v0.0.44 cursor as a V2 one (0.568976ms)
+✔ T3 V2 adapter: restart check (from one snapshot) (261.288378ms)
+▶ T3 V2 adapter: stream
+  ✔ a dropped stream is resubscribed with retries, and the run still resolves (1009.352648ms)
+  ✔ a resubscription that gets a snapshot (events gone) still resolves from the thread's records (24.85143ms)
+✔ T3 V2 adapter: stream (1034.890582ms)
+▶ docs/09: V2 adapter fixes
+  ✖ P1: no retry dispatch after the claim is lost (16.142075ms)
+  ✖ P1: the claim is confirmed again before the retry; refused there, nothing is sent (12.548755ms)
+  ✔ P1: a retry whose message is already in the thread needs no new dispatch, so no confirm (11.454683ms)
+✖ docs/09: V2 adapter fixes (40.518641ms)
+ℹ tests 32
+ℹ suites 5
+ℹ pass 30
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2386.390988
+
+✖ failing tests:
+
+test at test/v2-adapter.test.ts:567:3
+✖ P1: no retry dispatch after the claim is lost (16.142075ms)
+  AssertionError [ERR_ASSERTION]: a claim-lost connector must not issue a new dispatch
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///srv/agents/cedar/agent-comms/packages/adapter-t3/test/v2-adapter.test.ts:582:12)
+      at runNextTicks (node:internal/process/task_queues:65:5)
+      at listOnTimeout (node:internal/timers:567:9)
+      at process.processTimers (node:internal/timers:541:7)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1794:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/v2-adapter.test.ts:586:3
+✖ P1: the claim is confirmed again before the retry; refused there, nothing is sent (12.548755ms)
+  AssertionError [ERR_ASSERTION]: confirmed before the first dispatch and again before the retry
+  
+  1 !== 2
+  
+      at TestContext.<anonymous> (file:///srv/agents/cedar/agent-comms/packages/adapter-t3/test/v2-adapter.test.ts:592:12)
+      at runNextTicks (node:internal/process/task_queues:65:5)
+      at listOnTimeout (node:internal/timers:567:9)
+      at process.processTimers (node:internal/timers:541:7)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
