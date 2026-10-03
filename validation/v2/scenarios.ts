@@ -238,6 +238,7 @@ if (!name || !scenarios[name]) throw new Error(`scenarios: ${Object.keys(scenari
 try {
   await scenarios[name]!();
 } finally {
+  if (isActive(A) === "active") await stop(A); // never leave a second connector competing
   if (isActive(MAIN) !== "active" && name !== "t3Restart") startMain(); // never leave the scratch connector down
   await t3.close();
 }

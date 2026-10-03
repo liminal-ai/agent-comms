@@ -34,13 +34,10 @@ export function log(file: string, rec: Record<string, unknown>) {
   console.log(line);
 }
 
-/** The scratch CLI (its own socket), as @v2cat unless told otherwise. */
+/** The scratch CLI: the main connector's socket, or connector A's (each wrapper pins its socket). */
 export function comms(args: string[], socket?: string) {
-  const out = execFileSync(`${TMP}/comms`, [...args, "--json"], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, ...(socket ? { AGENT_COMMS_SOCKET: socket } : {}) },
-  });
+  if (socket && socket !== `${TMP}/comms-a.sock`) throw new Error(`no CLI wrapper for ${socket}`);
+  const out = execFileSync(socket ? `${TMP}/comms-a` : `${TMP}/comms`, [...args, "--json"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   return JSON.parse(out);
 }
 export const send = (conversationId: string, to: string, text: string, socket?: string) => {
