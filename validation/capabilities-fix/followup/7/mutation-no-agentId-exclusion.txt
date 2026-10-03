@@ -1,0 +1,61 @@
+▶ fix pass 1.1: the waiter's turn
+  ✔ 1.1: presence carries the main turn id when busy (18.396486ms)
+  ✔ 1.1: a new main turn while still busy sends presence again with the new turn id (23.547016ms)
+  ✔ 1.1: re-registering after a connector restart mid-turn carries the running turn id (24.399767ms)
+  ✔ 1.1: idle presence and an idle registration carry no turn id (23.969744ms)
+✔ fix pass 1.1: the waiter's turn (91.335396ms)
+▶ fix pass 1.1: answer-seen
+  ✔ 1.1: a main-loop tool result with a complete proof sends answer-seen with the session, turn and proof (24.421552ms)
+  ✖ 1.1: a helper subagent's tool result never confirms, even with a complete proof (24.877554ms)
+  ✔ 1.1: truncated output (Claude Code's persisted preview, no end line) never confirms (24.088657ms)
+  ✔ 1.1: the ids alone (a comms status listing, quoted text) never confirm (25.303743ms)
+  ✔ 1.1: a backgrounded command's tool result never confirms (28.672677ms)
+  ✔ 1.1: a tool result with no main turn running sends nothing (24.160582ms)
+  ✔ 1.1: answer-seen is retried if the connector can't be reached, so a restart inside the window doesn't lose it (206.41937ms)
+✖ fix pass 1.1: answer-seen (359.392022ms)
+▶ fix pass 1.1: the waiter's turn
+  ✔ 1.1: presence carries the main turn id when busy (18.748347ms)
+  ✔ 1.1: a new main turn while still busy sends presence again with the new turn id (23.664776ms)
+  ✔ 1.1: re-registering after a connector restart mid-turn carries the running turn id (23.458965ms)
+  ✔ 1.1: idle presence and an idle registration carry no turn id (23.210708ms)
+✔ fix pass 1.1: the waiter's turn (90.113183ms)
+▶ fix pass 1.1: answer-seen
+  ✔ 1.1: a main-loop tool result with a complete proof sends answer-seen with the session, turn and proof (23.578231ms)
+  ✔ 1.1: a helper subagent's tool result never confirms, even with a complete proof (3.303728ms)
+  ✔ 1.1: truncated output (Claude Code's persisted preview, no end line) never confirms (4.401538ms)
+  ✔ 1.1: the ids alone (a comms status listing, quoted text) never confirm (2.801964ms)
+  ✔ 1.1: a backgrounded command's tool result never confirms (2.694565ms)
+  ✔ 1.1: a tool result with no main turn running sends nothing (2.31281ms)
+  ✔ 1.1: answer-seen is retried if the connector can't be reached, so a restart inside the window doesn't lose it (203.847499ms)
+✔ fix pass 1.1: answer-seen (243.636389ms)
+ℹ tests 22
+ℹ suites 4
+ℹ pass 21
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10613.215934
+
+✖ failing tests:
+
+test at test/fix-pass-cap.test.ts:94:3
+✖ 1.1: a helper subagent's tool result never confirms, even with a complete proof (24.877554ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   'w_1',
+      'w_drain'
+    ]
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/packages/claude-code-mod/test/fix-pass-cap.test.ts:98:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'w_1', 'w_drain' ],
+    expected: [ 'w_drain' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

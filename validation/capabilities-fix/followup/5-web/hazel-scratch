@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# hazel-scratch up|down|run <convex args...>
+# Hazel's own SCRATCH Convex deployment, never the live one (3240): an anonymous local deployment
+# in a detached worktree of hazel's HEAD (/srv/agents/hazel/tmp/scratch-wt), own keys and state,
+# backend on 127.0.0.1:3216/3217 (unit hazel-scratch-convex), a random dummy admin token in
+# /srv/agents/hazel/tmp/scratch-admin-token (0600), people @lee and @pat. The admin key is only
+# ever passed by a 0600 env file. `down` stops it and removes the worktree and the token.
+set -euo pipefail
+export PATH=/home/leemoore/.local/share/fnm/node-versions/v24.18.0/installation/bin:/home/leemoore/.local/share/pnpm/bin:$PATH
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+T=/srv/agents/hazel/tmp; WT=$T/scratch-wt; TOK=$T/scratch-admin-token; REPO=/srv/agents/hazel/agent-comms
+run() {
+  cd "$WT"; local envfile; envfile="$(mktemp)"; chmod 600 "$envfile"
+  node -e 'const c=require(require("path").resolve(process.argv[1])); console.log("CONVEX_SELF_HOSTED_URL=http://127.0.0.1:"+c.ports.cloud); console.log("CONVEX_SELF_HOSTED_ADMIN_KEY="+c.adminKey)' .convex/local/default/config.json > "$envfile"
+  env -u CONVEX_DEPLOYMENT -u CONVEX_AGENT_MODE CONVEX_TMPDIR=$T/convex-tmp npx convex "$1" --env-file "$envfile" "${@:2}"; local rc=$?; rm -f "$envfile"; return $rc
+}
+case "${1:?up|down|run}" in
+  up)
+    mkdir -p $T/convex-tmp
+    git -C "$REPO" worktree add --detach "$WT" HEAD >/dev/null
+    (cd "$WT" && pnpm install --offline --frozen-lockfile >/dev/null)
+    (cd "$WT" && env -u CONVEX_DEPLOYMENT CONVEX_AGENT_MODE=anonymous CONVEX_TMPDIR=$T/convex-tmp npx convex dev --once --typecheck disable --tail-logs disable >/dev/null 2>&1)
+    node -e 'const fs=require("fs"),p=process.argv[1],c=JSON.parse(fs.readFileSync(p));c.ports={cloud:3216,site:3217};fs.writeFileSync(p,JSON.stringify(c,null,2))' "$WT/.convex/local/default/config.json"
+    systemctl --user reset-failed hazel-scratch-convex 2>/dev/null || true
+    systemd-run --user --quiet --unit=hazel-scratch-convex -p MemoryMax=2G --working-directory="$WT" -E PATH="$PATH" -E HOME="$HOME" scripts/local-convex.sh "$WT/.convex/local/default"
+    until curl -s -o /dev/null http://127.0.0.1:3216/version; do sleep 1; done
+    (umask 077; head -c 24 /dev/urandom | base64 | tr -d '/+=' > "$TOK")
+    run env set COMMS_ADMIN_TOKEN "$(cat "$TOK")" >/dev/null
+    for p in lee pat; do run run directory:promote "{\"adminToken\":\"$(cat "$TOK")\",\"name\":\"$p\",\"kind\":\"human\"}" >/dev/null; done
+    run run directory:upgrade "{\"adminToken\":\"$(cat "$TOK")\",\"defaultOwner\":\"lee\"}" >/dev/null
+    echo "scratch up: http://127.0.0.1:3216, admin token file $TOK" ;;
+  down)
+    systemctl --user stop hazel-scratch-convex 2>/dev/null || true
+    git -C "$REPO" worktree remove --force "$WT" 2>/dev/null || true; git -C "$REPO" worktree prune
+    rm -rf "$T/convex-tmp" "$TOK"; echo "scratch down" ;;
+  run) shift; run "$@" ;;
+esac

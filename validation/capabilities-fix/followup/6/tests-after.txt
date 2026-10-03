@@ -1,0 +1,69 @@
+$ tsc -p tsconfig.json
+$ node --test 'test/**/*.test.ts'
+▶ fix pass 1.4: reminder text capped on the web form
+  ✔ 1.4: text over MAX_TEXT_CHARS is refused before it's sent; at the cap it's accepted (20.623518ms)
+✔ fix pass 1.4: reminder text capped on the web form (21.595709ms)
+▶ fix pass 2: reminder names are one line
+  ✔ 2 names: a name with a newline (a forged header line) or a control character is refused (0.272746ms)
+✔ fix pass 2: reminder names are one line (0.373487ms)
+▶ fix pass 2: retired people can't own agents
+  ✔ 2 owners: the owner picker lists active people only (0.611691ms)
+✔ fix pass 2: retired people can't own agents (0.724579ms)
+▶ fix pass 2: thresholds are finite whole numbers
+  ✔ 2 thresholds: NaN, Infinity, blanks and fractions are refused before the range check (0.274512ms)
+✔ fix pass 2: thresholds are finite whole numbers (0.366742ms)
+▶ follow-up 6: an open conversation past 100 messages
+  ✔ 6: a new message changes the read key even when the view still holds 100 messages (1.005948ms)
+  ✔ 6: the key doesn't change when nothing new arrived, and is undefined before the view loads (0.332218ms)
+✔ follow-up 6: an open conversation past 100 messages (2.673198ms)
+▶ P3 bug 7: an old open alert stays visible
+  ✔ 7: an open incident older than the newest 100 is still in the badge and the open list (1.373226ms)
+  ✔ 7: an open alert in both lists is listed once; the badge counts open incidents only (0.159385ms)
+✔ P3 bug 7: an old open alert stays visible (2.408468ms)
+▶ P3 bug 8: no phantom @lee
+  ✔ 8: with no @lee, posting as defaults to the first active person (0.28726ms)
+  ✔ 8: a saved choice that's no longer an active person isn't kept (0.108322ms)
+  ✔ 8: @lee is still the default when it exists, and a saved active person wins (0.171316ms)
+  ✔ 8: before the directory has loaded, the saved choice is kept (0.098447ms)
+✔ P3 bug 8: no phantom @lee (0.896463ms)
+▶ W registry
+  ✔ W registry: an idle agent shows how long it has been idle (1.634245ms)
+  ✔ W registry: a stale machine is never shown as idle, whatever was last written (16.182619ms)
+  ✔ W registry: busy, offline, people and system participants (0.205107ms)
+  ✔ W registry: a profile edit is one description line and one duty per line, blanks dropped (0.305807ms)
+  ✔ W registry: a profile edit over the protocol's limits is refused before it's sent (0.220826ms)
+✔ W registry (19.803183ms)
+▶ W registry, promotion (R1 API)
+  ✔ W promote: an agent is promoted with its owner (a person), as R1's directory.promote requires (0.262091ms)
+  ✔ W promote: reserved names, bad names, a missing thread id or machine, and an owner who isn't a person are refused (0.149129ms)
+✔ W registry, promotion (R1 API) (0.588742ms)
+▶ W registry, live
+  ✔ W registry: a machine that stops heartbeating turns stale on the clock, not only when Convex next writes (0.195028ms)
+✔ W registry, live (0.356998ms)
+▶ W reminders
+  ✔ W reminders: the controls offered follow the state; ended reminders have none (0.245556ms)
+  ✔ W reminders: the schedule reads like the rendering (every 30m, once at a time), with its conditions (0.463467ms)
+  ✔ W reminders: the status line says the state, fires, next fire and why it's blocked (0.183751ms)
+  ✔ W reminders: the list shows the last fire's delivery state and the last skip, whichever is newer (0.178353ms)
+  ✔ W reminders: the create form becomes reminders.create arguments (0.43345ms)
+  ✔ W reminders: the create form refuses what Convex would (both or neither schedule, under a minute, past, too long) (0.172108ms)
+✔ W reminders (1.90888ms)
+▶ W inbox
+  ✔ W inbox: the badge and the page title carry the unread count (0.09874ms)
+✔ W inbox (0.184296ms)
+▶ W inbox, kinds
+  ✔ W inbox: messages from system participants are labelled by what they are (0.170249ms)
+✔ W inbox, kinds (0.244768ms)
+▶ W alerts
+  ✔ W alerts: each cause has a plain label, and resolved incidents say so (0.216444ms)
+  ✔ W alerts: the badge counts open incidents only (0.113882ms)
+  ✔ W alerts: thresholds are edited in minutes and checked against Convex's ranges (0.2434ms)
+✔ W alerts (0.683118ms)
+ℹ tests 31
+ℹ suites 14
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 136.527794

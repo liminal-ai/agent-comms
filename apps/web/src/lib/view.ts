@@ -380,3 +380,13 @@ export function defaultPostingAs(saved: string | null, participants: readonly { 
   if (saved !== null && people.includes(saved)) return saved;
   return people.includes("lee") ? "lee" : people[0]!;
 }
+
+/**
+ * What changes when an open conversation gets a new message: the latest message's id. Not the
+ * count loaded, which stays at the view's limit (100) in a longer conversation (follow-up 6).
+ * Empty string for a loaded conversation with no messages; undefined until the view loads.
+ */
+export function conversationReadKey(view: { messages: readonly { message: { id: string; seq: number } }[] } | undefined): string | number | undefined {
+  if (!view) return undefined;
+  return view.messages.at(-1)?.message.id ?? "";
+}

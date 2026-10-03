@@ -1,0 +1,7 @@
+2026-10-03T00:50:01.118Z the @pat/@lee DM has 250 messages
+2026-10-03T00:50:01.118Z PASS the conversation is past 100 messages
+2026-10-03T00:50:01.128Z PASS nothing unread to start
+2026-10-03T00:50:01.635Z messages shown: 100
+2026-10-03T00:50:03.785Z PASS new message 1 arrived in the open conversation and was marked read (unread 0)
+2026-10-03T00:50:05.966Z PASS new message 2 arrived in the open conversation and was marked read (unread 0)
+2026-10-03T00:50:06.069Z ALL PASS

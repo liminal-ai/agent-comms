@@ -8,7 +8,7 @@
     marked nothing (310 still unread); "Mark all read" left 150;
   - `inbox-after/` (fixed): the oldest reached through "Older" pages; opening the group marked its 60
     read (250 left); "Mark all read" left 0.
-  Fix: the inbox pages with `before`/`nextBefore` and has an "Unread only" filter; "Mark all read"
+  Fix: the inbox pages (`before`/`nextBefore`, since follow-up 5 Convex's cursor `cursor`/`nextCursor`) and has an "Unread only" filter; "Mark all read"
   calls `markRead {all: true}`; opening any conversation marks its rows read, not only conversations
   among the loaded unread.
 - P3 bugs 7 and 8: `p3-tests-before.txt` (8e31b9d, 3 of 6 failing, 3 guards) → `p3-tests-after.txt`

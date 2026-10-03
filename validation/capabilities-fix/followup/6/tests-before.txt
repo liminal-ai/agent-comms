@@ -1,0 +1,35 @@
+▶ follow-up 6: an open conversation past 100 messages
+  ✖ 6: a new message changes the read key even when the view still holds 100 messages (1.024414ms)
+  ✔ 6: the key doesn't change when nothing new arrived, and is undefined before the view loads (0.180762ms)
+✖ follow-up 6: an open conversation past 100 messages (2.024577ms)
+ℹ tests 2
+ℹ suites 1
+ℹ pass 1
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 94.021569
+
+✖ failing tests:
+
+test at test/followup.test.ts:9:3
+✖ 6: a new message changes the read key even when the view still holds 100 messages (1.024414ms)
+  AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to: 100
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/apps/web/test/followup.test.ts:11:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at node:internal/test_runner/test:1792:71
+      at node:internal/per_context/primordials:466:82
+      at new Promise (<anonymous>)
+      at new SafePromise (node:internal/per_context/primordials:435:3)
+      at node:internal/per_context/primordials:466:9
+      at Array.map (<anonymous>) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 100,
+    expected: 100,
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
