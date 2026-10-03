@@ -650,5 +650,17 @@ describe("docs/09: V2 adapter fixes", () => {
     t3.finish();
     assert.deepEqual(await outcome, { _tag: "replied", answer: "4" });
   });
+
+  it("3: the courtesy wait for idle is capped; then our message is sent and queued as its own run", async () => {
+    const t3 = new FakeV2();
+    t3.human("lee-long"); // Lee's run never ends during the test
+    const adapter = makeT3AdapterV2({ client: t3, ...options, idleWaitMs: 300 });
+    const started = Date.now();
+    const h = await Promise.race([adapter.handOff(target, delivery()), tick(2_000).then(() => ({ _tag: "still-waiting" }))]);
+    assert.equal(h._tag, "accepted", JSON.stringify(h));
+    assert.ok(Date.now() - started >= 300, "waited the courtesy period first");
+    assert.equal(t3.runOf(messageIdFor("d_1"))!.status, "queued");
+    assert.equal(t3.dispatched.length, 1);
+  });
 });
 
