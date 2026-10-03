@@ -5,8 +5,8 @@
 // - Our message id is `comms-<delivery id>` and our command id `comms-cmd-<delivery id>`.
 //   T3 never runs a command id twice: a retry after a lost response returns the first
 //   result; a command T3 refused fails "previously rejected" for good. So a dispatch
-//   error is retried once with the same id: refused is rejected, anything else is lost
-//   and the restart check decides.
+//   error is retried once with the same id, unless the thread already has our message:
+//   refused is rejected, anything else is lost and the restart check decides.
 // - We dispatch with `start_immediately` after waiting for the thread to be idle, as a
 //   courtesy only: on a busy thread T3 queues our message as its own run.
 // - Our run is the run whose `userMessageId` is our message. Ambiguous: another user
