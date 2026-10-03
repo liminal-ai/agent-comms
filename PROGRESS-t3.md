@@ -130,3 +130,7 @@ M0 was committed (with M1-M3). Change requests sent to Cedar:
 - Open: inbox mark-all/paging (needs Cedar's Convex calls); render.ts name escaping + report-to line (ownership agreed with Cedar first); section 4 rerun.
 - Section 4 (mine) all pass: validation/capabilities-fix/4/HAZEL.md. Web inbox fixed on a scratch deployment (fe80c5d). P3 bugs 7, 8 (e9c3e0b).
 - Fix pass complete on main (Cedar's final for review); waiting for the independent reviews (Alder, Wrenn, Reed).
+
+## Fix pass follow-up (docs/07-fix-pass-followup.md)
+- 7: never-confirms guards drain before asserting; mutation runs prove the helper test can fail (483fa46, accepted).
+- 6: open conversation keys read marking on the latest message id (tests 418ac3c, live before 6c2fd8c, fix 1a3148d) on my own scratch deployment.
