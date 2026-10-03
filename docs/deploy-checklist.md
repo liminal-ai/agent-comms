@@ -35,7 +35,7 @@ Skipping straight to the current code on an old deployment fails at step 3's sch
 
 ## Testing against real harnesses
 
-Standing rule (V2 port incident, 2026-10-03): synthetic test agents in real harness threads never run full-access. Their threads are approval-required, and a test harness approves only a command that matches exactly what the test asked for; it declines everything else. Long-running turns use text-only prompts, not shell commands. A full-access test agent acts on its own when something looks broken (one restarted a scratch systemd unit and read scratch configs). Test connectors run as separate units with their own config, socket and Convex deployment, never the live ones.
+Standing rule (V2 port incident, 2026-10-03; revised with Lee, Alder, Wrenn and Reed): synthetic test agents in real harness threads never run full-access; their threads are approval-required. The test harness approves a command only if it is a single invocation of the scratch `comms` wrapper (which pins the scratch connector's socket; `--socket` is refused) as the agent's own test identity, with any message text. It declines anything with shell operators or substitutions (`;` `&&` `||` `|` `&` `$(` `$` backticks `>` `<` and similar) and anything that isn't that CLI (`validation/v2/approve.ts`, unit-tested). Long-running turns use text-only prompts. Live scenarios cover only what needs a real model; deterministic behaviour (claim loss, late acknowledgements, retry ordering) is covered by tests instead. A run that stalls fails and keeps its evidence (its runs and pending requests); an outcome is never recorded by hand. Test connectors run as separate units with their own config, socket and Convex deployment, never the live ones.
 
 ## After any of these
 

@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { appendFileSync, readFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
+import { judge } from "./approve.ts";
 import { connectT3, type Projection } from "./t3.ts";
 
 export const TMP = "/srv/agents/cedar/tmp/v2";
@@ -131,24 +132,53 @@ export async function group(title: string, members: string[]) {
 }
 
 /**
- * While `ms` runs: approves a pending approval only if the one unfinished command in the
- * thread's active run is exactly `expected`; declines any other. Never approves anything else.
+ * Answers the synthetic agents' approval requests while a scenario runs, by the kit's rule
+ * (approve.ts): one scratch comms invocation as the thread's own test identity is approved,
+ * anything else declined. Every decision is kept as evidence (commands clipped).
  */
-export async function approveOnly(threadId: string, expected: string, ms: number) {
-  const seen: { input: string | null; decision: string }[] = [];
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    const p = (await projection(threadId)) as unknown as Projection & { runtimeRequests?: { id: string; status: string }[] };
-    const active = p.runs.find((r) => ["starting", "running", "waiting"].includes(r.status));
-    if (!active && seen.length) break;
-    for (const req of (p.runtimeRequests ?? []).filter((r) => r.status === "pending")) {
-      const open = p.turnItems.filter((i) => i.runId === active?.id && i.type === "command_execution" && !["completed", "failed", "declined", "cancelled", "interrupted"].includes(String((i as { status?: string }).status)));
-      const input = open.length === 1 ? String((open[0] as { input?: string }).input) : null;
-      const decision = input === expected ? "accept" : "decline";
-      await t3.call("orchestration.dispatchCommand", { type: "runtime-request.respond", commandId: randomUUID(), threadId, requestId: req.id, decision });
-      seen.push({ input: input === expected ? input : input === null ? null : "<other>", decision });
+export function startResponder(threads: Record<string, string>) {
+  const decisions: { at: string; identity: string; input: string | null; approve: boolean; why: string }[] = [];
+  const answered = new Set<string>();
+  let running = true;
+  const loop = (async () => {
+    while (running) {
+      for (const [threadId, identity] of Object.entries(threads)) {
+        const p = (await projection(threadId).catch(() => null)) as (Projection & { runtimeRequests?: { id: string; status: string }[] }) | null;
+        if (!p) continue;
+        const active = p.runs.find((r) => ["starting", "running", "waiting"].includes(r.status));
+        for (const req of (p.runtimeRequests ?? []).filter((r) => r.status === "pending" && !answered.has(r.id))) {
+          const open = p.turnItems.filter((i) => i.runId === active?.id && i.type === "command_execution" && !["completed", "failed", "declined", "cancelled", "interrupted"].includes(String((i as { status?: string }).status)));
+          const input = open.length === 1 ? String((open[0] as { input?: string }).input) : null;
+          const verdict = judge(input, identity);
+          const sent = await t3
+            .call("orchestration.dispatchCommand", { type: "runtime-request.respond", commandId: randomUUID(), threadId, requestId: req.id, decision: verdict.approve ? "accept" : "decline" })
+            .then(() => null, (e: Error) => e.message.slice(0, 200)); // e.g. T3 restarting: retried next round
+          if (sent !== null) continue;
+          answered.add(req.id);
+          decisions.push({ at: now(), identity, input: input === null ? null : input.slice(0, 200), ...verdict });
+        }
+      }
+      await sleep(1000);
     }
-    await sleep(1000);
+  })();
+  return {
+    decisions,
+    async stop() {
+      running = false;
+      await loop;
+      return decisions;
+    },
+  };
+}
+
+/** What a stalled scenario leaves behind: every run and pending request in the given threads. */
+export async function stallEvidence(threads: Record<string, string>) {
+  const out: Record<string, unknown> = {};
+  for (const [threadId, identity] of Object.entries(threads)) {
+    const p = (await projection(threadId).catch(() => null)) as (Projection & { runtimeRequests?: { kind: string; status: string }[] }) | null;
+    out[identity] = p
+      ? { runs: p.runs.slice(-5).map((r) => [r.ordinal, r.userMessageId, r.status]), pendingRequests: (p.runtimeRequests ?? []).filter((r) => r.status === "pending").map((r) => r.kind) }
+      : "unreadable";
   }
-  return seen;
+  return out;
 }
