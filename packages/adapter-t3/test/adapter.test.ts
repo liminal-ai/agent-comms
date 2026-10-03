@@ -579,3 +579,30 @@ describe("fix pass 1.2, Reed's follow-up", () => {
     assert.equal(outcome._tag, "ambiguous", JSON.stringify(outcome));
   });
 });
+
+describe("docs/09 P2 (ported to v0.0.44)", () => {
+  // Alder's V2 repro on the v0.0.44 adapter: the socket connects but every stream closes at once.
+  it("P2: repeated failed subscriptions honor the stream outage limit, with backoff", async () => {
+    const t3 = new FakeT3();
+    const subscribe = t3.subscribe.bind(t3);
+    let failing = false;
+    let opens = 0;
+    t3.subscribe = async (id, opts, cb) => {
+      if (!failing) return subscribe(id, opts, cb);
+      opens++;
+      const timer = setTimeout(() => (cb as (i: unknown) => void)({ kind: "closed" }), 10);
+      return () => void clearTimeout(timer);
+    };
+    const adapter = makeT3Adapter({ client: t3, acceptTimeoutMs: 500, replayQuietMs: 100, interruptWindowMs: 150, streamDownLimitMs: 50 });
+    const h = await accepted(adapter);
+    const pending = adapter.awaitOutcome(target, delivery(), h.turnId);
+    failing = true;
+    t3.drop();
+    const result = await Promise.race([pending, tick(350).then(() => ({ _tag: "review-timeout" }))]);
+    failing = false;
+    t3.finish();
+    await pending;
+    assert.equal(result._tag, "lost", "a continuous outage doesn't restart its clock on an unproven subscription");
+    assert.ok(opens <= 4, `closed streams back off too (${opens} opens in 350 ms)`);
+  });
+});

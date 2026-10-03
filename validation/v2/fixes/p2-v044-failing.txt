@@ -1,0 +1,75 @@
+▶ T3 adapter: live
+  ✔ starts its own turn on an idle thread, with the thread's modes and the T3 rendering (7.032049ms)
+  ✔ collects the turn's answer (285.042994ms)
+  ✔ waits for a busy thread, then runs as its own turn (337.085372ms)
+  ✔ is ambiguous when someone types into our turn, reporting only that it happened (257.762868ms)
+  ✔ is ambiguous when our message joins a turn someone else started (257.426776ms)
+  ✔ isn't ambiguous when a later message starts its own turn (254.638782ms)
+  ✔ reports an interrupt and an errored turn as failed (302.391084ms)
+  ✔ rejects when T3 can't start the turn, when it refuses, or when the thread is missing (4.078244ms)
+  ✔ reports presence from the thread's session (0.295181ms)
+  ✔ sends the unmatched notice once, as its own turn (0.430391ms)
+✔ T3 adapter: live (1708.415786ms)
+▶ T3 adapter: restart check
+  ✔ says absent when our message never arrived (0.211855ms)
+  ✔ replays from the cursor: running, then completed with the outcome (4011.639385ms)
+  ✔ replays foreign input that entered our turn while the connector was down (4012.490602ms)
+  ✔ without a cursor, never collects from the snapshot alone (1.3) (3.471575ms)
+✔ T3 adapter: restart check (8028.946255ms)
+▶ fix pass 1: reply ownership
+  ✔ 1.1 a foreign message landing just before ours, with no turn started in between, makes it ambiguous (255.143503ms)
+  ✔ 1.2 a background turn starting between our message and our turn isn't taken as ours (256.137559ms)
+  ✔ 1.3 recovery without the turn's full events reports uncertain, never collects (3.936944ms)
+  ✔ 1.3 the restart check never collects an interrupted turn's partial answer (65.121238ms)
+  ✔ 1.4 reads our turn's own end state when a later turn has started (254.886461ms)
+  ✔ 1.4 can't read our turn's end state: uncertain (253.626394ms)
+✔ fix pass 1: reply ownership (1090.461697ms)
+▶ fix pass 2.2 / 2.3
+  ✔ 2.2 the claim is re-checked right before sending; a lost claim sends nothing (3.721794ms)
+  ✔ 2.2 an aborted handoff (claim lost during the courtesy wait) sends nothing (82.464391ms)
+  ✔ 2.3 the real client: an HTTP 4xx refusal is rejected; a 5xx or a dropped connection is not (205.881491ms)
+✔ fix pass 2.2 / 2.3 (292.814068ms)
+▶ fix pass 3.3
+  ✔ 3.3 an answer's delivery leaves no subscription behind (2.512426ms)
+✔ fix pass 3.3 (2.633632ms)
+▶ fix pass 3.2
+  ✔ 3.2 a dropped stream is resubscribed with retries, and the turn still resolves (3255.96058ms)
+  ✔ 3.2 a resubscription that gets a snapshot (events missed) makes the outcome uncertain (354.398803ms)
+✔ fix pass 3.2 (3610.951448ms)
+▶ fix pass 1.2, Reed's follow-up
+  ✔ 1.2 a background turn isn't ours even if its requestedAt equals our createdAt to the millisecond (256.544291ms)
+✔ fix pass 1.2, Reed's follow-up (256.939265ms)
+▶ docs/09 P2 (ported to v0.0.44)
+  ✖ P2: repeated failed subscriptions honor the stream outage limit, with backoff (611.440221ms)
+✖ docs/09 P2 (ported to v0.0.44) (612.201254ms)
+ℹ tests 28
+ℹ suites 8
+ℹ pass 27
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 15715.963963
+
+✖ failing tests:
+
+test at test/adapter.test.ts:585:3
+✖ P2: repeated failed subscriptions honor the stream outage limit, with backoff (611.440221ms)
+  AssertionError [ERR_ASSERTION]: a continuous outage doesn't restart its clock on an unproven subscription
+  + actual - expected
+  
+  + 'review-timeout'
+  - 'lost'
+  
+      at TestContext.<anonymous> (file:///srv/agents/cedar/agent-comms/packages/adapter-t3/test/adapter.test.ts:605:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1794:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'review-timeout',
+    expected: 'lost',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
