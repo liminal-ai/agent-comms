@@ -238,7 +238,7 @@ All take `adminToken`. Errors are `ConvexError`s with `{code, message}` as above
 |---|---|---|
 | `registry.list` | — | `{agents: RegistryEntry[]}`: every participant, any state, with homes |
 | `registry.setProfile` | `name`, `description?`, `duties?` (empty clears) | `{agent}` |
-| `inbox.list` | `human`, `unreadOnly?`, `limit?` (≤ 200) | `{items: InboxItem[], unread}`, newest first |
+| `inbox.list` | `human`, `unreadOnly?`, `limit?` (≤ 200), `cursor?` (the previous page's `nextCursor`: opaque, exact even when items share a timestamp) | `{items: InboxItem[], unread, hasMore, nextCursor?}`, newest first |
 | `inbox.unreadCount` | `human` | `{unread}` |
 | `inbox.markRead` | `human`, exactly one of `messageIds` and `conversationId` | `{marked, unread}` |
 | `reminders.list` | `state?` | `{reminders}`, newest first, each with `lastFire` (message, delivery state, fired at) and `lastSkip` |

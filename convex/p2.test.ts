@@ -122,7 +122,7 @@ describe("2 inbox", () => {
     await fill(t, 101);
     const first = await t.query(api.inbox.list, { adminToken: ADMIN, human: "lee", limit: 100 });
     expect([first.items.length, first.unread, first.hasMore]).toEqual([100, 101, true]);
-    const second = await t.query(api.inbox.list, { adminToken: ADMIN, human: "lee", limit: 100, before: first.nextBefore! });
+    const second = await t.query(api.inbox.list, { adminToken: ADMIN, human: "lee", limit: 100, cursor: first.nextCursor! });
     expect(second.items.map((i) => i.message.text)).toEqual(["inbox 0"]);
     expect(second.hasMore).toBe(false);
   });

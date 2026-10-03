@@ -159,12 +159,12 @@ function ProfileEditor({ token, entry, onDone }: { token: string; entry: Registr
 // Inbox
 
 export function Inbox({ token, human, onOpen }: { token: string; human: string; onOpen: (conversationId: string) => void }) {
-  // Pages of older items, by the `nextBefore` each page returns (fix pass 2): nothing unread is
-  // out of reach, whatever the count.
-  const [cursors, setCursors] = useState<number[]>([]);
+  // Pages of older items, by the opaque `nextCursor` each page returns (fix pass 2, follow-up 5):
+  // nothing unread is out of reach, whatever the count, even when items share a timestamp.
+  const [cursors, setCursors] = useState<string[]>([]);
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const before = cursors.at(-1);
-  const inbox = useQuery(api.inbox.list, { adminToken: token, human, limit: 100, ...(unreadOnly ? { unreadOnly } : {}), ...(before !== undefined ? { before } : {}) });
+  const cursor = cursors.at(-1);
+  const inbox = useQuery(api.inbox.list, { adminToken: token, human, limit: 100, ...(unreadOnly ? { unreadOnly } : {}), ...(cursor !== undefined ? { cursor } : {}) });
   const markRead = useMutation(api.inbox.markRead);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => setCursors([]), [human, unreadOnly]);
@@ -206,7 +206,7 @@ export function Inbox({ token, human, onOpen }: { token: string; human: string; 
       </ul>
       <div className="pager small">
         {cursors.length > 0 && <button onClick={() => setCursors(cursors.slice(0, -1))}>Newer</button>}
-        {inbox.hasMore && inbox.nextBefore !== undefined && <button onClick={() => setCursors([...cursors, inbox.nextBefore!])}>Older</button>}
+        {inbox.hasMore && inbox.nextCursor !== undefined && <button onClick={() => setCursors([...cursors, inbox.nextCursor!])}>Older</button>}
       </div>
     </>
   );
