@@ -43,9 +43,9 @@ const rFirst = await outcome(t3.call("orchestration.dispatchCommand", R));
 const aSameBefore = await outcome(t3.call("orchestration.dispatchCommand", A)); // control: dedupe within one server life
 
 // 2. A comms delivery running at the restart.
-const g = await group(`v2 t3-restart ${new Date().toISOString().slice(11, 19)}`, ["v2lee", "v2cat", "v2bob"]);
+const g = await group(`v2 t3-restart ${new Date().toISOString().slice(11, 19)}`, ["v2lee", "v2req", "v2bob"]);
 await waitBusy(BOB, false, 400_000);
-const s = send(g, "v2bob", "V2 check t3-restart: run the shell command `sleep 20` in the foreground, then reply with exactly V2-T3-RESTART");
+const s = send(g, "v2bob", "V2 check t3-restart: without tools, write a 1,200-word story about a ferry, then a final line V2-T3-RESTART");
 await waitRun(BOB, `comms-${s.deliveryId}`, ["running"]);
 await sleep(4000);
 await t3.close();

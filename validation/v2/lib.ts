@@ -17,6 +17,8 @@ export const convex = new ConvexHttpClient("http://127.0.0.1:3214");
 export const t3 = await connectT3();
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export const now = () => new Date().toISOString();
+/** Scenario requests come from @v2req (homed in Claude Code, no session): its answers wake no T3 thread. */
+export const SENDER = "v2req";
 export const SETTLED = ["replied", "ambiguous", "failed", "uncertain"];
 export const env = { ...process.env, XDG_RUNTIME_DIR: "/run/user/1000", DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus" };
 export const sc = (...a: string[]) => execFileSync("systemctl", ["--user", ...a], { env, encoding: "utf8" });
@@ -41,7 +43,7 @@ export function comms(args: string[], socket?: string) {
   return JSON.parse(out);
 }
 export const send = (conversationId: string, to: string, text: string, socket?: string) => {
-  const r = comms(["send", "--as", "v2cat", "--conversation", conversationId, `@${to}`, text, "--continue"], socket);
+  const r = comms(["send", "--as", SENDER, "--conversation", conversationId, `@${to}`, text, "--continue"], socket);
   return { messageId: r.message.id as string, deliveryId: r.deliveries[0].id as string, conversationId };
 };
 
@@ -126,4 +128,27 @@ export const answers = async (s: { conversationId: string; messageId: string }) 
     .map((m) => ({ from: m.message.sender.name, collected: !!m.message.collectedFrom, text: m.message.text.slice(0, 120) }));
 export async function group(title: string, members: string[]) {
   return ((await convex.mutation("conversations:createGroup" as never, { adminToken, title, members } as never)) as { conversation: { id: string } }).conversation.id;
+}
+
+/**
+ * While `ms` runs: approves a pending approval only if the one unfinished command in the
+ * thread's active run is exactly `expected`; declines any other. Never approves anything else.
+ */
+export async function approveOnly(threadId: string, expected: string, ms: number) {
+  const seen: { input: string | null; decision: string }[] = [];
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const p = (await projection(threadId)) as unknown as Projection & { runtimeRequests?: { id: string; status: string }[] };
+    const active = p.runs.find((r) => ["starting", "running", "waiting"].includes(r.status));
+    if (!active && seen.length) break;
+    for (const req of (p.runtimeRequests ?? []).filter((r) => r.status === "pending")) {
+      const open = p.turnItems.filter((i) => i.runId === active?.id && i.type === "command_execution" && !["completed", "failed", "declined", "cancelled", "interrupted"].includes(String((i as { status?: string }).status)));
+      const input = open.length === 1 ? String((open[0] as { input?: string }).input) : null;
+      const decision = input === expected ? "accept" : "decline";
+      await t3.call("orchestration.dispatchCommand", { type: "runtime-request.respond", commandId: randomUUID(), threadId, requestId: req.id, decision });
+      seen.push({ input: input === expected ? input : input === null ? null : "<other>", decision });
+    }
+    await sleep(1000);
+  }
+  return seen;
 }
