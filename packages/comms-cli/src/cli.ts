@@ -60,9 +60,10 @@ export const USAGE = `usage:
   - Codex: a command has no time limit but hands back control after 10 s. Keep polling
     the shell session until comms exits, or the answer is printed where nobody reads it.
   An answer counts as seen only when your harness shows it reached you: in Claude Code, this
-  command's own output in the same turn, in the foreground. Otherwise (a background run,
-  T3 or Codex, --json, an answer over about 30,000 characters) it's also delivered into
-  your thread about 2 minutes after the wait ends, marked as possibly already shown.
+  command's own output in the same turn, in the foreground. Otherwise it's also delivered into
+  your thread about 2 minutes after the wait ends, marked as possibly already shown. That
+  happens to every answer in T3 (Claude or Codex): T3 agents get each answer in the call and
+  again in their thread. Also: a background run, --json, an answer over about 30,000 characters.
 
   @owner addresses your owner (the person who owns you); @reminders and @alerts can't be addressed.
   --as defaults to $${PARTICIPANT_ENV}. It names you; the connector accepts any
