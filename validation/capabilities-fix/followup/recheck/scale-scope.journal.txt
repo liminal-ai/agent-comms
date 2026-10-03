@@ -1,0 +1,10 @@
+== upgrade 01:09:46
+{"alertHistoryDone":true,"ownersSet":0,"systemCreated":[],"systemRepaired":[]}
+== (a) 2,000 answered results not yet due, and one due
+{"answer":"jx71wpaf7svv7spww28fy0gt4d8fkk5p","due":"kd795813w3kj3nbwbkgm3g5e8s8fkwhv"}
+sweep: {"deleted":0,"expired":0,"fellBack":1}
+due result: {"fallbacks":1,"state":"fell-back"}
+== (c) reminder lists over finished history: ✖Failedtorunfunction"scaleSeed:counts":Error:[RequestID:7c4f4bf83a895920]ServerErrorUncaughtError:Toomanybytesreadinasinglefunctionexecution(limit:16777216bytes).Considerusingsmallerlimitsinyourqueries,paginatingyourqueries,orusingindexedquerieswithaselectiveindexrangeexpressions.atasynccount(../convex/scaleSeed.ts:85:11)atasynchandler(../convex/scaleSeed.ts:87:86)
+web list: 96 listed, states {"active":51,"expired":15,"done":15,"cancelled":15} (809 ms)
+web list, expired: 50 expired listed
+comms reminders (@a, the target of 3,000 finished): 30 listed for @a

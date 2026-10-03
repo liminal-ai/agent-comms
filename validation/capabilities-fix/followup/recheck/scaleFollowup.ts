@@ -36,6 +36,30 @@ export const seed = internalMutation({
   },
 });
 
+/** Scope (a): `n` answered results in a wait still running (not yet due), and one answered result whose wait ended long enough ago to be due. */
+export const answeredNotDue = internalMutation({
+  args: { n: v.number() },
+  handler: async (ctx, { n }) => {
+    const { a, conversationId, messageId, now } = await convo(ctx, "followup sweep", 0);
+    const d = await ctx.db.insert("deliveries", { messageId, conversationId, recipientId: a._id, collect: true, state: "replied", at: now, createdAt: now });
+    const running = await ctx.db.insert("waits", { waiterId: a._id, messageId, until: now + 3_600_000, active: true, lastAwaitAt: now + 600_000, inInboxIds: [], createdAt: now });
+    for (let i = 0; i < n; i++) await ctx.db.insert("waitResults", { waitId: running, recipientId: a._id, deliveryId: d, state: "answered", at: now - 1 });
+    const answer = await ctx.db.insert("messages", { conversationId, seq: 2, senderId: a._id, recipientIds: [a._id], kind: "answer", inReplyTo: messageId, text: "due answer", attachments: [], origin: { via: "cli" }, createdAt: now });
+    const ended = await ctx.db.insert("waits", { waiterId: a._id, messageId, until: now, active: false, lastAwaitAt: now - 300_000, inInboxIds: [], endedAt: now - 300_000, createdAt: now - 400_000 });
+    const due = await ctx.db.insert("waitResults", { waitId: ended, recipientId: a._id, deliveryId: d, state: "answered", answerMessageId: answer, fallbackDueAt: now - 180_000, at: now - 300_000 });
+    return { due, answer };
+  },
+});
+
+export const dueOutcome = internalQuery({
+  args: { due: v.string(), answer: v.string() },
+  handler: async (ctx, args) => {
+    const r = await ctx.db.get(ctx.db.normalizeId("waitResults", args.due)!);
+    const fallbacks = (await ctx.db.query("deliveries").withIndex("by_message", (q: any) => q.eq("messageId", args.answer)).collect()).filter((d: any) => d.fallback).length;
+    return { state: r?.state, fallbacks };
+  },
+});
+
 /** The new items: a reclaimed delivery, an open incident whose delivery cleared, and an uncertain delivery 2 h old never reported. */
 export const fresh = internalMutation({
   args: {},
