@@ -128,7 +128,7 @@ class FakeV2 implements V2Client {
     this.listeners.clear();
     for (const f of subs) setTimeout(() => f({ kind: "closed" }), 1);
   }
-  async subscribe(id: string, options: { afterSequence?: number }, onItem: (i: Item) => void) {
+  async subscribe(id: string, options: { afterSequence?: number }, onItem: (i: Item) => void): Promise<() => void> {
     if (id !== this.id) throw new Error("no such thread");
     if (options.afterSequence !== undefined && this.failResubscribes > 0) {
       this.failResubscribes -= 1;
@@ -616,7 +616,7 @@ describe("docs/09: V2 adapter fixes", () => {
       if (!failing) return subscribe(id, opts, cb);
       opens++;
       const timer = setTimeout(() => cb({ kind: "closed" }), 10);
-      return () => clearTimeout(timer);
+      return () => void clearTimeout(timer);
     };
     const adapter = makeT3AdapterV2({ client: t3, ...options, streamDownLimitMs: 50 });
     await accepted(adapter);
@@ -639,7 +639,7 @@ describe("docs/09: V2 adapter fixes", () => {
       if (opts.afterSequence === undefined || failures <= 0) return subscribe(id, opts, cb);
       failures--;
       const timer = setTimeout(() => cb({ kind: "closed" }), 10);
-      return () => clearTimeout(timer);
+      return () => void clearTimeout(timer);
     };
     const adapter = makeT3AdapterV2({ client: t3, ...options, streamDownLimitMs: 5_000 });
     const h = await accepted(adapter);

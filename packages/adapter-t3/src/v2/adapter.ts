@@ -93,7 +93,16 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         unsubscribe?.();
       },
     };
-    const resubscribe = (attempt: number) => {
+    // The outage clock (`downSince`) and the backoff reset only when a stream has proven itself
+    // with a snapshot or `synchronized` (docs/09 P2): a subscribe call can resolve and the stream
+    // still close at once, and that must not look like recovery.
+    let failures = 0;
+    const retryLater = () => {
+      if (stopped) return;
+      setTimeout(resubscribe, Math.min(30_000, 250 * 2 ** Math.min(failures, 7)));
+      failures++;
+    };
+    const resubscribe = () => {
       if (stopped) return;
       // Resume from the last event we saw; if T3 can't replay that far it sends a snapshot, which is as good.
       client
@@ -101,22 +110,28 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         .then((u) => {
           if (stopped) return u();
           unsubscribe = u;
-          f.downSince = undefined;
         })
         .catch((e) => {
-          log(`resubscribing to ${threadId} (attempt ${attempt}): ${message(e)}`);
-          setTimeout(() => resubscribe(attempt + 1), Math.min(30_000, 500 * 2 ** Math.min(attempt, 6)));
+          log(`resubscribing to ${threadId} (attempt ${failures}): ${message(e)}`);
+          retryLater();
         });
+    };
+    const synced = () => {
+      f.downSince = undefined;
+      failures = 0;
     };
     const onItem = (item: V2StreamItem | { kind: "closed" }) => {
       if (item.kind === "snapshot") {
         tracker.load(item.thread);
         f.loaded = true;
+        synced();
+      } else if (item.kind === "synchronized") {
+        synced();
       } else if (item.kind === "event") {
         tracker.feed(item.event);
       } else if (item.kind === "closed" && !stopped) {
         f.downSince ??= Date.now();
-        resubscribe(1);
+        retryLater();
       }
       for (const w of [...waiters]) w();
     };
