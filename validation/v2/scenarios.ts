@@ -1,18 +1,16 @@
-// The V2 port's live scenarios: only what needs a real model in a real T3 thread (concurrent
-// human input, interrupts, restarts with a run in flight, the receipt rule, an explicit reply).
-// Claim loss, late acknowledgements and retry ordering are deterministic and covered by tests
-// (packages/adapter-t3/test/v2-adapter.test.ts, convex/reply-settles.test.ts); their live
-// scenarios were dropped (results kept in raw/results.jsonl).
+// The V2 port's live scenarios (closeout docs/08 section 2, handoff "acceptance before
+// permanent agents move": dispatcher claim loss, concurrent human input, restart and
+// interrupt, no double execution). Each appends one line to raw/results.jsonl.
 //
 //   node validation/v2/scenarios.ts <scenario>
 //
-// Each appends one line to raw/results.jsonl. An approval responder runs throughout
-// (lib.ts startResponder, approve.ts). A scenario that stalls fails, and its line records the
-// stall with its evidence; outcomes are never recorded by hand. Scratch connector unit:
-// cedar-v2-connector (socket comms.sock).
+// An approval responder runs throughout (lib.ts startResponder, approve.ts). A scenario that
+// stalls fails, and its line records the stall with its evidence; outcomes are never recorded
+// by hand. Connector units (transient, scratch only): cedar-v2-connector (B, the main one,
+// socket comms.sock), cedar-v2-conn-a (A, 8 s lease, socket comms-a.sock), cedar-v2-faulty.
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync, readFileSync } from "node:fs";
 import {
   answers, group, stallEvidence, startResponder, ids, interrupt, isActive, log, projection, runsFor, sc, SETTLED, send, sleep, t3, TMP, typeIn, waitBusy, waitRun, waitState, env,
 } from "./lib.ts";
@@ -21,14 +19,18 @@ const ANN = ids.threads.v2ann;
 const BOB = ids.threads.v2bob;
 const NODE = `${process.env.HOME}/.local/share/fnm/node-versions/v24.18.0/installation/bin/node`;
 const MAIN = "cedar-v2-connector";
+const A = "cedar-v2-conn-a";
+const FAULTY = "cedar-v2-faulty";
+const SOCK_A = `${TMP}/comms-a.sock`;
 const result = (scenario: string, rec: Record<string, unknown>) => log("results.jsonl", { scenario, ...rec });
 const fresh = (name: string, member: string) => group(`v2 ${name} ${new Date().toISOString().slice(11, 19)}`, ["v2lee", "v2req", member]);
 
-function startConnector(unit: string, config: string) {
+function startConnector(unit: string, config: string, extraEnv: Record<string, string> = {}) {
   try { sc("reset-failed", unit); } catch {}
   execFileSync("systemd-run", [
     "--user", `--unit=${unit}`, "-q", "-p", "MemoryMax=1G", "-p", "MemorySwapMax=0", "--working-directory=/srv/agents/cedar/agent-comms",
     `--setenv=PATH=${NODE.replace(/\/node$/, "")}:/usr/bin:/bin`, `--setenv=HOME=${process.env.HOME}`,
+    ...Object.entries(extraEnv).map(([k, v]) => `--setenv=${k}=${v}`),
     NODE, "packages/connector/src/main.ts", "--config", config,
   ], { env });
 }
@@ -44,6 +46,12 @@ async function started(unit: string, socket: string) {
   }
   throw new Error(`${unit} didn't start on ${socket}`);
 }
+function configA() {
+  const c = JSON.parse(readFileSync(`${TMP}/connector.json`, "utf8"));
+  writeFileSync(`${TMP}/connector-a.json`, JSON.stringify({ ...c, socket: SOCK_A, leaseMs: 8000 }, null, 2), { mode: 0o600 });
+  return `${TMP}/connector-a.json`;
+}
+const mainPid = (unit: string) => sc("show", "-p", "MainPID", "--value", unit).trim();
 async function stop(unit: string) {
   if (isActive(unit) === "active") sc("stop", unit);
   for (let i = 0; i < 40 && isActive(unit) === "active"; i++) await sleep(250);
@@ -135,6 +143,48 @@ const scenarios: Record<string, () => Promise<void>> = {
     result("liveInterrupt", { delivery: s.deliveryId, state: d.state, detail: d.detail ?? null, answers: await answers(s), t3: await runsFor(ANN, `comms-${s.deliveryId}`) });
   },
 
+  /** 2.2: connector A, frozen in its courtesy wait past its lease, loses the claim to B. */
+  async claimLost() {
+    const g = await fresh("claim-lost", "v2ann");
+    await waitBusy(ANN, false);
+    await stop(MAIN);
+    await stop(A);
+    startConnector(A, configA());
+    await started(A, SOCK_A);
+    const lee = await typeIn(ANN, "Without tools, write a 1,500-word story about a glacier, then a final line LEE-LONG");
+    await waitRun(ANN, lee, ["running"]);
+    const s = send(g, "v2ann", "V2 check claim-lost: without tools, reply with exactly V2-CLAIM", SOCK_A);
+    await sleep(3000); // A has claimed and is in its courtesy wait
+    const atFreeze = await delivery(g, s.messageId);
+    execFileSync("kill", ["-STOP", mainPid(A)]);
+    await sleep(11_000); // A's 8 s lease runs out
+    startMain(); // B takes over
+    await started(MAIN, `${TMP}/comms.sock`);
+    await sleep(6_000);
+    execFileSync("kill", ["-CONT", mainPid(A)]);
+    const d = await waitState(g, s.messageId, SETTLED, 400_000);
+    await sleep(5_000);
+    await stop(A);
+    result("claimLost", { delivery: s.deliveryId, stateAtFreeze: atFreeze?.state, state: d.state, detail: d.detail ?? null, answers: await answers(s), t3: await runsFor(ANN, `comms-${s.deliveryId}`) });
+  },
+
+  /** Crash after T3 accepted our message and before `delivered` was recorded. */
+  async crashWindow() {
+    const g = await fresh("crash-window", "v2bob");
+    await waitBusy(BOB, false);
+    await stop(MAIN);
+    startConnector(FAULTY, `${TMP}/connector.json`, { AGENT_COMMS_FAULT: "crash-after-accept" });
+    await started(FAULTY, `${TMP}/comms.sock`);
+    const s = send(g, "v2bob", "V2 check crash-window: without tools, write the numbers one to forty in words, one per line, then a final line V2-CRASH-DONE");
+    for (let i = 0; i < 120 && isActive(FAULTY) === "active"; i++) await sleep(500);
+    if (isActive(FAULTY) === "active") throw new Error("the faulty connector never crashed: not a crash-window run");
+    const before = await delivery(g, s.messageId);
+    startMain();
+    await started(MAIN, `${TMP}/comms.sock`);
+    const d = await waitState(g, s.messageId, SETTLED, 400_000);
+    result("crashWindow", { delivery: s.deliveryId, stateAtCrash: before?.state, state: d.state, detail: d.detail ?? null, answers: await answers(s), t3: await runsFor(BOB, `comms-${s.deliveryId}`) });
+  },
+
   /** Lee stops our run while the connector is down (SIGKILL); recovery must not collect the partial answer. */
   async interruptRecovery() {
     const g = await fresh("interrupt-recovery", "v2ann");
@@ -213,6 +263,7 @@ try {
   result(name, { failed: true, error: error instanceof Error ? error.message : String(error), evidence: await stallEvidence(agents), approvals: responder.decisions });
 } finally {
   const decisions = await responder.stop();
+  for (const u of [A, FAULTY]) if (isActive(u) === "active") await stop(u); // never leave a second connector competing
   if (!failed && decisions.length) log("results.jsonl", { scenario: name, approvals: decisions });
   if (isActive(MAIN) !== "active") startMain(); // never leave the scratch connector down
   await t3.close();
