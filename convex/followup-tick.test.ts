@@ -58,3 +58,40 @@ for (const [label, expiring, due, ch] of [
     expect(ticks).toBeLessThan(15);
   });
 }
+
+// Close-out 1 (docs/08): the byte budget doesn't bound how many queries a tick makes. Alder's
+// repro: 1,500 short reminders together exceeded Convex's 4,096 index ranges per transaction,
+// rolled back, and never cleared. Both loops, with creators who get the ending notices.
+for (const kind of ["expiring", "due"] as const) {
+  it(`Alder's repro: 1,500 short reminders ${kind} together, made by people and by agents, all finish across ticks under the real limits`, async () => {
+    const t = await setup();
+    const { reminder } = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a0", text: "x", everyMs: 60 * MIN, expiresMs: 120 * MIN });
+    const ids = await t.run(async (ctx) => {
+      const r = (await ctx.db.get(reminder.id as never)) as Record<string, unknown> & { _id: string };
+      const { _id, _creationTime, ...fields } = r as never as Record<string, unknown>;
+      const agents = await Promise.all(Array.from({ length: 50 }, async (_, i) => (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", `a${i}`)).unique())!));
+      const lee = (await ctx.db.query("participants").withIndex("by_name", (q) => q.eq("name", "lee")).unique())!;
+      await ctx.db.delete(_id as never);
+      const out: string[] = [];
+      for (let i = 0; i < 1_500; i++) {
+        const when = kind === "expiring" ? { expiresAt: NOW + MIN } : { nextFireAt: NOW + MIN };
+        // Half made by a person (an inbox notice when it ends), half by an agent (a delivered notice).
+        const createdById = i % 2 ? lee._id : agents[(i + 1) % 50]!._id;
+        out.push(await ctx.db.insert("reminders", { ...(fields as never), ...when, targetId: agents[i % 50]!._id, createdById, name: `short ${i}` }));
+      }
+      return out;
+    });
+    at(2 * MIN);
+    let ticks = 0;
+    for (; ticks < 40; ticks++) {
+      await t.mutation(internal.reminders.tick, {}); // throws (and rolls back) if over the limits
+      const states = await t.run(async (ctx) => Promise.all(ids.map(async (id) => (await ctx.db.get(id as never)) as { state: string; fires: number })));
+      if (states.every((r) => (kind === "expiring" ? r.state === "expired" : r.fires >= 1))) break;
+    }
+    expect(ticks).toBeLessThan(40);
+    if (kind === "expiring") {
+      const notices = await t.run(async (ctx) => (await ctx.db.query("messages").collect()).filter((m) => m.meta?.type === "reminder-ended").length);
+      expect(notices).toBe(1_500);
+    }
+  });
+}

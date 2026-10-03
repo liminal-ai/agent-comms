@@ -1,0 +1,5 @@
+[31m   [31m×[31m Alder's repro: 1,500 short reminders expiring together, made by people and by agents, all finish across ticks under the real limits[39m[33m 1117[2mms[22m[39m
+[31m   [31m×[31m Alder's repro: 1,500 short reminders due together, made by people and by agents, all finish across ticks under the real limits[39m[33m 4336[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[33m4 skipped[39m[90m (6)[39m
+[31m[1mError[22m: Too many index ranges read in a single function execution (limit: 4096). This is a Convex limit: https://docs.convex.dev/production/state/limits[39m
