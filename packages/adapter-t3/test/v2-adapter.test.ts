@@ -37,6 +37,8 @@ class FakeV2 implements V2Client {
   refuse: string | undefined;
   /** Commit the next dispatch but lose its response. */
   dropResponse = 0;
+  /** T3 restarts after losing a response and forgets its command receipts (if they weren't persisted). */
+  forgetReceipts = false;
   /** Fail the next dispatches before they reach T3 (nothing committed). */
   unreachable = 0;
   failResubscribes = 0;
@@ -116,6 +118,7 @@ class FakeV2 implements V2Client {
     this.receipts.set(m.commandId, result);
     if (this.dropResponse > 0) {
       this.dropResponse -= 1;
+      if (this.forgetReceipts) this.receipts.clear();
       throw new Error("socket closed");
     }
     return result;
@@ -368,6 +371,16 @@ describe("T3 V2 adapter: live", () => {
     assert.equal(h.turnId, "run:thread:th1:ordinal:1");
     assert.deepEqual(t3.userMessages(), [messageIdFor("d_1")]);
     assert.equal(t3.dispatched.length, 1);
+  });
+
+  it("Reed: the retry doesn't depend on T3 remembering the command: our message in the thread means sent", async () => {
+    const { t3, adapter } = setup();
+    t3.dropResponse = 1;
+    t3.forgetReceipts = true;
+    const h = await accepted(adapter);
+    assert.equal(h.turnId, "run:thread:th1:ordinal:1");
+    assert.equal(t3.dispatched.length, 1, "not dispatched again");
+    assert.deepEqual(t3.userMessages(), [messageIdFor("d_1")]);
   });
 
   it("T3 unreachable on send and on retry: lost; the next handoff sends once", async () => {

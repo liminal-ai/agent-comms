@@ -134,7 +134,15 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
     log(`t3 dispatch ${m.messageId} to ${threadId}`);
     let first: unknown;
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (attempt > 0) await new Promise((r) => setTimeout(r, retryDelayMs));
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, retryDelayMs));
+        // Before the retry, the thread itself: if our message is there it went in, whatever
+        // T3's command receipts remember (they might not survive a T3 restart). If the
+        // thread can't be read, don't retry blind: lost, and the restart check decides.
+        const now = await client.getThread(threadId).catch(() => undefined);
+        if (now && find(now, m.messageId).present) return { _tag: "sent" };
+        if (!now) break;
+      }
       try {
         await client.dispatch(threadId, m);
         return { _tag: "sent" };
