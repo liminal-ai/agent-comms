@@ -1,0 +1,6 @@
+7]: 2026-10-03T12:21:05.959Z decision jd74ncd1h4t363xcjyjv8r7dp98fjr1z claimed state=claimed participant=v2ann
+7]: 2026-10-03T12:21:05.982Z decision jd74ncd1h4t363xcjyjv8r7dp98fjr1z handoff to t3:2c464b35-89d4-45e0-9baa-77d9620b6c2c
+7]: 2026-10-03T12:21:06.064Z decision jd74ncd1h4t363xcjyjv8r7dp98fjr1z gate claim confirmed; sending (cursor=v2:1606)
+7]: 2026-10-03T12:21:06.065Z t3 dispatch comms-jd74ncd1h4t363xcjyjv8r7dp98fjr1z to 2c464b35-89d4-45e0-9baa-77d9620b6c2c
+7]: 2026-10-03T12:21:06.145Z decision jd74ncd1h4t363xcjyjv8r7dp98fjr1z handoff-accepted turn=run:thread:2c464b35-89d4-45e0-9baa-77d9620b6c2c:ordinal:23
+7]: 2026-10-03T12:21:12.866Z decision jd74ncd1h4t363xcjyjv8r7dp98fjr1z outcome replied turn=run:thread:2c464b35-89d4-45e0-9baa-77d9620b6c2c:ordinal:23

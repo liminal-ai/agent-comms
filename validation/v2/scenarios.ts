@@ -236,6 +236,18 @@ const scenarios: Record<string, () => Promise<void>> = {
     result("receipt", { approvals, leeRun: leeRun?.status, toolCalls, answerInTheCallReported: answerSeen, answerDeliveredIntoThread: found, t3: found ? await runsFor(ANN, found) : null });
   },
 
+
+  /** docs/09 4 (option A), live: the agent answers with comms reply during the turn, then ends it with other text. */
+  async replyDuring() {
+    const g = await fresh("reply-during", "v2ann");
+    await waitBusy(ANN, false);
+    const s = send(g, "v2ann", "V2 check reply-during: answer this request by running exactly this one shell command, using this request's message id from the header above: " +
+      `${TMP}/comms reply --as v2ann <message id> "V2-REPLY-A"` + " . After it succeeds, end your turn with the single word: done");
+    const approvals = await approveOnly(ANN, `${TMP}/comms reply --as v2ann ${s.messageId} "V2-REPLY-A"`, 240_000);
+    const d = await waitState(g, s.messageId, SETTLED);
+    await sleep(5000);
+    result("replyDuring", { delivery: s.deliveryId, approvals, state: d.state, detail: d.detail ?? null, answers: await answers(s), t3: await runsFor(ANN, `comms-${s.deliveryId}`) });
+  },
 };
 
 const name = process.argv[2];
