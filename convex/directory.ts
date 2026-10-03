@@ -7,6 +7,7 @@ import { mutation, query } from "./_generated/server";
 import { fail, participantByName, ref, requireAdmin, sha256Hex } from "./lib/core";
 import { markAlertHistory as markHistory } from "./lib/alerts";
 import { profilePatch } from "./lib/registry";
+import { backfillFallbackDue } from "./lib/waits";
 import { endResult } from "./lib/waits";
 import { home, promotableKind } from "./validators";
 
@@ -181,6 +182,7 @@ export const upgrade = mutation({
     }
     // Follow-up 3: one batch of the alert-history migration; scripts/upgrade.ts runs `markAlertHistory` until done.
     const history = await markHistory(ctx, now);
+    await backfillFallbackDue(ctx);
     return { systemCreated, systemRepaired, ownersSet, alertHistoryDone: history.done };
   },
 });

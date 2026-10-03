@@ -179,12 +179,15 @@ export default defineSchema({
     proofToken: v.optional(v.string()),
     /** Fix pass 0.1: when the CLI said it printed the answer (provisional). */
     printedAt: v.optional(v.number()),
+    /** Follow-up (a): for an answered result once its wait ended, when its fallback is due. */
+    fallbackDueAt: v.optional(v.number()),
     at: v.number(),
   })
     .index("by_wait", ["waitId"])
     .index("by_delivery", ["deliveryId"])
-    // The fallback pass: answered results whose ack window has passed.
-    .index("by_state_at", ["state", "at"]),
+    .index("by_state_at", ["state", "at"])
+    // Follow-up (a): the fallback pass reads only results that are due.
+    .index("by_state_due", ["state", "fallbackDueAt"]),
 
   reminders: defineTable({
     name: v.string(),
@@ -218,7 +221,11 @@ export default defineSchema({
     .index("by_blocked_unreported", ["state", "blockedReported", "stateAt"])
     .index("by_target", ["targetId"])
     .index("by_creator", ["createdById"])
-    .index("by_reportTo", ["reportToId"]),
+    .index("by_reportTo", ["reportToId"])
+    // Follow-up (c): lists read live reminders and a few recent finished ones, never all history.
+    .index("by_target_state", ["targetId", "state"])
+    .index("by_creator_state", ["createdById", "state"])
+    .index("by_reportTo_state", ["reportToId", "state"]),
 
   /** One row per fire, keyed by the fire's request message. */
   reminderFires: defineTable({

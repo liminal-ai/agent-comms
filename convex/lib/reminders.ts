@@ -53,7 +53,11 @@ export async function createReminder(ctx: MutationCtx, creator: Doc<"participant
     fail("bad_request", `--expires is between ${formatDuration(REMINDER_MIN_INTERVAL_MS)} and ${formatDuration(REMINDER_MAX_EXPIRY_MS)}`);
   }
   const expiresAt = now + expiresMs;
-  if (input.at !== undefined && (input.at <= now || input.at >= expiresAt)) fail("bad_request", "--at must be in the future and before the reminder expires");
+  // Follow-up (b): a reminder must be able to fire before it expires, with a tick (a minute) to spare.
+  if (input.at !== undefined && (input.at <= now || input.at > expiresAt - REMINDER_MIN_INTERVAL_MS)) {
+    fail("bad_request", "--at must be in the future and at least a minute before the reminder expires");
+  }
+  if (input.everyMs !== undefined && input.everyMs >= expiresMs) fail("bad_request", "--every must be shorter than the time until the reminder expires (--expires)");
   // Fix pass 2: finite whole numbers before any range check (NaN and Infinity pass `<` checks).
   for (const [flag, value] of [["--every", input.everyMs], ["--at", input.at], ["--idle-for", input.idleForMs], ["--max", input.max], ["--expires", input.expiresMs]] as const) {
     if (value !== undefined && !Number.isSafeInteger(value)) fail("bad_request", `${flag} must be a whole number`);
@@ -75,8 +79,11 @@ export async function createReminder(ctx: MutationCtx, creator: Doc<"participant
   if (watch && watch.state === "retired") fail("bad_request", `@${watch.name} is retired`);
   const reportTo = input.reportTo !== undefined ? await participantByName(ctx, input.reportTo) : undefined;
   if (reportTo && reportTo.kind === "system") fail("bad_request", `@${reportTo.name} can't be reported to`);
+  if (reportTo && reportTo.state === "retired") fail("bad_request", `@${reportTo.name} is retired`);
 
-  const name = (input.name ?? input.text.split(/\s+/).slice(0, 4).join(" ")).trim().slice(0, MAX_NAME_CHARS);
+  // Follow-up (b): a name made from the text loses control characters, like an explicit name refuses them.
+  const derived = () => input.text.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ").split(/\s+/).filter(Boolean).slice(0, 4).join(" ");
+  const name = (input.name ?? derived()).trim().slice(0, MAX_NAME_CHARS);
   const id = await ctx.db.insert("reminders", {
     name,
     text: input.text,
@@ -432,6 +439,7 @@ export async function report(ctx: MutationCtx, fireId: Id<"reminderFires">): Pro
   // Test hook (fix pass 1.5): a failure after the report is written.
   if (process.env.COMMS_TEST_FAULT === `reminder-report-after-post:${r._id}`) throw new Error("injected failure after the report was posted");
   if (posted) await ctx.db.patch(f._id, { reportMessageId: posted });
+  else await ctx.db.patch(f._id, { reportError: `report-to @${reportTo.name} is ${reportTo.state === "retired" ? "retired" : "a system participant"}; not reported` });
 }
 
 /** The report text, the answer cut so the whole fits MAX_TEXT_CHARS, saying where the full answer is. */
@@ -446,6 +454,50 @@ function clippedReport(r: Doc<"reminders">, target: string, answer: Doc<"message
     if (text.length <= MAX_TEXT_CHARS || keep <= 0) return text.slice(0, MAX_TEXT_CHARS);
     keep -= text.length - MAX_TEXT_CHARS + 100;
   }
+}
+
+const LIVE: readonly ReminderState[] = ["active", "paused", "blocked"];
+const ENDED: readonly ReminderState[] = ["done", "cancelled", "expired"];
+/** How many finished reminders a list shows per source (follow-up c): the newest, never the whole history. */
+const RECENT_ENDED = 10;
+
+/** Live first (newest created first), then the recently finished (newest finished first). */
+function liveFirst(rows: Iterable<Doc<"reminders">>): Doc<"reminders">[] {
+  const all = [...new Map([...rows].map((r) => [r._id, r])).values()];
+  const live = all.filter((r) => LIVE.includes(r.state)).sort((a, b) => b.createdAt - a.createdAt);
+  const ended = all.filter((r) => !LIVE.includes(r.state)).sort((a, b) => b.stateAt - a.stateAt);
+  return [...live, ...ended];
+}
+
+/**
+ * `comms reminders` (follow-up c): every live reminder the participant created, is the
+ * target of, is reported to, or owns the target of, plus the few most recent finished ones
+ * of each, never the whole history.
+ */
+export async function listFor(ctx: QueryCtx, me: Doc<"participants">): Promise<Doc<"reminders">[]> {
+  const rows: Doc<"reminders">[] = [];
+  const add = async (index: "by_creator_state" | "by_target_state" | "by_reportTo_state", field: "createdById" | "targetId" | "reportToId", id: Id<"participants">, ended = RECENT_ENDED) => {
+    for (const state of LIVE) rows.push(...(await ctx.db.query("reminders").withIndex(index, (q: any) => q.eq(field, id).eq("state", state)).collect()));
+    for (const state of ENDED) rows.push(...(await ctx.db.query("reminders").withIndex(index, (q: any) => q.eq(field, id).eq("state", state)).order("desc").take(ended)));
+  };
+  await add("by_creator_state", "createdById", me._id);
+  await add("by_target_state", "targetId", me._id);
+  await add("by_reportTo_state", "reportToId", me._id);
+  for (const owned of await ctx.db.query("participants").withIndex("by_owner", (q) => q.eq("ownerId", me._id)).take(50)) {
+    await add("by_target_state", "targetId", owned._id, 3);
+  }
+  return liveFirst(rows);
+}
+
+/** The web view's list (follow-up c): all live reminders and the 15 most recent finished of each kind, or one state (finished: the newest 50). */
+export async function listAll(ctx: QueryCtx, state?: ReminderState): Promise<Doc<"reminders">[]> {
+  const live = (s: ReminderState) => ctx.db.query("reminders").withIndex("by_state_next", (q) => q.eq("state", s)).collect();
+  const ended = (s: ReminderState, n: number) => ctx.db.query("reminders").withIndex("by_state_stateAt", (q) => q.eq("state", s)).order("desc").take(n);
+  if (state) return liveFirst(LIVE.includes(state) ? await live(state) : await ended(state, 50));
+  const rows: Doc<"reminders">[] = [];
+  for (const s of LIVE) rows.push(...(await live(s)));
+  for (const s of ENDED) rows.push(...(await ended(s, 15)));
+  return liveFirst(rows);
 }
 
 /** Who may read a reminder (fix pass 0.4): those who may change it, and its report-to. */

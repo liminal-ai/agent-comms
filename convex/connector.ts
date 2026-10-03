@@ -28,7 +28,7 @@ import {
 } from "./lib/core";
 import { machineSeen, nextPresence, profilePatch, registryEntry } from "./lib/registry";
 import { confirm, endResult, markPrinted, registerWait, requireWait, takeAnswer, touch, waitOn, waitShape } from "./lib/waits";
-import { applyAction, createReminder, mayChange, mayRead, recordFireAnswer, reminderDetail, reminderShape } from "./lib/reminders";
+import { applyAction, createReminder, listFor, mayChange, mayRead, recordFireAnswer, reminderDetail, reminderShape } from "./lib/reminders";
 import { openDm, post, replayed } from "./lib/post";
 import { attachment, enteredInput, failureReason, machineAuth, reminderAction, via } from "./validators";
 
@@ -782,33 +782,7 @@ export const reminders = query({
   handler: async (ctx, args): Promise<Responses["reminders"]> => {
     const machine = await requireMachine(ctx, args.machine);
     const me = await actingAs(ctx, machine, args.as);
-    const mine = new Map<string, Doc<"reminders">>();
-    for (const r of await ctx.db
-      .query("reminders")
-      .withIndex("by_creator", (q) => q.eq("createdById", me._id))
-      .collect())
-      mine.set(r._id, r);
-    for (const r of await ctx.db
-      .query("reminders")
-      .withIndex("by_target", (q) => q.eq("targetId", me._id))
-      .collect())
-      mine.set(r._id, r);
-    for (const owned of await ctx.db
-      .query("participants")
-      .withIndex("by_owner", (q) => q.eq("ownerId", me._id))
-      .collect()) {
-      for (const r of await ctx.db
-        .query("reminders")
-        .withIndex("by_target", (q) => q.eq("targetId", owned._id))
-        .collect())
-        mine.set(r._id, r);
-    }
-    for (const r of await ctx.db
-      .query("reminders")
-      .withIndex("by_reportTo", (q) => q.eq("reportToId", me._id))
-      .collect())
-      mine.set(r._id, r);
-    const rows = [...mine.values()].sort((a, b) => b.createdAt - a.createdAt);
+    const rows = await listFor(ctx, me);
     return { reminders: await Promise.all(rows.map((r) => reminderShape(ctx, r))) };
   },
 });

@@ -78,7 +78,8 @@ describe("follow-up 3: outages can't hide alerts", () => {
 
   it("a reminder that expired two hours ago, never reported, is alerted once", async () => {
     const t = await setup();
-    const { reminder } = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: 10 * MIN, expiresMs: 2 * MIN });
+    const { reminder } = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: 10 * MIN, expiresMs: 20 * MIN });
+    await t.run(async (ctx) => ctx.db.patch(reminder.id as never, { expiresAt: NOW + 2 * MIN }));
     at(3 * MIN);
     await t.mutation(internal.reminders.tick, {});
     at(3 * MIN + 2 * 60 * MIN);

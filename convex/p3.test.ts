@@ -57,7 +57,8 @@ describe("P3 reminders", () => {
     const t = await setup();
     const create = (atMs: number) => t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", at: atMs, expiresMs: 10 * MIN });
     expect(await errorCode(create(NOW + 10 * MIN))).toBe("bad_request");
-    expect(await errorCode(create(NOW + 10 * MIN - 1))).toBe("no error");
+    expect(await errorCode(create(NOW + 10 * MIN - 1))).toBe("bad_request"); // follow-up (b): a tick to spare
+    expect(await errorCode(create(NOW + 9 * MIN))).toBe("no error");
   });
 
   it("bug 4: a retired creator's reminders are cancelled at the next tick", async () => {

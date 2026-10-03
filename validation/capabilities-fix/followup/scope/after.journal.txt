@@ -1,0 +1,2 @@
+ [32m✓[39m [30m[42m convex [49m[39m convex/followup-scope.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 306[2mms[22m[39m
+[2m      Tests [22m [1m[32m6 passed[39m[22m[90m (6)[39m

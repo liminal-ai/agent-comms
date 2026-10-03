@@ -105,6 +105,10 @@ async function end(ctx: MutationCtx, wait: Doc<"waits">, endedAt: number): Promi
     if (r.state === "open") await ctx.db.patch(r._id, { state: "expired", at: endedAt });
   }
   await ctx.db.patch(wait._id, { active: false, endedAt });
+  // Follow-up (a): each answered result's fallback falls due a window after the wait ended.
+  for (const r of await results(ctx, wait._id)) {
+    if (r.state === "answered") await ctx.db.patch(r._id, { fallbackDueAt: endedAt + ACK_WINDOW_MS });
+  }
 }
 
 /** A wait ends once no result is open. */
@@ -230,12 +234,12 @@ export async function sweep(ctx: MutationCtx, now: number): Promise<{ fellBack: 
     expired++;
   }
   let fellBack = 0;
+  // Follow-up (a): only results that are due; answered results of waits still running have no due time.
   for (const r of await ctx.db
     .query("waitResults")
-    .withIndex("by_state_at", (q) => q.eq("state", "answered"))
+    .withIndex("by_state_due", (q) => q.eq("state", "answered").gt("fallbackDueAt", 0).lte("fallbackDueAt", now))
     .take(500)) {
     const wait = (await ctx.db.get(r.waitId))!;
-    if (wait.endedAt === undefined || now < wait.endedAt + ACK_WINDOW_MS) continue;
     const waiter = (await ctx.db.get(wait.waiterId))!;
     const answer = r.answerMessageId ? await ctx.db.get(r.answerMessageId) : null;
     await ctx.db.patch(r._id, { state: "fell-back", at: now });
@@ -295,4 +299,22 @@ export async function waitShape(ctx: QueryCtx, wait: Doc<"waits">, options: { wi
     inInbox: await Promise.all(wait.inInboxIds.map((id) => refById(ctx, id))),
     createdAt: wait.createdAt,
   };
+}
+
+/**
+ * Follow-up (a), for `directory.upgrade`: answered results from before due times existed,
+ * whose wait has ended, get theirs. Few at any time (they live minutes). Returns how many.
+ */
+export async function backfillFallbackDue(ctx: MutationCtx): Promise<number> {
+  let n = 0;
+  for (const r of await ctx.db
+    .query("waitResults")
+    .withIndex("by_state_due", (q) => q.eq("state", "answered").eq("fallbackDueAt", undefined))
+    .take(500)) {
+    const wait = await ctx.db.get(r.waitId);
+    if (wait?.endedAt === undefined) continue;
+    await ctx.db.patch(r._id, { fallbackDueAt: wait.endedAt + ACK_WINDOW_MS });
+    n++;
+  }
+  return n;
 }

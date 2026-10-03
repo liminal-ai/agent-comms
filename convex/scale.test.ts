@@ -79,7 +79,8 @@ describe("1.3 reminders: history doesn't hide an expiry", () => {
   it(`Alder's repro: ${HISTORY} expired reminders don't stop a newer one expiring, nor the expiry alert`, async () => {
     const t = await setup();
     await seedExpiredReminders(t, HISTORY);
-    const { reminder } = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: 10 * MIN, expiresMs: 2 * MIN });
+    const { reminder } = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: 10 * MIN, expiresMs: 20 * MIN });
+    await t.run(async (ctx) => ctx.db.patch(reminder.id as never, { expiresAt: NOW + 2 * MIN })); // expires before its first fire
     at(3 * MIN);
     await beat(t);
     await t.mutation(internal.reminders.tick, {});
@@ -91,7 +92,8 @@ describe("1.3 reminders: history doesn't hide an expiry", () => {
   it("the firing loop checks expiry itself: a reminder due to fire after it expired doesn't fire", async () => {
     const t = await setup();
     await seedExpiredReminders(t, HISTORY);
-    const { reminder } = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: 2 * MIN, expiresMs: 2 * MIN });
+    const { reminder } = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: 2 * MIN, expiresMs: 20 * MIN });
+    await t.run(async (ctx) => ctx.db.patch(reminder.id as never, { expiresAt: NOW + 2 * MIN })); // due exactly at its expiry
     // Due exactly at its expiry: the firing loop must see that itself, whatever the expiry scan read.
     at(2 * MIN);
     await t.mutation(internal.reminders.tick, {});

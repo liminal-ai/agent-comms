@@ -92,7 +92,7 @@ describe("(c) reminder lists over finished history (400-read limit)", () => {
     expect(r.reminders[0]!.id).toBe(live.reminder.id);
     const expired = await t.query(api.reminders.list, { adminToken: ADMIN, state: "expired" });
     expect(expired.reminders.length).toBeGreaterThan(0);
-    expect(expired.reminders.length).toBeLessThanOrEqual(200);
+    expect(expired.reminders.length).toBeLessThanOrEqual(50);
   });
 });
 

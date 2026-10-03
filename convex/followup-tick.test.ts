@@ -42,7 +42,11 @@ for (const [label, expiring, due, ch] of [
     const t = await setup();
     const text = ch.repeat(32_000);
     const ids: string[] = [];
-    for (let i = 0; i < expiring; i++) ids.push((await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: `a${i % 50}`, text, everyMs: 60 * MIN, expiresMs: 2 * MIN })).reminder.id);
+    for (let i = 0; i < expiring; i++) ids.push((await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: `a${i % 50}`, text, everyMs: 60 * MIN, expiresMs: 120 * MIN })).reminder.id);
+    // Expiring before their first fire: refused at creation since follow-up (b), so moved here.
+    await t.run(async (ctx) => {
+      for (const id of ids) await ctx.db.patch(id as never, { expiresAt: NOW + 2 * MIN });
+    });
     for (let i = 0; i < due; i++) ids.push((await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: `a${i}`, text, everyMs: 2 * MIN })).reminder.id);
     at(2 * MIN);
     let ticks = 0;

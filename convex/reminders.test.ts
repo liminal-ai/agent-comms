@@ -175,7 +175,9 @@ describe("R3 stopping", () => {
 
   it("expires (active or paused), telling the creator; paused and blocked reminders don't fire; done and cancel tell the creator", async () => {
     const t = await setup();
-    const short = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: 10 * MIN, expiresMs: 5 * MIN, name: "short" });
+    // Expires before its first fire: refused at creation since follow-up (b), so made valid and then moved.
+    const short = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "a", text: "x", everyMs: 10 * MIN, expiresMs: 20 * MIN, name: "short" });
+    await t.run(async (ctx) => ctx.db.patch(short.reminder.id as never, { expiresAt: NOW + 5 * MIN }));
     const paused = await t.mutation(api.reminders.create, { adminToken: ADMIN, as: "lee", target: "b", text: "y", everyMs: MIN, expiresMs: 3 * MIN, name: "paused" });
     await t.mutation(api.reminders.update, { adminToken: ADMIN, id: paused.reminder.id, action: "pause" });
     at(2 * MIN);

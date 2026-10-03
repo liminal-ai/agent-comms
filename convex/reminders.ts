@@ -6,21 +6,15 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { fail, getOr, participantByName, requireAdmin } from "./lib/core";
-import { applyAction, createReminder, reminderDetail, reminderShape, report as reportOne, step as stepOne, tick as fireDue } from "./lib/reminders";
+import { applyAction, createReminder, listAll, reminderDetail, reminderShape, report as reportOne, step as stepOne, tick as fireDue } from "./lib/reminders";
 import { reminderAction, reminderState } from "./validators";
 
-/** Every reminder, or those in one state, newest first. */
+/** Live reminders first, then the most recent finished ones; or one state (follow-up c: never the whole history). */
 export const list = query({
   args: { adminToken: v.string(), state: v.optional(reminderState) },
   handler: async (ctx, args) => {
     await requireAdmin(args.adminToken);
-    const rows = args.state
-      ? await ctx.db
-          .query("reminders")
-          .withIndex("by_state_next", (q) => q.eq("state", args.state!))
-          .collect()
-      : await ctx.db.query("reminders").collect();
-    rows.sort((a, b) => b.createdAt - a.createdAt);
+    const rows = await listAll(ctx, args.state);
     return { reminders: await Promise.all(rows.map((r) => reminderShape(ctx, r))) };
   },
 });
