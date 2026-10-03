@@ -137,6 +137,7 @@ export async function applyAction(
     state: next.state,
     stateReason: next.stateReason,
     stateAt: now,
+    blockedReported: undefined, // follow-up 2: a new blocked spell is alerted again
     ...(next.state === "done" || next.state === "cancelled" ? { nextFireAt: undefined } : {}),
   });
   const updated = (await ctx.db.get(r._id))!;
@@ -297,38 +298,58 @@ async function expire(ctx: MutationCtx, r: Doc<"reminders">, now: number): Promi
 }
 
 /** The minute cron: expiries first, then due reminders (bounded per run). */
-export async function tick(ctx: MutationCtx, now: number): Promise<{ fired: number; skipped: number; expired: number }> {
+/**
+ * How much one tick may read or write, estimated, well under Convex's 16 MiB per
+ * transaction (follow-up 4). The tick stops when the next reminder would pass it; the
+ * rest are handled by the next tick, a minute later.
+ */
+const TICK_BUDGET_BYTES = 6 * 1024 * 1024;
+const encoder = new TextEncoder();
+/** A reminder document's size, near enough: its text dominates. */
+const sizeOf = (r: Doc<"reminders">) => encoder.encode(r.text).length + encoder.encode(r.name).length + 2_048;
+
+export async function tick(ctx: MutationCtx, now: number): Promise<{ fired: number; skipped: number; expired: number; deferred: boolean }> {
+  let used = 0;
+  let deferred = false;
+  /** Whether `cost` more fits in this tick's budget; counts it if so. */
+  const fits = (cost: number) => {
+    if (used > 0 && used + cost > TICK_BUDGET_BYTES) {
+      deferred = true;
+      return false;
+    }
+    used += cost;
+    return true;
+  };
   let expired = 0;
-  // Live states only (fix pass 1.3): finished reminders are never read here.
-  for (const state of ["active", "paused", "blocked"] as const) {
-    for (const r of await ctx.db
-      .query("reminders")
-      .withIndex("by_state_expires", (q) => q.eq("state", state).lte("expiresAt", now))
-      .take(100)) {
+  // Live states only (fix pass 1.3): finished reminders are never read here. Streamed, so
+  // nothing past the budget is read (follow-up 4). Expiring: read once, written once.
+  expiry: for (const state of ["active", "paused", "blocked"] as const) {
+    for await (const r of ctx.db.query("reminders").withIndex("by_state_expires", (q) => q.eq("state", state).lte("expiresAt", now))) {
+      if (!fits(2 * sizeOf(r))) break expiry;
       await expire(ctx, r, now);
       expired++;
     }
   }
   let fired = 0;
   let skipped = 0;
-  const due = await ctx.db
-    .query("reminders")
-    .withIndex("by_state_next", (q) => q.eq("state", "active").lte("nextFireAt", now))
-    .take(50);
-  for (const r of due) {
-    // Each reminder in its own sub-transaction (fix pass 1.4): if anything throws, all of that
-    // reminder's writes are rolled back, it alone is blocked with the error, and the tick goes on.
-    try {
-      const outcome: Step = await ctx.runMutation(internal.reminders.step, { id: r._id });
-      if (outcome === "fired") fired++;
-      else if (outcome === "skipped") skipped++;
-      else if (outcome === "expired") expired++;
-    } catch (error) {
-      const message = error instanceof ConvexError ? (error.data as { message?: string }).message : (error as Error).message;
-      await ctx.db.patch(r._id, { state: "blocked", stateReason: `the fire failed: ${String(message ?? error).slice(0, 1_000)}`, stateAt: now });
+  if (!deferred) {
+    for await (const r of ctx.db.query("reminders").withIndex("by_state_next", (q) => q.eq("state", "active").lte("nextFireAt", now))) {
+      // A fire reads the reminder here and in its step, writes the message (the text again) and the reminder.
+      if (!fits(4 * sizeOf(r))) break;
+      // Each reminder in its own sub-transaction (fix pass 1.4): if anything throws, all of that
+      // reminder's writes are rolled back, it alone is blocked with the error, and the tick goes on.
+      try {
+        const outcome: Step = await ctx.runMutation(internal.reminders.step, { id: r._id });
+        if (outcome === "fired") fired++;
+        else if (outcome === "skipped") skipped++;
+        else if (outcome === "expired") expired++;
+      } catch (error) {
+        const message = error instanceof ConvexError ? (error.data as { message?: string }).message : (error as Error).message;
+        await ctx.db.patch(r._id, { state: "blocked", stateReason: `the fire failed: ${String(message ?? error).slice(0, 1_000)}`, stateAt: now, blockedReported: undefined });
+      }
     }
   }
-  return { fired, skipped, expired };
+  return { fired, skipped, expired, deferred };
 }
 
 export type Step = "fired" | "skipped" | "expired" | "ended" | "none";

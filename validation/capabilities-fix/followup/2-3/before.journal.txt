@@ -1,0 +1,10 @@
+[31m     [31m×[31m Alder's repro: an uncertain delivery two hours old with no alert (the scanner was down) is alerted, once[39m[32m 206[2mms[22m[39m
+[31m     [31m×[31m a reminder that expired two hours ago, never reported, is alerted once[39m[32m 17[2mms[22m[39m
+[31m     [31m×[31m history from before tracking (marked by the upgrade) doesn't flood; what happens after is alerted[39m[32m 38[2mms[22m[39m
+[31m     [31m×[31m Alder's repro: 500 in-flight deliveries don't hide a newer reclaimed one[39m[32m 47[2mms[22m[39m
+[31m     [31m×[31m 500 reclaimed deliveries already alerted don't hide a newer one[39m[33m 1376[2mms[22m[39m
+[31m     [31m×[31m Alder's repro: a 501st incident whose condition cleared resolves past 500 still-open ones[39m[32m 106[2mms[22m[39m
+[31m     [31m×[31m Reed's repro: with 500 long-lived open incidents, a connector incident resolves in one scan, and a later silence alerts again[39m[32m 103[2mms[22m[39m
+[31m     [31m×[31m a reminder blocked again after a resume is alerted again; 300 blocked reminders don't hide a newer one[39m[33m 793[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 8 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m8 failed[39m[22m[90m (8)[39m

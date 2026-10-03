@@ -1,0 +1,2 @@
+    not ok 1 - Reed's repro: the connector dies mid-send and is back in 3 s; the retry with the same key posts it once
+    not ok 2 - Alder's repro: the connector dies mid-send and stays down; the CLI gives up with exit 3 and prints the --key line

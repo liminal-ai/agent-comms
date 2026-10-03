@@ -1,0 +1,3 @@
+[31m     [31m×[31m Alder's and Reed's repro: 100 notices in one tick, pages of 50: every one reachable, once, in both views[39m[33m 312[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m8 skipped[39m[90m (9)[39m

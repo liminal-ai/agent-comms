@@ -27,7 +27,9 @@ async function unread(ctx: QueryCtx, humanId: Doc<"participants">["_id"]): Promi
 
 /**
  * The newest `limit` (default 50, at most 200) inbox items, newest first, and the unread
- * count. `before` (a `nextBefore` from the previous page) reaches older ones (fix pass 2).
+ * count. `cursor` (a `nextCursor` from the previous page) reaches older ones. The cursor is
+ * Convex's own pagination cursor (follow-up 5): opaque, and exact even when many items
+ * share a timestamp.
  */
 export const list = query({
   args: {
@@ -35,37 +37,27 @@ export const list = query({
     human: v.string(),
     unreadOnly: v.optional(v.boolean()),
     limit: v.optional(v.number()),
-    before: v.optional(v.number()),
+    cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await requireAdmin(args.adminToken);
     const h = await human(ctx, args.human);
     const limit = Math.max(1, Math.min(Math.floor(args.limit ?? 50), MAX_LIST));
-    const before = args.before;
-    const page = args.unreadOnly
-      ? await ctx.db
-          .query("inbox")
-          .withIndex("by_human_read_created", (q) => {
-            const unread = q.eq("humanId", h._id).eq("readAt", undefined);
-            return before !== undefined ? unread.lt("createdAt", before) : unread;
-          })
-          .order("desc")
-          .take(limit + 1)
-      : await ctx.db
-          .query("inbox")
-          .withIndex("by_human", (q) => (before !== undefined ? q.eq("humanId", h._id).lt("createdAt", before) : q.eq("humanId", h._id)))
-          .order("desc")
-          .take(limit + 1);
-    const rows = page.slice(0, limit);
+    const page = await (args.unreadOnly
+      ? ctx.db.query("inbox").withIndex("by_human_read_created", (q) => q.eq("humanId", h._id).eq("readAt", undefined))
+      : ctx.db.query("inbox").withIndex("by_human", (q) => q.eq("humanId", h._id))
+    )
+      .order("desc")
+      .paginate({ numItems: limit, cursor: args.cursor ?? null });
     const items: InboxItem[] = [];
-    for (const row of rows) {
+    for (const row of page.page) {
       const message = await ctx.db.get(row.messageId);
       const conversation = await ctx.db.get(row.conversationId);
       if (!message || !conversation) continue;
       items.push({ message: await envelope(ctx, message), conversation: conversationRef(conversation), readAt: row.readAt ?? null });
     }
-    const hasMore = page.length > limit;
-    return { items, unread: await unread(ctx, h._id), hasMore, ...(hasMore ? { nextBefore: rows.at(-1)!.createdAt } : {}) };
+    const hasMore = !page.isDone;
+    return { items, unread: await unread(ctx, h._id), hasMore, ...(hasMore ? { nextCursor: page.continueCursor } : {}) };
   },
 });
 

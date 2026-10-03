@@ -1,0 +1,5 @@
+ [32m✓[39m [30m[42m convex [49m[39m convex/followup-tick.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 1458[2mms[22m[39m
+   [33m[2m✓[22m[39m Reed's repro: the tick survives 30 due CJK reminders of 32,000 characters, and carries on until all are handled[33m 333[2mms[22m[39m
+   [33m[2m✓[22m[39m Reed's repro: the tick survives 50 due CJK reminders of 32,000 characters, and carries on until all are handled[33m 368[2mms[22m[39m
+   [33m[2m✓[22m[39m Reed's repro: the tick survives 100 expiring + 50 due ASCII reminders of 32,000 characters, and carries on until all are handled[33m 455[2mms[22m[39m
+[2m      Tests [22m [1m[32m4 passed[39m[22m[90m (4)[39m

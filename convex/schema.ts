@@ -109,6 +109,9 @@ export default defineSchema({
     claimCount: v.optional(v.number()),
     /** The one fallback delivery of an answer already returned to a waiting send, unacknowledged. */
     fallback: v.optional(v.boolean()),
+    /** Follow-up 3: the alert scan has seen this delivery as uncertain / reclaimed (alerted, or an incident was already open). */
+    uncertainReported: v.optional(v.boolean()),
+    reclaimReported: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_recipient_state", ["recipientId", "state"])
@@ -116,8 +119,10 @@ export default defineSchema({
     .index("by_recipient_state_collect", ["recipientId", "state", "collect"])
     .index("by_target_state_collect", ["target.machine", "state", "collect"])
     .index("by_message", ["messageId"])
-    // Alerts (fix pass 1.3): deliveries entering `uncertain` recently, by when they changed.
     .index("by_state_at", ["state", "at"])
+    // Alerts (follow-up 2, 3): what hasn't been reported yet, so every scan makes progress.
+    .index("by_state_uncertainReported", ["state", "uncertainReported"])
+    .index("by_reclaim_unreported", ["state", "collect", "reclaimReported", "claimCount"])
     // Alerts (fix pass 1.3): in-flight deliveries only (answers end at `delivered` and are never in flight).
     .index("by_state_collect", ["state", "collect"]),
 
@@ -200,12 +205,17 @@ export default defineSchema({
     expiresAt: v.number(),
     /** The most recent skips, newest last (capped). */
     skips: v.array(reminderSkip),
+    /** Follow-up 3: the alert scan has seen it expired / blocked (cleared when it leaves `blocked`). */
+    expiryReported: v.optional(v.boolean()),
+    blockedReported: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_state_next", ["state", "nextFireAt"])
     // Fix pass 1.3: expiry and alerts read live states only, never finished history.
     .index("by_state_expires", ["state", "expiresAt"])
     .index("by_state_stateAt", ["state", "stateAt"])
+    .index("by_state_expiryReported", ["state", "expiryReported"])
+    .index("by_blocked_unreported", ["state", "blockedReported", "stateAt"])
     .index("by_target", ["targetId"])
     .index("by_creator", ["createdById"])
     .index("by_reportTo", ["reportToId"]),
@@ -238,11 +248,18 @@ export default defineSchema({
     conversationId: v.id("conversations"),
     openedAt: v.number(),
     resolvedAt: v.optional(v.number()),
+    /** Follow-up 2: when the resolve pass last found it still holding (open incidents are checked least recently first). */
+    checkedAt: v.optional(v.number()),
     summary: v.string(),
   })
     .index("by_subject", ["cause", "subjectId", "resolvedAt"])
     .index("by_resolved", ["resolvedAt", "openedAt"])
-    .index("by_opened", ["openedAt"]),
+    .index("by_opened", ["openedAt"])
+    .index("by_cause_resolved", ["cause", "resolvedAt"])
+    .index("by_resolved_checked", ["resolvedAt", "checkedAt"]),
+
+  /** One-time data migrations run by `directory.upgrade` (follow-up 3: "alert-history"). */
+  migrations: defineTable({ name: v.string(), doneAt: v.number() }).index("by_name", ["name"]),
 
   /** The alert thresholds: at most one row; DEFAULT_ALERT_CONFIG when absent. */
   alertConfig: defineTable({

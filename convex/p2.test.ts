@@ -122,7 +122,7 @@ describe("2 inbox", () => {
     await fill(t, 101);
     const first = await t.query(api.inbox.list, { adminToken: ADMIN, human: "lee", limit: 100 });
     expect([first.items.length, first.unread, first.hasMore]).toEqual([100, 101, true]);
-    const second = await t.query(api.inbox.list, { adminToken: ADMIN, human: "lee", limit: 100, before: first.nextBefore! });
+    const second = await t.query(api.inbox.list, { adminToken: ADMIN, human: "lee", limit: 100, cursor: first.nextCursor! });
     expect(second.items.map((i) => i.message.text)).toEqual(["inbox 0"]);
     expect(second.hasMore).toBe(false);
   });
@@ -132,5 +132,33 @@ describe("2 inbox", () => {
     await fill(t, 101);
     const r = await t.mutation(api.inbox.markRead, { adminToken: ADMIN, human: "lee", all: true });
     expect([r.marked, r.unread]).toEqual([101, 0]);
+  });
+});
+
+describe("follow-up 5: the inbox cursor handles identical timestamps", () => {
+  async function sameTick(t: T, n: number) {
+    // The clock is frozen: every message gets the same createdAt, as when many arrive in one mutation.
+    for (let i = 0; i < n; i++) await t.mutation(api.connector.send, { machine: m1, as: "a", to: ["lee"], text: `same ${i}`, key: `same-${String(i).padStart(4, "0")}` });
+  }
+  async function all(t: T, unreadOnly: boolean) {
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      const r = await t.query(api.inbox.list, { adminToken: ADMIN, human: "lee", limit: 50, unreadOnly, ...(cursor ? { cursor } : {}) });
+      seen.push(...r.items.map((i) => i.message.text));
+      if (!r.hasMore) break;
+      cursor = r.nextCursor!;
+    }
+    return seen;
+  }
+
+  it("Alder's and Reed's repro: 100 notices in one tick, pages of 50: every one reachable, once, in both views", async () => {
+    const t = await setup();
+    await sameTick(t, 100);
+    for (const unreadOnly of [false, true]) {
+      const seen = await all(t, unreadOnly);
+      expect(seen.length, `unreadOnly=${unreadOnly}`).toBe(100);
+      expect(new Set(seen).size).toBe(100);
+    }
   });
 });
