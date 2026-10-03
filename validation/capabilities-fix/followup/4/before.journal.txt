@@ -1,0 +1,6 @@
+   [33m[2m✓[22m[39m Reed's repro: the tick survives 30 due CJK reminders of 32,000 characters, and carries on until all are handled[33m 307[2mms[22m[39m
+[31m   [31m×[31m Reed's repro: the tick survives 50 due CJK reminders of 32,000 characters, and carries on until all are handled[39m[32m 221[2mms[22m[39m
+[31m   [31m×[31m Reed's repro: the tick survives 60 expiring CJK reminders of 32,000 characters, and carries on until all are handled[39m[32m 212[2mms[22m[39m
+   [33m[2m✓[22m[39m Reed's repro: the tick survives 100 expiring + 50 due ASCII reminders of 32,000 characters, and carries on until all are handled[33m 393[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (4)[39m
