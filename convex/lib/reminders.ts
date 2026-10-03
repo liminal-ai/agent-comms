@@ -137,6 +137,7 @@ export async function applyAction(
     state: next.state,
     stateReason: next.stateReason,
     stateAt: now,
+    blockedReported: undefined, // follow-up 2: a new blocked spell is alerted again
     ...(next.state === "done" || next.state === "cancelled" ? { nextFireAt: undefined } : {}),
   });
   const updated = (await ctx.db.get(r._id))!;
@@ -325,7 +326,7 @@ export async function tick(ctx: MutationCtx, now: number): Promise<{ fired: numb
       else if (outcome === "expired") expired++;
     } catch (error) {
       const message = error instanceof ConvexError ? (error.data as { message?: string }).message : (error as Error).message;
-      await ctx.db.patch(r._id, { state: "blocked", stateReason: `the fire failed: ${String(message ?? error).slice(0, 1_000)}`, stateAt: now });
+      await ctx.db.patch(r._id, { state: "blocked", stateReason: `the fire failed: ${String(message ?? error).slice(0, 1_000)}`, stateAt: now, blockedReported: undefined });
     }
   }
   return { fired, skipped, expired };

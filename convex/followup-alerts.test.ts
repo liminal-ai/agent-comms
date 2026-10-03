@@ -90,7 +90,13 @@ describe("follow-up 3: outages can't hide alerts", () => {
 
   it("history from before tracking (marked by the upgrade) doesn't flood; what happens after is alerted", async () => {
     const t = await setup();
+    // A deployment from before tracking: no migration record yet.
+    await t.run(async (ctx) => {
+      for (const m of await ctx.db.query("migrations").collect()) await ctx.db.delete(m._id);
+    });
     await seedDeliveries(t, 300, { state: "uncertain", collect: true, ago: 30 * DAY });
+    await scan(t); // before the migration, the scan leaves these causes alone
+    expect(await alerts(t)).toEqual([]);
     for (let i = 0; i < 5; i++) {
       const r = await t.mutation(api.directory.markAlertHistory, { adminToken: ADMIN });
       if (r.done) break;

@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { fail, participantByName, ref, requireAdmin, sha256Hex } from "./lib/core";
+import { markAlertHistory as markHistory } from "./lib/alerts";
 import { profilePatch } from "./lib/registry";
 import { endResult } from "./lib/waits";
 import { home, promotableKind } from "./validators";
@@ -178,6 +179,17 @@ export const upgrade = mutation({
       await ctx.db.patch(p._id, { ownerId: fallback._id });
       ownersSet++;
     }
-    return { systemCreated, systemRepaired, ownersSet };
+    // Follow-up 3: one batch of the alert-history migration; scripts/upgrade.ts runs `markAlertHistory` until done.
+    const history = await markHistory(ctx, now);
+    return { systemCreated, systemRepaired, ownersSet, alertHistoryDone: history.done };
+  },
+});
+
+/** Follow-up 3: one batch of the alert-history migration. Call until `done` (scripts/upgrade.ts does). */
+export const markAlertHistory = mutation({
+  args: { adminToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireAdmin(args.adminToken);
+    return markHistory(ctx, Date.now());
   },
 });

@@ -46,6 +46,8 @@ async function seedDeliveries(t: T, n: number, fields: { state: "delivered" | "u
     const ids: Id<"deliveries">[] = [];
     for (let i = 0; i < n; i++) {
       ids.push(await ctx.db.insert("deliveries", {
+        // History is already handled (follow-up 3: reported, as the upgrade's migration leaves it), unless it's the new item.
+        ...(fields.ago > 0 ? { uncertainReported: true, reclaimReported: true } : {}),
         messageId, conversationId, recipientId: b._id, collect: fields.collect, state: fields.state, at: NOW - fields.ago - i,
         ...(fields.claimCount !== undefined ? { claimCount: fields.claimCount } : {}), createdAt: NOW - fields.ago - i,
       }));
@@ -62,7 +64,7 @@ async function seedExpiredReminders(t: T, n: number) {
     const { _id, _creationTime, ...base } = row;
     await ctx.db.delete(_id);
     for (let i = 0; i < n; i++) {
-      await ctx.db.insert("reminders", { ...base, state: "expired", stateAt: NOW - 30 * DAY - i, expiresAt: NOW - 30 * DAY - i, nextFireAt: undefined });
+      await ctx.db.insert("reminders", { ...base, state: "expired", stateAt: NOW - 30 * DAY - i, expiresAt: NOW - 30 * DAY - i, nextFireAt: undefined, expiryReported: true });
     }
   });
 }
@@ -107,7 +109,7 @@ describe("1.3 alerts: history doesn't hide a new incident", () => {
     expect((await alerts(t)).map((a) => [a.cause, a.subject.id])).toEqual([["delivery-reclaimed", hot]]);
   });
 
-  it(`${HISTORY} old uncertain deliveries don't hide a new one, and an open incident older than the scan window stays open`, async () => {
+  it(`${HISTORY} old uncertain deliveries (already reported) don't hide a new one, and an open incident stays open until it clears`, async () => {
     const t = await setup();
     await seedDeliveries(t, HISTORY, { state: "uncertain", collect: true, ago: 2 * DAY });
     const [fresh] = await seedDeliveries(t, 1, { state: "uncertain", collect: true, ago: 0 });

@@ -24,3 +24,11 @@ const adminToken = readFileSync(expand(values["admin-token-file"]), "utf8").trim
 const client = new ConvexHttpClient(values.url);
 const result = await client.mutation(api.directory.upgrade, { adminToken, defaultOwner: values["default-owner"] ?? "lee" });
 console.log(JSON.stringify(result));
+// Follow-up 3: finish marking alert history from before tracking, a batch at a time.
+let history = { marked: 0, done: result.alertHistoryDone };
+let marked = 0;
+while (!history.done) {
+  history = await client.mutation(api.directory.markAlertHistory, { adminToken });
+  marked += history.marked;
+}
+if (marked > 0) console.log(JSON.stringify({ alertHistoryMarked: marked }));

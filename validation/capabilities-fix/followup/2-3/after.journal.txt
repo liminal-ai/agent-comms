@@ -1,0 +1,8 @@
+ [32m✓[39m [30m[42m convex [49m[39m convex/scale.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 402[2mms[22m[39m
+ [32m✓[39m [30m[42m convex [49m[39m convex/followup-alerts.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 2819[2mms[22m[39m
+   [32m✓[39m follow-up 2: the scans progress through every eligible row [2m(5)[22m
+     [33m[2m✓[22m[39m 500 reclaimed deliveries already alerted don't hide a newer one[33m 631[2mms[22m[39m
+     [33m[2m✓[22m[39m Alder's repro: a 501st incident whose condition cleared resolves past 500 still-open ones[33m 398[2mms[22m[39m
+     [33m[2m✓[22m[39m Reed's repro: with 500 long-lived open incidents, a connector incident resolves in one scan, and a later silence alerts again[33m 523[2mms[22m[39m
+     [33m[2m✓[22m[39m a reminder blocked again after a resume is alerted again; 300 blocked reminders don't hide a newer one[33m 1020[2mms[22m[39m
+[2m      Tests [22m [1m[32m13 passed[39m[22m[90m (13)[39m
