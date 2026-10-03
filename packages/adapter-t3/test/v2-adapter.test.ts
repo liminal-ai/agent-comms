@@ -223,7 +223,7 @@ const delivery = (id = "d_1", kind: "request" | "answer" = "request"): Delivery 
 
 const target = { participant: "tee", locator: "th1" };
 const tick = (ms = 30) => new Promise((r) => setTimeout(r, ms));
-const options = { acceptTimeoutMs: 500, waitingSettleMs: 200, idlePollMs: 20 };
+const options = { acceptTimeoutMs: 500, waitingSettleMs: 200, idlePollMs: 20, retryDelayMs: 10 };
 const setup = () => {
   const t3 = new FakeV2();
   return { t3, adapter: makeT3AdapterV2({ client: t3, ...options }) };
