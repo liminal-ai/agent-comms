@@ -8,40 +8,74 @@ export const SCRATCH_COMMS = "/srv/agents/cedar/tmp/v2/comms";
 export const TEST_IDENTITIES = ["v2ann", "v2bob", "v2cat"] as const;
 const SUBCOMMANDS = new Set(["send", "reply", "await", "status", "read", "list", "agents"]);
 
-/** Splits a command into words like a POSIX shell, refusing anything but plain words and quotes. */
+/**
+ * Splits a command into shell words, the way bash would, refusing only what the shell would
+ * act on: operators and substitutions outside quotes, and substitutions or named variables
+ * inside double quotes (the shell still runs `$(…)` and backticks there, and `"$TOKEN"` would
+ * put an environment variable into the message). Inside single quotes everything is literal;
+ * inside double quotes operators are literal text (`"a > b"`, `"x; y"`), and `$` followed by a
+ * digit is a positional parameter, empty in the agent's shell (`"costs $5"` becomes "costs ").
+ */
 export function words(input: string): string[] | { refused: string } {
   const out: string[] = [];
   let word: string | null = null;
-  let quote: "'" | '"' | null = null;
-  for (let i = 0; i < input.length; i++) {
-    const c = input[i]!;
-    // Substitutions are refused everywhere, quoted or not ($ expands inside double quotes too).
-    if (c === "`" || c === "$") return { refused: `substitution (${c})` };
-    if (quote === "'") {
-      if (c === "'") quote = null;
-      else word += c;
+  const add = (t: string) => (word = (word ?? "") + t);
+  let i = 0;
+  const at = (k: number) => input[k] ?? "";
+  while (i < input.length) {
+    const c = at(i);
+    if (c === "'") {
+      const end = input.indexOf("'", i + 1);
+      if (end < 0) return { refused: "unterminated single quote" };
+      add(input.slice(i + 1, end));
+      i = end + 1;
       continue;
     }
-    if (quote === '"') {
-      if (c === '"') quote = null;
-      else if (c === "\\") return { refused: "escape inside double quotes" };
-      else word += c;
+    if (c === '"') {
+      let k = i + 1;
+      let text = "";
+      for (;;) {
+        if (k >= input.length) return { refused: "unterminated double quote" };
+        const d = at(k);
+        if (d === '"') break;
+        if (d === "\\" && "$`\"\\\n".includes(at(k + 1))) {
+          text += at(k + 1);
+          k += 2;
+          continue;
+        }
+        if (d === "`") return { refused: "command substitution (backtick) in double quotes" };
+        if (d === "$") {
+          const n = at(k + 1);
+          if (/[0-9]/.test(n)) {
+            k += 2; // a positional parameter: empty
+            continue;
+          }
+          if (/[A-Za-z_{(@*#?$!-]/.test(n)) return { refused: `expansion ($${n}) in double quotes` };
+        }
+        text += d;
+        k++;
+      }
+      add(text);
+      i = k + 1;
       continue;
     }
-    if (c === "'" || c === '"') {
-      quote = c;
-      word ??= "";
+    if (c === "\\") {
+      if (i + 1 >= input.length) return { refused: "trailing backslash" };
+      if (at(i + 1) !== "\n") add(at(i + 1)); // an escaped newline joins lines
+      i += 2;
       continue;
     }
     if (c === " " || c === "\t") {
       if (word !== null) out.push(word);
       word = null;
+      i++;
       continue;
     }
-    if (";&|<>()\n\\#{}*?[]~!".includes(c)) return { refused: `shell operator (${JSON.stringify(c)})` };
-    word = (word ?? "") + c;
+    if (c === "$" || c === "`") return { refused: `substitution (${c}) outside quotes` };
+    if (";&|<>()\n#{}*?[]~!".includes(c)) return { refused: `shell operator (${JSON.stringify(c)}) outside quotes` };
+    add(c);
+    i++;
   }
-  if (quote) return { refused: "unterminated quote" };
   if (word !== null) out.push(word);
   return out;
 }
