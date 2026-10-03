@@ -1,0 +1,2 @@
+{"at":"2026-10-03T03:18:52.650Z","scenario":"brief","ok":true}
+{"at":"2026-10-03T03:18:56.208Z","scenario":"baseline","delivery":"jd72c081v1kybnqqp1349ajb518fk6j0","state":"replied","answers":[{"from":"v2ann","collected":true,"text":"V2-BASELINE"}],"t3":{"ourMessages":1,"runs":[{"id":"run:thread:2c464b35-89d4-45e0-9baa-77d9620b6c2c:ordinal:3","status":"completed","attempts":["initial:completed"]}],"foreignInOurRun":0}}

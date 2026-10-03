@@ -1,0 +1,91 @@
+{
+  "ok": true,
+  "deliveries": [
+    {
+      "id": "jd790a8nmeyd6sz4c6r6y5z8ad8fjhtt",
+      "recipient": "v2ann",
+      "state": "pending"
+    }
+  ],
+  "message": {
+    "attachments": [],
+    "conversationId": "j97chg7z4et8r841y83rcj7dmn8fj3dh",
+    "createdAt": 1790997386752,
+    "id": "jx7fpsbf6twzent1eh8j4t854s8fkxqy",
+    "kind": "request",
+    "origin": {
+      "via": "cli"
+    },
+    "recipients": [
+      {
+        "id": "k57cyfmvgr7vj3xfb069yva69n8fksxn",
+        "kind": "agent",
+        "name": "v2ann"
+      }
+    ],
+    "sender": {
+      "id": "k57csv639awxbdq0p1w731rcfs8fkgrk",
+      "kind": "agent",
+      "name": "v2cat"
+    },
+    "seq": 1,
+    "text": "V2 smoke 1: no tools please. Reply with exactly: PONG-1"
+  },
+  "skipped": [],
+  "wait": {
+    "active": false,
+    "createdAt": 1790997386752,
+    "endedAt": 1790997389417,
+    "id": "kn769q4499dwjymz4ks9qwb1bd8fkqev",
+    "inInbox": [],
+    "messageId": "jx7fpsbf6twzent1eh8j4t854s8fkxqy",
+    "results": [
+      {
+        "answer": {
+          "attachments": [],
+          "collectedFrom": "jd790a8nmeyd6sz4c6r6y5z8ad8fjhtt",
+          "conversationId": "j97chg7z4et8r841y83rcj7dmn8fj3dh",
+          "createdAt": 1790997389417,
+          "id": "jx7869d8z29w8pq2gfhwj3q9p98fkrah",
+          "inReplyTo": "jx7fpsbf6twzent1eh8j4t854s8fkxqy",
+          "kind": "answer",
+          "origin": {
+            "via": "t3"
+          },
+          "recipients": [
+            {
+              "id": "k57csv639awxbdq0p1w731rcfs8fkgrk",
+              "kind": "agent",
+              "name": "v2cat"
+            }
+          ],
+          "sender": {
+            "id": "k57cyfmvgr7vj3xfb069yva69n8fksxn",
+            "kind": "agent",
+            "name": "v2ann"
+          },
+          "seq": 2,
+          "text": "PONG-1"
+        },
+        "at": 1790997389417,
+        "delivery": {
+          "id": "jd790a8nmeyd6sz4c6r6y5z8ad8fjhtt",
+          "state": "replied"
+        },
+        "proofToken": "da180134118d454b84a649f4ed466ff6",
+        "recipient": {
+          "id": "k57cyfmvgr7vj3xfb069yva69n8fksxn",
+          "kind": "agent",
+          "name": "v2ann"
+        },
+        "state": "answered"
+      }
+    ],
+    "until": 1790997536752,
+    "waiter": {
+      "id": "k57csv639awxbdq0p1w731rcfs8fkgrk",
+      "kind": "agent",
+      "name": "v2cat"
+    }
+  }
+}
