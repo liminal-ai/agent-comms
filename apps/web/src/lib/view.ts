@@ -391,7 +391,7 @@ export function conversationReadKey(view: { messages: readonly { message: { id: 
   return view.messages.at(-1)?.message.id ?? "";
 }
 
-/** The reminders list's summary of finished reminders (today's wording). */
+/** The reminders list's summary of finished reminders: `reminders.list` returns only the recent ones. */
 export function endedRemindersSummary(count: number): string {
-  return `${count} ended`;
+  return `${count} recently ended (older not shown)`;
 }

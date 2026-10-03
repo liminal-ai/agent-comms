@@ -1,0 +1,72 @@
+$ node --test 'test/**/*.test.ts'
+▶ fix pass 1.4: reminder text capped on the web form
+  ✔ 1.4: text over MAX_TEXT_CHARS is refused before it's sent; at the cap it's accepted (12.341691ms)
+✔ fix pass 1.4: reminder text capped on the web form (13.094947ms)
+▶ fix pass 2: reminder names are one line
+  ✔ 2 names: a name with a newline (a forged header line) or a control character is refused (0.203144ms)
+✔ fix pass 2: reminder names are one line (0.300067ms)
+▶ fix pass 2: retired people can't own agents
+  ✔ 2 owners: the owner picker lists active people only (0.608686ms)
+✔ fix pass 2: retired people can't own agents (0.716793ms)
+▶ fix pass 2: thresholds are finite whole numbers
+  ✔ 2 thresholds: NaN, Infinity, blanks and fractions are refused before the range check (0.270162ms)
+✔ fix pass 2: thresholds are finite whole numbers (0.359437ms)
+▶ follow-up 6: an open conversation past 100 messages
+  ✔ 6: a new message changes the read key even when the view still holds 100 messages (1.031971ms)
+  ✔ 6: the key doesn't change when nothing new arrived, and is undefined before the view loads (0.196902ms)
+✔ follow-up 6: an open conversation past 100 messages (2.43557ms)
+▶ after sign-off: the ended reminders summary
+  ✔ says the list holds only recent ended reminders (reminders.list returns 15 per finished state) (0.192848ms)
+✔ after sign-off: the ended reminders summary (0.366387ms)
+▶ P3 bug 7: an old open alert stays visible
+  ✔ 7: an open incident older than the newest 100 is still in the badge and the open list (1.21828ms)
+  ✔ 7: an open alert in both lists is listed once; the badge counts open incidents only (0.163776ms)
+✔ P3 bug 7: an old open alert stays visible (2.211565ms)
+▶ P3 bug 8: no phantom @lee
+  ✔ 8: with no @lee, posting as defaults to the first active person (0.231938ms)
+  ✔ 8: a saved choice that's no longer an active person isn't kept (0.105886ms)
+  ✔ 8: @lee is still the default when it exists, and a saved active person wins (0.146853ms)
+  ✔ 8: before the directory has loaded, the saved choice is kept (0.124799ms)
+✔ P3 bug 8: no phantom @lee (0.830437ms)
+▶ W registry
+  ✔ W registry: an idle agent shows how long it has been idle (1.186859ms)
+  ✔ W registry: a stale machine is never shown as idle, whatever was last written (12.528247ms)
+  ✔ W registry: busy, offline, people and system participants (0.217563ms)
+  ✔ W registry: a profile edit is one description line and one duty per line, blanks dropped (0.379248ms)
+  ✔ W registry: a profile edit over the protocol's limits is refused before it's sent (0.189814ms)
+✔ W registry (15.478886ms)
+▶ W registry, promotion (R1 API)
+  ✔ W promote: an agent is promoted with its owner (a person), as R1's directory.promote requires (0.261905ms)
+  ✔ W promote: reserved names, bad names, a missing thread id or machine, and an owner who isn't a person are refused (0.16504ms)
+✔ W registry, promotion (R1 API) (0.61628ms)
+▶ W registry, live
+  ✔ W registry: a machine that stops heartbeating turns stale on the clock, not only when Convex next writes (0.194757ms)
+✔ W registry, live (0.336358ms)
+▶ W reminders
+  ✔ W reminders: the controls offered follow the state; ended reminders have none (0.226092ms)
+  ✔ W reminders: the schedule reads like the rendering (every 30m, once at a time), with its conditions (0.436354ms)
+  ✔ W reminders: the status line says the state, fires, next fire and why it's blocked (0.18194ms)
+  ✔ W reminders: the list shows the last fire's delivery state and the last skip, whichever is newer (0.172979ms)
+  ✔ W reminders: the create form becomes reminders.create arguments (0.42665ms)
+  ✔ W reminders: the create form refuses what Convex would (both or neither schedule, under a minute, past, too long) (0.17384ms)
+✔ W reminders (1.860319ms)
+▶ W inbox
+  ✔ W inbox: the badge and the page title carry the unread count (0.100197ms)
+✔ W inbox (0.170975ms)
+▶ W inbox, kinds
+  ✔ W inbox: messages from system participants are labelled by what they are (0.143328ms)
+✔ W inbox, kinds (0.199746ms)
+▶ W alerts
+  ✔ W alerts: each cause has a plain label, and resolved incidents say so (0.22175ms)
+  ✔ W alerts: the badge counts open incidents only (0.113128ms)
+  ✔ W alerts: thresholds are edited in minutes and checked against Convex's ranges (0.22955ms)
+✔ W alerts (0.664298ms)
+ℹ tests 32
+ℹ suites 15
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 151.751161
+$ tsc -p tsconfig.json

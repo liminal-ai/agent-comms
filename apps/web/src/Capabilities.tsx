@@ -18,6 +18,7 @@ import {
   parseReminderForm,
   presenceView,
   type ReminderForm,
+  endedRemindersSummary,
   reminderActions,
   reminderLast,
   reminderLine,
@@ -271,7 +272,7 @@ export function Reminders({ token, as, now }: { token: string; as: string; now: 
       </ul>
       {ended.length > 0 && (
         <details>
-          <summary className="small muted">{ended.length} ended</summary>
+          <summary className="small muted">{endedRemindersSummary(ended.length)}</summary>
           <ul className="reminders">{ended.map(row)}</ul>
         </details>
       )}
