@@ -60,3 +60,22 @@ Related: with `@v2cat` approval-required and as the sender, each answer delivere
 ## Not covered here
 
 The rest of the handoff's acceptance: the stock UI pass, LHC (Hazel, 13977), the combined comms + LHC run and the sustained multi-agent trial. The deployed connector stays on protocol 1 and 3780 until those pass.
+
+## Rerun on the 2632 re-pin (docs/11 step 3)
+
+2026-10-03 from 14:58 UTC: stock `v0.0.46-nightly.20261003.2632` (f391794a) on 13976 after Cedar's re-pin (`/srv/work/t3code-v2-baseline/HANDOFF.txt`), agent-comms main d87e55b+ (option A, both stream fixes, the reply race), scratch Convex 3214, same synthetic threads. Lines after the `marker` line in `raw/results.jsonl`.
+
+The contract diff from 2610 to 2632 is additive (a `workStartedAt` field on runs, pull-request watch commands and events, one capability flag; the only removed line is a doc comment), and nothing the adapter reads or sends changed: no adapter change.
+
+| Check | 2632 result |
+|---|---|
+| baseline, busy thread, Lee queues, claim loss, crash after accept, connector restart | `replied`; one message, one run each |
+| Lee steers into our run | `ambiguous` (twice; see below) |
+| restart_active | still refused for Claude; ours `replied` |
+| Stop, and Stop while the connector is down | `failed` (aborted); nothing collected |
+| receipt rule | the one exact command approved; the answer in the call and again as the fallback |
+| option A, `replyDuring` | `replied` with the agent's `comms reply` only; the final text not collected |
+| commandId across a T3 restart | still persisted: the accepted command returns its first sequence (2382) and adds nothing; the rejected one stays rejected |
+| T3 restart mid-run | **changed from 2610:** the run now ends `failed` ("Provider turn failed.") instead of `cancelled`; we record `failed` (error), collect nothing, no re-run. Likely PR 15048's stuck-run handling; either way the outcome is right |
+
+Harness notes: in the steer check the agent now often answers the original request with its own `comms reply` (the new delivery sentence tells it that's the answer). That command carries free text, which can't be matched exactly, so under the standing rule its approval is declined; `steeredIn` now declines it itself and waits for the thread to go idle (the first 2632 run left the thread blocked on the approval, so `restartSteer` failed on the idle wait and was rerun; the second `steeredIn` timed out on it and its outcome was recorded by hand, marked). The reply race has no live scenario: it needs a reply to land between T3 accepting and the `delivered` write, which the Convex tests cover in every ordering.

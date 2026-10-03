@@ -107,9 +107,12 @@ const scenarios: Record<string, () => Promise<void>> = {
     await sleep(4000);
     const lee = await typeIn(ANN, "Steering aside: also tell me what 5+5 is.", "steer");
     const d = await waitState(g, s.messageId, SETTLED);
-    await sleep(5000);
+    // The notice's run: the agent's own `comms reply` carries free text, which can't be matched
+    // exactly, so its approval is declined (standing rule); the run then ends and the thread is idle.
+    const noticeApprovals = await approveOnly(ANN, "\u0000no exact match", 180_000);
+    await waitBusy(ANN, false);
     const notice = await runsFor(ANN, `comms-notice-${s.deliveryId}`);
-    result("steeredIn", { delivery: s.deliveryId, state: d.state, detail: d.detail ?? null, answers: await answers(s), t3: await runsFor(ANN, `comms-${s.deliveryId}`), leeIn: (await projection(ANN)).messages.find((m) => m.id === lee)?.runId ?? null, notice });
+    result("steeredIn", { delivery: s.deliveryId, state: d.state, detail: d.detail ?? null, answers: await answers(s), t3: await runsFor(ANN, `comms-${s.deliveryId}`), leeIn: (await projection(ANN)).messages.find((m) => m.id === lee)?.runId ?? null, notice, noticeApprovals });
   },
 
   /** Lee restarts our running run with his message (restart_active). */
