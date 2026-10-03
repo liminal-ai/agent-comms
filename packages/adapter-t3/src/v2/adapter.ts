@@ -8,7 +8,8 @@
 //   error is retried once with the same id, unless the thread already has our message:
 //   refused is rejected, anything else is lost and the restart check decides.
 // - We dispatch with `start_immediately` after waiting for the thread to be idle, as a
-//   courtesy only: on a busy thread T3 queues our message as its own run.
+//   courtesy only and for at most `idleWaitMs`: on a busy thread T3 queues our message as
+//   its own run.
 // - Our run is the run whose `userMessageId` is our message. Ambiguous: another user
 //   message in our run (someone steered into it), or a steer restarted it. Only the
 //   fact is reported, never that message's text.
@@ -30,6 +31,8 @@ export interface T3AdapterV2Options {
   log?: (line: string) => void;
   /** How long to wait for our run to appear after dispatching. */
   acceptTimeoutMs?: number;
+  /** The longest courtesy wait for an idle thread before sending anyway (T3 queues our message as its own run). */
+  idleWaitMs?: number;
   /** How long a run may sit in `waiting` before its outcome is read anyway. */
   waitingSettleMs?: number;
   /** If the thread's event stream stays down this long, stop waiting on it: the restart check decides. */
@@ -57,6 +60,7 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
   const log = options.log ?? (() => {});
   const acceptTimeoutMs = options.acceptTimeoutMs ?? 60_000;
   const waitingSettleMs = options.waitingSettleMs ?? 30_000;
+  const idleWaitMs = options.idleWaitMs ?? 90_000;
   const streamDownLimitMs = options.streamDownLimitMs ?? 5 * 60_000;
   const retryDelayMs = options.retryDelayMs ?? 1_000;
   const idlePollMs = options.idlePollMs ?? 1_000;
@@ -241,8 +245,14 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         if (gate?.signal.aborted) return { _tag: "aborted", detail: "cancelled before sending" };
         const tracker = new RunTracker(messageId);
         const f = await follow(threadId, tracker);
-        // Courtesy wait until idle; a cancelled handoff stops waiting.
-        await f.wait(() => (gate?.signal.aborted || (f.loaded && !tracker.busy) || downTooLong(f) ? true : undefined));
+        // Courtesy wait until idle, at most `idleWaitMs` (docs/09 3): on a thread that stays busy
+        // T3 queues our message as its own run, so waiting longer only churns the claim. A
+        // cancelled handoff stops waiting.
+        await f.wait(() => (gate?.signal.aborted || (f.loaded && !tracker.busy) || downTooLong(f) ? true : undefined), idleWaitMs);
+        if (!f.loaded) {
+          f.stop();
+          return { _tag: "aborted", detail: "T3's thread stream gave no snapshot; not sending" };
+        }
         if (downTooLong(f)) {
           f.stop();
           return { _tag: "aborted", detail: "T3's event stream is down; not sending" };
