@@ -1,0 +1,93 @@
+
+ RUN  v5.0.3 /srv/agents/cedar/agent-comms
+
+ ❯  convex  convex/reply-settles.test.ts (9 tests | 4 failed) 307ms
+   ✓ docs/09 4: an explicit reply settles the request (5)
+     ✓ reply during the turn completes the delivery and settles the wait; the turn's final text isn't collected 194ms
+     ✓ a later outcome never reopens or overwrites it, and posts nothing 32ms
+     ✓ the other order: the turn's answer is collected first; a later reply is an ordinary follow-up 11ms
+     ✓ a reminder fire answered by comms reply is recorded and reported once, with the reply 24ms
+     ✓ only the recipient's own reply completes it; a reply to a request not yet delivered completes nothing 6ms
+   ❯ docs/10 1: the reply race (a reply while the delivery is still claimed) (4)
+     × 1. reply while claimed, before dispatch: the final claim check refuses, nothing is dispatched; one answer; the wait settles with the reply 11ms
+     × 2. review: explicit reply before delivered acknowledgement remains the answer 10ms
+     × 3. crash after dispatch, reply, recovery: the delivery stays replied; the restart check never runs on it 10ms
+     × a replied delivery: delivered and the outcomes only release the caller's claim; another machine's claim is untouched 8ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL   convex  convex/reply-settles.test.ts > docs/10 1: the reply race (a reply while the delivery is still claimed) > 1. reply while claimed, before dispatch: the final claim check refuses, nothing is dispatched; one answer; the wait settles with the reply
+AssertionError: expected undefined to be '0000000000000000010011deliveries' // Object.is equality
+
+- Expected:
+"0000000000000000010011deliveries"
+
++ Received:
+undefined
+
+ ❯ convex/reply-settles.test.ts:148:29
+    146|     const { sent, deliveryId, claimId } = await claimedOnly(t);
+    147|     const reply = await t.mutation(api.connector.reply, { machine: m1,…
+    148|     expect(reply.completed).toBe(deliveryId);
+       |                             ^
+    149|     // The adapter's gate is `prepare`: it refuses, so the adapter sen…
+    150|     expect(await errorCode(t.mutation(api.connector.prepare, { machine…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL   convex  convex/reply-settles.test.ts > docs/10 1: the reply race (a reply while the delivery is still claimed) > 2. review: explicit reply before delivered acknowledgement remains the answer
+AssertionError: expected 'delivered' to be 'replied' // Object.is equality
+
+Expected: "replied"
+Received: "delivered"
+
+ ❯ convex/reply-settles.test.ts:166:33
+    164|     const reply = await t.mutation(api.connector.reply, { machine: m1,…
+    165|     const late = await t.mutation(api.connector.delivered, { machine: …
+    166|     expect(late.delivery.state).toBe("replied");
+       |                                 ^
+    167|     await t.mutation(api.connector.collect, { machine: m1, deliveryId,…
+    168|     const answers = await answersTo(t, sent.message.id);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL   convex  convex/reply-settles.test.ts > docs/10 1: the reply race (a reply while the delivery is still claimed) > 3. crash after dispatch, reply, recovery: the delivery stays replied; the restart check never runs on it
+AssertionError: expected [ …(2) ] to not include '0000000000000000010011deliveries'
+ ❯ convex/reply-settles.test.ts:181:98
+    179|     at(10 * MIN); // the lease has run out; the restarted connector lo…
+    180|     await t.mutation(api.connector.heartbeat, { machine: m1 });
+    181|     expect((await t.query(api.connector.work, { machine: m1 })).delive…
+       |                                                                                                  ^
+    182|     expect(await errorCode(t.mutation(api.connector.claim, { machine: …
+    183|     expect(await delivery(t, deliveryId)).toMatchObject({ state: "repl…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL   convex  convex/reply-settles.test.ts > docs/10 1: the reply race (a reply while the delivery is still claimed) > a replied delivery: delivered and the outcomes only release the caller's claim; another machine's claim is untouched
+AssertionError: expected { …(11) } to match object { state: 'replied' }
+(13 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "state": "replied",
++   "state": "claimed",
+  }
+
+ ❯ convex/reply-settles.test.ts:191:46
+    189|     const { sent, deliveryId, claimId } = await claimedOnly(t);
+    190|     await t.mutation(api.connector.reply, { machine: m1, as: "b", mess…
+    191|     expect((await delivery(t, deliveryId))!).toMatchObject({ state: "r…
+       |                                              ^
+    192|     const again = await t.mutation(api.connector.delivered, { machine:…
+    193|     expect(again.delivery.state).toBe("replied");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 5 passed (9)
+   Start at  10:08:52
+   Duration  652ms (tests 55%, transform 31%, environment 8%, import 6%, worker 1%)
+

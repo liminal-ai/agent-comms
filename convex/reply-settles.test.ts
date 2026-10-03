@@ -4,6 +4,7 @@
 // reopens, overwrites or posts on it. For every harness (T3 v0.0.44 and V2, Claude Code).
 
 import { convexTest } from "convex-test";
+import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
@@ -29,6 +30,15 @@ async function setup() {
 type T = Awaited<ReturnType<typeof setup>>;
 
 const at = (ms: number) => vi.setSystemTime(new Date(NOW + ms));
+async function errorCode(p: Promise<unknown>): Promise<string> {
+  try {
+    await p;
+  } catch (error) {
+    if (error instanceof ConvexError) return (error.data as { code: string }).code;
+    return `plain: ${(error as Error).message}`;
+  }
+  return "no error";
+}
 const answersTo = (t: T, messageId: string) =>
   t.run(async (ctx) => ctx.db.query("messages").withIndex("by_inReplyTo", (q) => q.eq("inReplyTo", messageId as never)).collect());
 const delivery = (t: T, id: string) => t.run(async (ctx) => ctx.db.get(id as never));
@@ -121,3 +131,67 @@ describe("docs/09 4: an explicit reply settles the request", () => {
     expect((await delivery(t, sent.deliveries[0]!.id))!).toMatchObject({ state: "pending" });
   });
 });
+
+describe("docs/10 1: the reply race (a reply while the delivery is still claimed)", () => {
+  /** @a asks @b and waits; the connector has claimed it. */
+  async function claimedOnly(t: T) {
+    const sent = await t.mutation(api.connector.send, { machine: m1, as: "a", to: ["b"], text: "q", wait: true, waitMs: 100_000 } as never);
+    const deliveryId = sent.deliveries[0]!.id;
+    const { claim } = await t.mutation(api.connector.claim, { machine: m1, deliveryId });
+    return { sent, deliveryId, claimId: claim.claimId };
+  }
+
+  it("1. reply while claimed, before dispatch: the final claim check refuses, nothing is dispatched; one answer; the wait settles with the reply", async () => {
+    const t = await setup();
+    const { sent, deliveryId, claimId } = await claimedOnly(t);
+    const reply = await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: sent.message.id, text: "real answer" });
+    expect(reply.completed).toBe(deliveryId);
+    // The adapter's gate is `prepare`: it refuses, so the adapter sends nothing.
+    expect(await errorCode(t.mutation(api.connector.prepare, { machine: m1, deliveryId, claimId }))).toBe("conflict");
+    expect(await delivery(t, deliveryId)).toMatchObject({ state: "replied", answerMessageId: reply.message.id });
+    expect((await answersTo(t, sent.message.id)).map((m) => m.text)).toEqual(["real answer"]);
+    expect((await awaitWait(t, "a", sent.message.id)).wait.results[0]).toMatchObject({ state: "answered", answer: { id: reply.message.id } });
+  });
+
+  // Alder's repro (/srv/work/research/v2-fixes-recheck-alder/, reply-race.log): T3 has accepted, the agent replies, the delivered write is late.
+  it("2. review: explicit reply before delivered acknowledgement remains the answer", async () => {
+    const t = await setup();
+    const sent = await t.mutation(api.connector.send, { machine: m1, as: "a", to: ["b"], text: "q", wait: true, waitMs: 100000 } as never);
+    const deliveryId = sent.deliveries[0]!.id;
+    const { claim } = await t.mutation(api.connector.claim, { machine: m1, deliveryId });
+    // prepare succeeds; T3 accepts and the agent replies while delivery acknowledgement is delayed.
+    await t.mutation(api.connector.prepare, { machine: m1, deliveryId, claimId: claim.claimId });
+    const reply = await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: sent.message.id, text: "real answer" });
+    const late = await t.mutation(api.connector.delivered, { machine: m1, deliveryId, claimId: claim.claimId, turnId: "t1" });
+    expect(late.delivery.state).toBe("replied");
+    await t.mutation(api.connector.collect, { machine: m1, deliveryId, claimId: claim.claimId, turnId: "t1", answer: "Reply sent." });
+    const answers = await answersTo(t, sent.message.id);
+    expect(answers.map((x) => x.text)).toEqual(["real answer"]);
+    expect((await awaitWait(t, "a", sent.message.id)).wait.results[0]).toMatchObject({ state: "answered", answer: { id: reply.message.id } });
+    expect(await delivery(t, deliveryId)).toMatchObject({ state: "replied", answerMessageId: reply.message.id, claim: undefined });
+  });
+
+  it("3. crash after dispatch, reply, recovery: the delivery stays replied; the restart check never runs on it", async () => {
+    const t = await setup();
+    const { sent, deliveryId, claimId } = await claimedOnly(t);
+    await t.mutation(api.connector.prepare, { machine: m1, deliveryId, claimId }); // dispatched, then the connector dies
+    const reply = await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: sent.message.id, text: "real answer" });
+    at(10 * MIN); // the lease has run out; the restarted connector looks for work
+    await t.mutation(api.connector.heartbeat, { machine: m1 });
+    expect((await t.query(api.connector.work, { machine: m1 })).deliveries.map((d) => d.id)).not.toContain(deliveryId);
+    expect(await errorCode(t.mutation(api.connector.claim, { machine: m1, deliveryId }))).toBe("conflict");
+    expect(await delivery(t, deliveryId)).toMatchObject({ state: "replied", answerMessageId: reply.message.id });
+    expect((await answersTo(t, sent.message.id)).map((m) => m.text)).toEqual(["real answer"]);
+  });
+
+  it("a reply while claimed settles it; the later delivered write is a no-op that releases the claim", async () => {
+    const t = await setup();
+    const { sent, deliveryId, claimId } = await claimedOnly(t);
+    await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: sent.message.id, text: "real answer" });
+    expect((await delivery(t, deliveryId))!).toMatchObject({ state: "replied" });
+    const again = await t.mutation(api.connector.delivered, { machine: m1, deliveryId, claimId, turnId: "t1" });
+    expect(again.delivery.state).toBe("replied");
+    expect(await delivery(t, deliveryId)).toMatchObject({ state: "replied", claim: undefined });
+  });
+});
+
