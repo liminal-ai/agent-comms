@@ -109,8 +109,8 @@ describe("(b) creation-time checks", () => {
 
   it("Reed's repro: a name derived from the text has no control characters (C0, C1, U+2028/2029)", async () => {
     const t = await setup();
-    const { reminder } = await create(t, { text: "check\u0085the\u0007queue now", everyMs: MIN });
-    expect(reminder.name).not.toMatch(/[\u0000-\u001f\u007f-\u009f  ]/);
+    const { reminder } = await create(t, { text: "check\u0085the\u0007queue\u2028now", everyMs: MIN });
+    expect(reminder.name).not.toMatch(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/);
     expect(reminder.name).toBe("check the queue now");
   });
 

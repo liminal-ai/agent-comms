@@ -1,1 +1,8 @@
-[2m      Tests [22m [2mno tests[22m
+[31m     [31m×[31m Reed's repro: 500 answered results not yet due (a long group wait still running) don't starve a due fallback[39m[32m 151[2mms[22m[39m
+[31m     [31m×[31m Reed's repro: `comms reminders` for an agent with 600 finished reminders answers, live ones first and complete[39m[32m 80[2mms[22m[39m
+[31m     [31m×[31m Reed's repro: the web Reminders list with 600 finished reminders answers, live ones first[39m[32m 64[2mms[22m[39m
+[31m     [31m×[31m a reminder that can't fire before it expires is refused: --at leaves at least one tick; --every is shorter than the time to expiry[39m[32m 11[2mms[22m[39m
+[31m     [31m×[31m Reed's repro: a name derived from the text has no control characters (C0, C1, U+2028/2029)[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m Reed's repro: a retired --report-to is refused; one retired later records a reportError instead of nothing[39m[32m 5[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 6 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[2m      Tests [22m [1m[31m6 failed[39m[22m[90m (6)[39m
