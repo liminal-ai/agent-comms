@@ -1,0 +1,11 @@
+# 2026-10-03T02:51:31Z deploy of main 2b7cda5 to the live local deployment (127.0.0.1:3240)
+✔ 22:51:32 Convex functions ready! (280.88ms)
+$ node scripts/upgrade.ts --url http://127.0.0.1:3240 --admin-token-file ~/.config/agent-comms/admin-token
+{"alertHistoryDone":true,"fallbackDueBackfilled":0,"ownersSet":0,"systemCreated":[],"systemRepaired":[]}
+(rerun, idempotent:)
+{"alertHistoryDone":true,"fallbackDueBackfilled":0,"ownersSet":0,"systemCreated":[],"systemRepaired":[]}
+
+# Note: the previous push (311096c, 2026-10-03 ~01:09 UTC) also ran scripts/upgrade.ts right after it; its output then was
+# {"alertHistoryDone":true,"ownersSet":0,"systemCreated":[],"systemRepaired":[]} (that version didn't yet report the
+# fallback-due backfill count). The run above, on 2b7cda5, reports it: 0. Live has no answered wait results, so the
+# backfill had nothing to do either time.
