@@ -33,6 +33,10 @@ Skipping straight to the current code on an old deployment fails at step 3's sch
 | A system participant was retired by hand | `scripts/upgrade.ts` puts it back. |
 | Convex push refused by schema validation | A row predates the change. Write a migration (as the owner steps did) and run it before the push; don't loosen the schema. |
 
+## Testing against real harnesses
+
+Standing rule (V2 port incident, 2026-10-03): synthetic test agents in real harness threads never run full-access. Their threads are approval-required, and a test harness approves only a command that matches exactly what the test asked for; it declines everything else. Long-running turns use text-only prompts, not shell commands. A full-access test agent acts on its own when something looks broken (one restarted a scratch systemd unit and read scratch configs). Test connectors run as separate units with their own config, socket and Convex deployment, never the live ones.
+
 ## After any of these
 
 `comms status`, `comms agents --as <an agent here>`, and the web view's Hosts and Alerts pages should show the host heard from and no open alerts you didn't expect.
