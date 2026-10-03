@@ -1,5 +1,7 @@
 # T3 v0.0.44 API notes for the T3 adapter
 
+> For T3 v0.0.46 and later (orchestration protocol 2) see `t3-v2-notes.md`: routes, ids, steer-on-busy, interrupts and tool output differ. This file describes v0.0.44.
+
 For Cedar, from Hazel. Checked against the v0.0.44 source (`packages/contracts/src/orchestration.ts`,
 `rpc.ts`, `environmentHttp.ts`; server `orchestration/decider.ts`, `ProviderCommandReactor.ts`,
 `ProjectionPipeline.ts`, `ws.ts`; web `ChatView.tsx`, `queuedMessageStore.ts`) and live runs on the

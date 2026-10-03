@@ -24,6 +24,8 @@ export interface ConnectorConfig {
     baseUrl: string;
     /** File holding the bearer credential for T3 (mode 0600). */
     authFile: string;
+    /** T3's orchestration protocol: 1 for v0.0.44 (the default), 2 from v0.0.46. */
+    protocol?: 1 | 2;
   };
 }
 
@@ -57,6 +59,9 @@ export function loadConfig(path: string): LoadedConfig {
       uid: process.getuid?.(),
     });
   if (!socket) throw new Error(`can't work out the socket path; set "socket" in ${path}`);
+  if (config.t3?.protocol !== undefined && config.t3.protocol !== 1 && config.t3.protocol !== 2) {
+    throw new Error(`config ${path}: "t3.protocol" must be 1 or 2`);
+  }
   const t3 = config.t3 ? { ...config.t3, authFile: expand(config.t3.authFile) } : undefined;
   return { ...config, ...(t3 ? { t3 } : {}), secretFile, secret, socket, warnings };
 }

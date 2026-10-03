@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "T3 adapter: delivers into T3 v0.0.44 threads through T3's own client runtime, matches replies from T3's records.",
+  "description": "T3 adapter: delivers into T3 threads (v0.0.44, and orchestration protocol 2 from v0.0.46) through T3's own wire contract, matches replies from T3's records.",
   "exports": {
     ".": "./src/index.ts",
-    "./client": "./src/t3/client.ts"
+    "./client": "./src/t3/client.ts",
+    "./v2": "./src/v2/index.ts",
+    "./v2/client": "./src/v2/client.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

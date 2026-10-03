@@ -54,12 +54,18 @@ const adapters: HarnessAdapter[] = [];
 if (config.adapters?.includes("t3")) {
   if (!config.t3) throw new Error(`config: "adapters" includes t3 but there's no "t3" section`);
   // Loaded only when configured.
-  const { makeT3Client } = await import("@agent-comms/adapter-t3/client");
-  const { makeT3Adapter } = await import("@agent-comms/adapter-t3");
   const { t3HarnessAdapter } = await import("./t3.ts");
-  const t3Client = makeT3Client({ baseUrl: config.t3.baseUrl, authFile: config.t3.authFile, log });
-  adapters.push(t3HarnessAdapter(makeT3Adapter({ client: t3Client, log })));
-  log(`T3 adapter: ${config.t3.baseUrl}`);
+  const t3 = { baseUrl: config.t3.baseUrl, authFile: config.t3.authFile, log };
+  if (config.t3.protocol === 2) {
+    const { makeT3ClientV2 } = await import("@agent-comms/adapter-t3/v2/client");
+    const { makeT3AdapterV2 } = await import("@agent-comms/adapter-t3/v2");
+    adapters.push(t3HarnessAdapter(makeT3AdapterV2({ client: makeT3ClientV2(t3), log })));
+  } else {
+    const { makeT3Client } = await import("@agent-comms/adapter-t3/client");
+    const { makeT3Adapter } = await import("@agent-comms/adapter-t3");
+    adapters.push(t3HarnessAdapter(makeT3Adapter({ client: makeT3Client(t3), log })));
+  }
+  log(`T3 adapter: ${config.t3.baseUrl} (orchestration protocol ${config.t3.protocol ?? 1})`);
 }
 const scope = Effect.runSync(Scope.make());
 await Effect.runPromise(
