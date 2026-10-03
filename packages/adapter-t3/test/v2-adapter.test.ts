@@ -604,4 +604,51 @@ describe("docs/09: V2 adapter fixes", () => {
     assert.equal(confirms.length, 1);
     assert.equal(t3.dispatched.length, 1);
   });
+
+  // Alder's repro: the socket connects but every stream closes at once; each resolved subscribe
+  // cleared the outage clock, so the outage limit never triggered recovery (35 opens in 350 ms).
+  it("P2: repeated failed subscriptions honor the stream outage limit, with backoff", async () => {
+    const t3 = new FakeV2();
+    const subscribe = t3.subscribe.bind(t3);
+    let failing = false;
+    let opens = 0;
+    t3.subscribe = async (id, opts, cb) => {
+      if (!failing) return subscribe(id, opts, cb);
+      opens++;
+      const timer = setTimeout(() => cb({ kind: "closed" }), 10);
+      return () => clearTimeout(timer);
+    };
+    const adapter = makeT3AdapterV2({ client: t3, ...options, streamDownLimitMs: 50 });
+    await accepted(adapter);
+    const pending = adapter.awaitOutcome(target, delivery(), "");
+    failing = true;
+    t3.drop();
+    const result = await Promise.race([pending, tick(350).then(() => ({ _tag: "review-timeout" }))]);
+    failing = false;
+    t3.end("cancelled");
+    await pending;
+    assert.equal(result?._tag, "lost", "a continuous outage doesn't restart its clock on an unproven subscription");
+    assert.ok(opens <= 4, `closed streams back off too (${opens} opens in 350 ms)`);
+  });
+
+  it("P2: a stream that comes back and synchronizes clears the outage; the run still resolves", async () => {
+    const t3 = new FakeV2();
+    const subscribe = t3.subscribe.bind(t3);
+    let failures = 2;
+    t3.subscribe = async (id, opts, cb) => {
+      if (opts.afterSequence === undefined || failures <= 0) return subscribe(id, opts, cb);
+      failures--;
+      const timer = setTimeout(() => cb({ kind: "closed" }), 10);
+      return () => clearTimeout(timer);
+    };
+    const adapter = makeT3AdapterV2({ client: t3, ...options, streamDownLimitMs: 5_000 });
+    const h = await accepted(adapter);
+    const outcome = adapter.awaitOutcome(target, delivery(), h.turnId);
+    t3.drop();
+    await tick(1_500);
+    t3.assistant("4");
+    t3.finish();
+    assert.deepEqual(await outcome, { _tag: "replied", answer: "4" });
+  });
 });
+

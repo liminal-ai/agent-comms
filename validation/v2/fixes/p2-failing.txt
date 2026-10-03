@@ -1,0 +1,73 @@
+▶ T3 V2 adapter: live
+  ✔ dispatches our message as its own run on an idle thread; the run is the turn (7.955732ms)
+  ✔ collects the run's last finished assistant message, never a streaming one (55.133169ms)
+  ✔ waits for a busy thread as a courtesy, then runs as its own run (127.733765ms)
+  ✔ losing the idle race queues our message as its own run: accepted, not ambiguous (88.660155ms)
+  ✔ is ambiguous when Lee steers into our run, or restarts it with his message; reports only that it happened (51.832542ms)
+  ✔ isn't ambiguous when Lee's message queues behind ours as its own run (25.81399ms)
+  ✔ reports interrupted, cancelled and failed runs as failed, never collecting a partial answer (23.494582ms)
+  ✔ a run that ends with no answer has failed (26.343811ms)
+  ✔ a run stuck in waiting (checkpoint never lands) is read after the settle window (306.562095ms)
+  ✔ rejects a refused dispatch (confirmed by the same commandId) and a missing thread (14.810608ms)
+  ✔ a lost dispatch response is retried with the same commandId: one message, one run (13.602481ms)
+  ✔ Reed: the retry doesn't depend on T3 remembering the command: our message in the thread means sent (12.860931ms)
+  ✔ T3 unreachable on send and on retry: lost; the next handoff sends once (19.181188ms)
+  ✔ a second handoff of a delivery already dispatched finds its run and sends nothing (claim lost and re-claimed) (4.524071ms)
+  ✔ reports presence from the runs: queued and waiting are busy (1.421578ms)
+  ✔ sends the unmatched notice once, as its own run, after the thread is idle (1.853379ms)
+  ✔ an answer's delivery leaves no subscription behind (35.638551ms)
+✔ T3 V2 adapter: live (823.454515ms)
+▶ T3 V2 adapter: gate
+  ✔ re-checks the claim right before sending; a lost claim sends nothing (3.882875ms)
+  ✔ an aborted handoff (claim lost during the courtesy wait) sends nothing (162.814983ms)
+✔ T3 V2 adapter: gate (167.679669ms)
+▶ T3 V2 adapter: restart check (from one snapshot)
+  ✔ absent when our message never arrived (1.181989ms)
+  ✔ running while its run runs, then completed with the outcome, in a new process (125.346226ms)
+  ✔ queued counts as running (1.155049ms)
+  ✔ sees foreign input that entered our run while the connector was down (65.185281ms)
+  ✔ an interrupted run is completed as failed (aborted), its partial answer never collected (2.772641ms)
+  ✔ a rolled-back run is unknown: its outcome no longer stands (64.148508ms)
+  ✔ T3 down: later; thread gone: unknown (1.20825ms)
+  ✔ never reads a v0.0.44 cursor as a V2 one (0.584984ms)
+✔ T3 V2 adapter: restart check (from one snapshot) (263.332972ms)
+▶ T3 V2 adapter: stream
+  ✔ a dropped stream is resubscribed with retries, and the run still resolves (1009.788687ms)
+  ✔ a resubscription that gets a snapshot (events gone) still resolves from the thread's records (24.16914ms)
+✔ T3 V2 adapter: stream (1034.271885ms)
+▶ docs/09: V2 adapter fixes
+  ✔ P1: no retry dispatch after the claim is lost (12.533079ms)
+  ✔ P1: the claim is confirmed again before the retry; refused there, nothing is sent (12.156904ms)
+  ✔ P1: a retry whose message is already in the thread needs no new dispatch, so no confirm (11.762587ms)
+  ✖ P2: repeated failed subscriptions honor the stream outage limit, with backoff (358.956082ms)
+  ✔ P2: a stream that comes back and synchronizes clears the outage; the run still resolves (1529.508691ms)
+✖ docs/09: V2 adapter fixes (1926.179604ms)
+ℹ tests 34
+ℹ suites 5
+ℹ pass 33
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4328.652925
+
+✖ failing tests:
+
+test at test/v2-adapter.test.ts:610:3
+✖ P2: repeated failed subscriptions honor the stream outage limit, with backoff (358.956082ms)
+  AssertionError [ERR_ASSERTION]: a continuous outage doesn't restart its clock on an unproven subscription
+  + actual - expected
+  
+  + 'review-timeout'
+  - 'lost'
+  
+      at TestContext.<anonymous> (file:///srv/agents/cedar/agent-comms/packages/adapter-t3/test/v2-adapter.test.ts:630:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'review-timeout',
+    expected: 'lost',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
