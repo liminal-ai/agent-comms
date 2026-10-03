@@ -141,7 +141,16 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
     };
     /** Whether the current subscription asked for a replay after a sequence (then a snapshot means events were missed). */
     let resumedAfter = afterSequence !== undefined;
-    const resubscribe = (attempt: number) => {
+    // The outage clock (`downSince`) and the backoff reset only when a stream has proven itself
+    // with a snapshot or `synchronized` (docs/09 P2): a subscribe call can resolve and the stream
+    // still close at once, and that must not look like recovery.
+    let failures = 0;
+    const retryLater = () => {
+      if (stopped) return;
+      setTimeout(resubscribe, Math.min(30_000, 250 * 2 ** Math.min(failures, 7)));
+      failures++;
+    };
+    const resubscribe = () => {
       if (stopped) return;
       // Resume from the last event we saw, without a gap; retry with backoff while T3 is away (3.2).
       resumedAfter = true;
@@ -150,12 +159,15 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
         .then((u) => {
           if (stopped) return u();
           unsubscribe = u;
-          f.downSince = undefined;
         })
         .catch((e) => {
-          log(`resubscribing to ${threadId} (attempt ${attempt}): ${e instanceof Error ? e.message : String(e)}`);
-          setTimeout(() => resubscribe(attempt + 1), Math.min(30_000, 500 * 2 ** Math.min(attempt, 6)));
+          log(`resubscribing to ${threadId} (attempt ${failures}): ${e instanceof Error ? e.message : String(e)}`);
+          retryLater();
         });
+    };
+    const synced = () => {
+      f.downSince = undefined;
+      failures = 0;
     };
     const onItem = (item: T3StreamItem | { kind: "closed" }) => {
       f.lastItemAt = Date.now();
@@ -164,13 +176,15 @@ export function makeT3Adapter(options: T3AdapterOptions): T3Adapter {
         if (resumedAfter && tracker.seenOurs && !tracker.ended) tracker.gap = true; // events after our message were missed
         if (!tracker.seenOurs) tracker.start(item.thread.session, item.thread.snapshotSequence);
         if (afterSequence !== undefined) f.synced = true; // the events were gone; the snapshot is all there is
+        synced();
       } else if (item.kind === "event") {
         tracker.feed(item.event);
       } else if (item.kind === "synchronized") {
         f.synced = true;
+        synced();
       } else if (item.kind === "closed" && !stopped) {
         f.downSince ??= Date.now();
-        resubscribe(1);
+        retryLater();
       }
       for (const w of [...waiters]) w();
     };

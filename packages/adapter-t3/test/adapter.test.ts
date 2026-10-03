@@ -549,7 +549,7 @@ describe("fix pass 3.2", () => {
     t3.eventsGone = true;
     t3.drop();
     t3.userMessage("lee-while-down"); // unseen
-    await tick(100);
+    await tick(500); // past the first resubscription (backed off since docs/09 P2), which gets a snapshot
     t3.eventsGone = false;
     t3.assistant("mixed");
     t3.finish();
