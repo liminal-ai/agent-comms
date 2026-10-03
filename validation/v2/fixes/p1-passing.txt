@@ -1,0 +1,95 @@
+▶ T3 adapter: live
+  ✔ starts its own turn on an idle thread, with the thread's modes and the T3 rendering (5.970199ms)
+  ✔ collects the turn's answer (284.589814ms)
+  ✔ waits for a busy thread, then runs as its own turn (334.817564ms)
+  ✔ is ambiguous when someone types into our turn, reporting only that it happened (254.667554ms)
+  ✔ is ambiguous when our message joins a turn someone else started (254.761274ms)
+  ✔ isn't ambiguous when a later message starts its own turn (256.560271ms)
+  ✔ reports an interrupt and an errored turn as failed (301.77095ms)
+  ✔ rejects when T3 can't start the turn, when it refuses, or when the thread is missing (6.706446ms)
+  ✔ reports presence from the thread's session (1.718747ms)
+  ✔ sends the unmatched notice once, as its own turn (2.215348ms)
+✔ T3 adapter: live (1706.648711ms)
+▶ T3 adapter: restart check
+  ✔ says absent when our message never arrived (0.21916ms)
+  ✔ replays from the cursor: running, then completed with the outcome (4011.752956ms)
+  ✔ replays foreign input that entered our turn while the connector was down (4008.336217ms)
+  ✔ without a cursor, never collects from the snapshot alone (1.3) (2.954596ms)
+✔ T3 adapter: restart check (8023.541681ms)
+▶ fix pass 1: reply ownership
+  ✔ 1.1 a foreign message landing just before ours, with no turn started in between, makes it ambiguous (254.088948ms)
+  ✔ 1.2 a background turn starting between our message and our turn isn't taken as ours (257.061047ms)
+  ✔ 1.3 recovery without the turn's full events reports uncertain, never collects (3.91164ms)
+  ✔ 1.3 the restart check never collects an interrupted turn's partial answer (64.479908ms)
+  ✔ 1.4 reads our turn's own end state when a later turn has started (254.808843ms)
+  ✔ 1.4 can't read our turn's end state: uncertain (255.999379ms)
+✔ fix pass 1: reply ownership (1092.14958ms)
+▶ fix pass 2.2 / 2.3
+  ✔ 2.2 the claim is re-checked right before sending; a lost claim sends nothing (3.801109ms)
+  ✔ 2.2 an aborted handoff (claim lost during the courtesy wait) sends nothing (82.072898ms)
+  ✔ 2.3 the real client: an HTTP 4xx refusal is rejected; a 5xx or a dropped connection is not (217.931675ms)
+✔ fix pass 2.2 / 2.3 (304.350828ms)
+▶ fix pass 3.3
+  ✔ 3.3 an answer's delivery leaves no subscription behind (2.523659ms)
+✔ fix pass 3.3 (2.645708ms)
+▶ fix pass 3.2
+  ✔ 3.2 a dropped stream is resubscribed with retries, and the turn still resolves (3254.960354ms)
+  ✔ 3.2 a resubscription that gets a snapshot (events missed) makes the outcome uncertain (354.382873ms)
+✔ fix pass 3.2 (3609.555173ms)
+▶ fix pass 1.2, Reed's follow-up
+  ✔ 1.2 a background turn isn't ours even if its requestedAt equals our createdAt to the millisecond (255.066845ms)
+✔ fix pass 1.2, Reed's follow-up (255.775687ms)
+▶ T3 V2 adapter: live
+  ✔ dispatches our message as its own run on an idle thread; the run is the turn (7.288165ms)
+  ✔ collects the run's last finished assistant message, never a streaming one (54.465856ms)
+  ✔ waits for a busy thread as a courtesy, then runs as its own run (124.885476ms)
+  ✔ losing the idle race queues our message as its own run: accepted, not ambiguous (84.431037ms)
+  ✔ is ambiguous when Lee steers into our run, or restarts it with his message; reports only that it happened (47.14142ms)
+  ✔ isn't ambiguous when Lee's message queues behind ours as its own run (22.871954ms)
+  ✔ reports interrupted, cancelled and failed runs as failed, never collecting a partial answer (16.91069ms)
+  ✔ a run that ends with no answer has failed (22.851951ms)
+  ✔ a run stuck in waiting (checkpoint never lands) is read after the settle window (302.976991ms)
+  ✔ rejects a refused dispatch (confirmed by the same commandId) and a missing thread (11.3439ms)
+  ✔ a lost dispatch response is retried with the same commandId: one message, one run (11.115142ms)
+  ✔ Reed: the retry doesn't depend on T3 remembering the command: our message in the thread means sent (11.556206ms)
+  ✔ T3 unreachable on send and on retry: lost; the next handoff sends once (14.145797ms)
+  ✔ a second handoff of a delivery already dispatched finds its run and sends nothing (claim lost and re-claimed) (2.842816ms)
+  ✔ reports presence from the runs: queued and waiting are busy (0.244497ms)
+  ✔ sends the unmatched notice once, as its own run, after the thread is idle (0.329543ms)
+  ✔ an answer's delivery leaves no subscription behind (32.019473ms)
+✔ T3 V2 adapter: live (769.551991ms)
+▶ T3 V2 adapter: gate
+  ✔ re-checks the claim right before sending; a lost claim sends nothing (1.935031ms)
+  ✔ an aborted handoff (claim lost during the courtesy wait) sends nothing (160.147557ms)
+✔ T3 V2 adapter: gate (162.342276ms)
+▶ T3 V2 adapter: restart check (from one snapshot)
+  ✔ absent when our message never arrived (0.193097ms)
+  ✔ running while its run runs, then completed with the outcome, in a new process (124.115728ms)
+  ✔ queued counts as running (1.255661ms)
+  ✔ sees foreign input that entered our run while the connector was down (65.330314ms)
+  ✔ an interrupted run is completed as failed (aborted), its partial answer never collected (4.264586ms)
+  ✔ a rolled-back run is unknown: its outcome no longer stands (64.334777ms)
+  ✔ T3 down: later; thread gone: unknown (1.254421ms)
+  ✔ never reads a v0.0.44 cursor as a V2 one (0.554164ms)
+✔ T3 V2 adapter: restart check (from one snapshot) (262.624316ms)
+▶ T3 V2 adapter: stream
+  ✔ a dropped stream is resubscribed with retries, and the run still resolves (1009.083031ms)
+  ✔ a resubscription that gets a snapshot (events gone) still resolves from the thread's records (22.916737ms)
+✔ T3 V2 adapter: stream (1032.316089ms)
+▶ docs/09: V2 adapter fixes
+  ✔ P1: no retry dispatch after the claim is lost (11.249465ms)
+  ✔ P1: the claim is confirmed again before the retry; refused there, nothing is sent (12.046416ms)
+  ✔ P1: a retry whose message is already in the thread needs no new dispatch, so no confirm (12.395926ms)
+✔ docs/09: V2 adapter fixes (36.352632ms)
+▶ T3 V2 wire slice
+  ✔ a snapshot keeps runs, attempts, message ids and runs, assistant text and errors; never user text (1.327219ms)
+  ✔ stream items: snapshot, events, synchronized; unknown event types advance the cursor as other (0.32492ms)
+✔ T3 V2 wire slice (2.458339ms)
+ℹ tests 61
+ℹ suites 13
+ℹ pass 61
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 15106.510022

@@ -130,7 +130,12 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
    * Dispatches, retrying once with the same command id: T3 runs it at most once. A refusal
    * is certain only when T3 says the command was rejected; anything else may have gone in.
    */
-  async function send(threadId: string, m: { commandId: string; messageId: string; text: string }): Promise<{ _tag: "sent" } | HandOff> {
+  async function send(
+    threadId: string,
+    m: { commandId: string; messageId: string; text: string },
+    /** Re-checks the claim before a fresh dispatch (docs/09 P1); the first is checked by the caller. */
+    stillOurs: () => Promise<boolean> = async () => true,
+  ): Promise<{ _tag: "sent" } | HandOff> {
     log(`t3 dispatch ${m.messageId} to ${threadId}`);
     let first: unknown;
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -142,6 +147,11 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         const now = await client.getThread(threadId).catch(() => undefined);
         if (now && find(now, m.messageId).present) return { _tag: "sent" };
         if (!now) break;
+        // A fresh dispatch: only while the claim is still ours. The first attempt may still
+        // have reached T3, so a lost claim here is `lost` (the restart check decides), not aborted.
+        if (!(await stillOurs())) {
+          return { _tag: "lost", detail: `claim lost before the retry; the first attempt may have reached T3: ${message(first)}` };
+        }
       }
       try {
         await client.dispatch(threadId, m);
@@ -228,7 +238,11 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
           f.stop();
           return { _tag: "aborted", detail: "claim not held, or cancelled, before sending" };
         }
-        const sent = await send(threadId, { commandId: commandIdFor(delivery.id), messageId, text: renderDelivery(delivery, { harnessLabelsSource: false }) });
+        const sent = await send(
+          threadId,
+          { commandId: commandIdFor(delivery.id), messageId, text: renderDelivery(delivery, { harnessLabelsSource: false }) },
+          async () => !gate || (!gate.signal.aborted && (await gate.confirm(cursor)) && !gate.signal.aborted),
+        );
         if (sent._tag !== "sent") {
           f.stop();
           return sent;
