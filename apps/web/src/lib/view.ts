@@ -380,3 +380,8 @@ export function defaultPostingAs(saved: string | null, participants: readonly { 
   if (saved !== null && people.includes(saved)) return saved;
   return people.includes("lee") ? "lee" : people[0]!;
 }
+
+/** What changes when an open conversation gets a new message (today's behaviour: the count loaded). */
+export function conversationReadKey(view: { messages: readonly { message: { id: string; seq: number } }[] } | undefined): string | number | undefined {
+  return view?.messages.length;
+}
