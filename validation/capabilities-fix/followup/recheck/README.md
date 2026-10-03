@@ -7,3 +7,7 @@
 | Items 2, 3, 4, 5 at volume | scratch deployment (127.0.0.1:3212, never the live one); `scale.sh`, `scaleFollowup.ts` (scratch only), `scale.journal.txt` | PASS. **2:** a reclaimed delivery behind 600 in-flight deliveries was alerted, and a cleared incident behind 600 open ones resolved on scan 2. **3:** an uncertain delivery 2 h old, never reported, was alerted once, after the upgrade marked the scratch's 1,500 old uncertain deliveries as history. **4:** 60 expiring and 50 due reminders of 32,000 CJK characters, under the backend's real limits: each tick stopped at its budget (`deferred`) and carried on; all were handled in 5 ticks, with no failures. **5:** 300 inbox items with one timestamp, pages of 50: all 300 reached, both views |
 
 The live deployment ran main e375c24 for these, with the upgrade's alert-history migration done in one batch: nothing old was alerted.
+
+## Reed's scope answer, also covered
+
+(a) the waits sweep reads only results that are due; (b) creation refuses a reminder that can't fire before it expires, and a retired report-to, a derived name drops control characters, and a report-to retired later records `reportError`; (c) the reminder lists read live reminders plus a few recent finished ones. Tests: `convex/followup-scope.test.ts` (failing first: `../scope/before.journal.txt`). At volume: `scale-scope.journal.txt` below.
