@@ -10,7 +10,7 @@ Branch `cedar`, not on main and not deployed live (3780 waits for the re-check).
 | 3 courtesy idle wait capped (90 s) | 738ea57 | 323c1c9 | `3-failing.txt`, `3-passing.txt` |
 | 4 explicit `comms reply` settles the request (Convex, all harnesses) | a9f340a | fac9ca9 | `4-failing.txt`, `4-passing.txt`; live on stock 13976 + scratch 3214: 8b41672, `raw/results.jsonl` (`replyDuring`), `4-live-connector.journal.txt` |
 | 5 the `waiting` settle documented | (docs) | 55acb5c | `docs/t3-v2-notes.md` |
-| docs/10 1 the reply race: a reply settles a `claimed` delivery too; a late `delivered` on a replied delivery only releases the claim | 6f3fd08 (incl. Alder's repro) | FIX | `10-1-failing.txt`, `10-1-full-check.txt` |
+| docs/10 1 the reply race: a reply settles a `claimed` delivery too; a late `delivered` on a replied delivery only releases the claim | 6f3fd08 (incl. Alder's repro) | 5065066 | `10-1-failing.txt`, `10-1-full-check.txt` |
 
 Full check: `full-check.txt` (docs/09 tip), `10-1-full-check.txt` (after docs/10 1). Both exit 0.
 
