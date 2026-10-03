@@ -153,7 +153,7 @@ function build(delivery: Delivery, options: RenderOptions, budget: Budget): stri
     lines.push(...attachments);
     lines.push("");
     lines.push(
-      `An answer is expected. Reply normally: your final message in this turn is sent back to @${message.sender.name} as your answer, so make it complete on its own. Finish the work before your final message; if you must end the turn first, send the result later with \`comms reply\`.`,
+      `An answer is expected. Reply normally: your final message in this turn is sent back to @${message.sender.name} as your answer, so make it complete on its own. Finish the work before your final message; if you must end the turn first, send the result later with \`comms reply\`. If you answer with \`comms reply\` during this turn, that is your answer and your final message isn't sent.`,
     );
     lines.push(
       `If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with \`comms reply --as ${me} ${message.id} "<your answer>"\`.`,

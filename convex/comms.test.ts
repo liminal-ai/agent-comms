@@ -200,7 +200,7 @@ describe("fix pass section 5 finding", () => {
     const { sent, id, claimId } = await claimed(t);
     await t.mutation(api.connector.delivered, { machine: m1, deliveryId: id, claimId, turnId: "t1" });
     const reply = await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: sent.message.id, text: "4" });
-    expect(reply.completed).toBeUndefined(); // still running: a follow-up, not a completion
+    expect(reply.completed).toBe(id); // docs/09 4: the explicit reply is the answer, even while the turn runs
     const amb = await t.mutation(api.connector.ambiguous, { machine: m1, deliveryId: id, claimId, turnId: "t1", entered: [{ origin: "t3-user-message" }] });
     expect(amb.delivery.state).toBe("replied");
     const view = await t.query(api.conversations.view, { adminToken: ADMIN, conversationId: sent.message.conversationId });
@@ -384,14 +384,15 @@ describe("delivery lifecycle", () => {
     expect(view.messages.filter((m) => m.message.inReplyTo === sent.message.id)).toHaveLength(2);
   });
 
-  it("leaves a still-running delivery alone on comms reply: its own answer is still collected", async () => {
+  it("docs/09 4: comms reply to a still-running delivery is its answer; the turn's final text isn't collected", async () => {
+    // Option A's accepted cost: an interim reply ("working on it") becomes the answer.
     const t = await setup();
     const { sent, id, claimId } = await claimed(t);
     await t.mutation(api.connector.delivered, { machine: m1, deliveryId: id, claimId, turnId: "t1" });
     const early = await t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: sent.message.id, text: "working on it" });
-    expect(early.completed).toBeUndefined();
+    expect(early.completed).toBe(id);
     const r = await t.mutation(api.connector.collect, { machine: m1, deliveryId: id, claimId, turnId: "t1", answer: "4" });
-    expect(r.duplicate).toBe(false);
+    expect(r).toMatchObject({ duplicate: true, answerMessageId: early.message.id });
   });
 
   it("fails and marks uncertain from claimed or delivered, idempotently, and only with the claim", async () => {

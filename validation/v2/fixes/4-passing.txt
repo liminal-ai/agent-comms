@@ -1,0 +1,35 @@
+
+ RUN  v5.0.3 /srv/agents/cedar/agent-comms
+
+ ✓  convex  convex/p3.test.ts (4 tests) 265ms
+ ✓  convex  convex/alerts.test.ts (5 tests) 324ms
+ ✓  convex  convex/reply-settles.test.ts (5 tests) 343ms
+ ✓  convex  convex/capabilities.test.ts (20 tests) 397ms
+ ✓  convex  convex/waits-proof.test.ts (10 tests) 420ms
+ ✓  convex  convex/waits.test.ts (14 tests) 439ms
+ ✓  convex  convex/reminders.test.ts (16 tests) 482ms
+ ✓  convex  convex/followup-scope.test.ts (6 tests) 518ms
+ ✓  convex  convex/comms.test.ts (31 tests) 623ms
+ ✓  convex  convex/scale.test.ts (5 tests) 645ms
+   ✓ 1.3 reminders: history doesn't hide an expiry (2)
+     ✓ Alder's repro: 600 expired reminders don't stop a newer one expiring, nor the expiry alert 327ms
+ ✓  convex  convex/p2.test.ts (9 tests) 795ms
+ ✓  convex  convex/followup-alerts.test.ts (8 tests) 3085ms
+   ✓ follow-up 2: the scans progress through every eligible row (5)
+     ✓ 500 reclaimed deliveries already alerted don't hide a newer one 693ms
+     ✓ Alder's repro: a 501st incident whose condition cleared resolves past 500 still-open ones 403ms
+     ✓ Reed's repro: with 500 long-lived open incidents, a connector incident resolves in one scan, and a later silence alerts again 521ms
+     ✓ a reminder blocked again after a resume is alerted again; 300 blocked reminders don't hide a newer one 1044ms
+ ✓  convex  convex/followup-tick.test.ts (6 tests) 15395ms
+   ✓ Reed's repro: the tick survives 30 due CJK reminders of 32,000 characters, and carries on until all are handled 493ms
+   ✓ Reed's repro: the tick survives 50 due CJK reminders of 32,000 characters, and carries on until all are handled 438ms
+   ✓ Reed's repro: the tick survives 60 expiring CJK reminders of 32,000 characters, and carries on until all are handled 332ms
+   ✓ Reed's repro: the tick survives 100 expiring + 50 due ASCII reminders of 32,000 characters, and carries on until all are handled 482ms
+   ✓ Alder's repro: 1,500 short reminders expiring together, made by people and by agents, all finish across ticks under the real limits 5244ms
+   ✓ Alder's repro: 1,500 short reminders due together, made by people and by agents, all finish across ticks under the real limits 8405ms
+
+ Test Files  13 passed (13)
+      Tests  139 passed (139)
+   Start at  08:18:08
+   Duration  15.96s (tests 81%, transform 12%, import 4%, environment 3%)
+

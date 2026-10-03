@@ -288,6 +288,9 @@ export const collect = mutation({
       .withIndex("by_collectedFrom", (q) => q.eq("collectedFrom", d._id))
       .first();
     if (existing) return { delivery: await stateRef(ctx, d), answerMessageId: existing._id, duplicate: true };
+    // Already answered by the agent's own `comms reply` (docs/09 4): that reply is the answer;
+    // the turn's final text isn't collected.
+    if (d.state === "replied") return { delivery: await releaseReplied(ctx, d, machine, args.claimId), answerMessageId: d.answerMessageId, duplicate: true };
     const turnId = await openTurn(d, machine, args.claimId, args.turnId);
 
     const request = (await ctx.db.get(d.messageId))!;
@@ -320,6 +323,12 @@ export const collect = mutation({
   },
 });
 
+/** A late outcome on a delivery its recipient already answered: drop the caller's claim, change nothing else. */
+async function releaseReplied(ctx: MutationCtx, d: Doc<"deliveries">, machine: Doc<"machines">, claimId: string) {
+  if (d.claim && d.claim.claimId === claimId && d.claim.machine === machine.machineId) await ctx.db.patch(d._id, { claim: undefined });
+  return stateRef(ctx, (await ctx.db.get(d._id))!);
+}
+
 /** Checks for finishing a claimed or delivered delivery: the claim is ours, and the turn matches if one is known. */
 async function openTurn(d: Doc<"deliveries">, machine: Doc<"machines">, claimId: string, turnId: string) {
   if (d.state !== "claimed" && d.state !== "delivered") fail("conflict", `delivery ${d._id} is already ${d.state}`);
@@ -350,6 +359,8 @@ async function finish(
   if (d.state === state && (args.turnId === undefined || d.turnId === args.turnId)) {
     return { delivery: await stateRef(ctx, d) };
   }
+  // Answered by the agent's own `comms reply` (docs/09 4): a later outcome changes nothing.
+  if (d.state === "replied") return { delivery: await releaseReplied(ctx, d, machine, args.claimId) };
   if (state === "ambiguous" && !d.collect) fail("conflict", `delivery ${d._id} carries an answer; it can't be ambiguous`);
   if (d.state !== "claimed" && d.state !== "delivered") fail("conflict", `delivery ${d._id} is already ${d.state}`);
   holdsClaim(d, machine, args.claimId);
@@ -525,14 +536,23 @@ export const reply = mutation({
       ...(args.key !== undefined ? { idempotencyKey: args.key } : {}),
       origin: { via: args.via ?? "cli" },
     });
-    for (const state of ["ambiguous", "uncertain"] as const) {
+    // The reply is the answer to the recipient's open delivery of the request: one waiting for
+    // an explicit answer (ambiguous, uncertain), or one still in its turn (docs/09 4: the turn's
+    // final text is then not collected). A delivered request keeps its claim, so the connector
+    // following the turn finishes it cleanly (collect and the other outcomes change nothing).
+    for (const state of ["delivered", "ambiguous", "uncertain"] as const) {
       const open = await ctx.db
         .query("deliveries")
         .withIndex("by_recipient_state", (q) => q.eq("recipientId", me._id).eq("state", state))
-        .filter((q) => q.eq(q.field("messageId"), original._id))
+        .filter((q) => q.and(q.eq(q.field("messageId"), original._id), q.eq(q.field("collect"), true)))
         .first();
       if (open) {
-        await ctx.db.patch(open._id, { state: "replied", at: Date.now(), detail: `completed by comms reply ${result.message.id}` });
+        await ctx.db.patch(open._id, {
+          state: "replied",
+          at: Date.now(),
+          detail: `completed by comms reply ${result.message.id}`,
+          answerMessageId: result.message.id as Id<"messages">,
+        });
         result.completed = open._id;
         await takeAnswer(ctx, open, result.message.id as Id<"messages">, Date.now());
         await recordFireAnswer(ctx, open, result.message.id as Id<"messages">, Date.now());

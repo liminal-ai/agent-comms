@@ -77,7 +77,7 @@ describe("docs/09 4: an explicit reply settles the request", () => {
           ? await t.mutation(api.connector.ambiguous, { ...outcome, entered: [{ origin: "t3-user-message" }] })
           : late === "failed"
             ? await t.mutation(api.connector.failed, { ...outcome, reason: "aborted", detail: "interrupted" })
-            : await t.mutation(api.connector.uncertain, { ...outcome, detail: "can't tell" });
+            : await t.mutation(api.connector.uncertain, { machine: m1, deliveryId, claimId: outcome.claimId, detail: "can't tell" });
       expect(r.delivery.state, late).toBe("replied");
       expect(await delivery(t, deliveryId), late).toMatchObject({ state: "replied", answerMessageId: reply.message.id });
       expect((await answersTo(t, sent.message.id)).map((m) => m.text), late).toEqual(["4"]);

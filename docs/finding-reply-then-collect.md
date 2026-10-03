@@ -1,5 +1,7 @@
 # Finding: an explicit reply and the collected turn text both become answers
 
+**Decided:** option A, with one sentence of D in the delivery text (docs/09 item 4, 2026-10-03). Below is the finding as written before the decision.
+
 Found in the V2 port's live checks (validation/v2), 2026-10-03. Not V2-specific: the Convex side is the same for T3 v0.0.44, V2 and Claude Code. No change is made in the port; this is a behaviour change for real agents, so it goes to Alder, Wrenn and Lee first.
 
 ## What happens today, step by step
