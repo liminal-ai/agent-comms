@@ -1,7 +1,7 @@
 // Capabilities fix pass follow-up, the web view's item 6.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { conversationReadKey } from "../src/lib/view.ts";
+import { conversationReadKey, endedRemindersSummary } from "../src/lib/view.ts";
 
 const page = (from: number, to: number) => ({ messages: Array.from({ length: to - from + 1 }, (_, i) => ({ message: { id: `m_${from + i}`, seq: from + i } })) });
 
@@ -13,5 +13,11 @@ describe("follow-up 6: an open conversation past 100 messages", () => {
   it("6: the key doesn't change when nothing new arrived, and is undefined before the view loads", () => {
     assert.equal(conversationReadKey(page(101, 200)), conversationReadKey(page(101, 200)));
     assert.equal(conversationReadKey(undefined), undefined);
+  });
+});
+
+describe("after sign-off: the ended reminders summary", () => {
+  it("says the list holds only recent ended reminders (reminders.list returns 15 per finished state)", () => {
+    assert.equal(endedRemindersSummary(12), "12 recently ended (older not shown)");
   });
 });

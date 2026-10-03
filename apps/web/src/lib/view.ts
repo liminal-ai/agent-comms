@@ -390,3 +390,8 @@ export function conversationReadKey(view: { messages: readonly { message: { id: 
   if (!view) return undefined;
   return view.messages.at(-1)?.message.id ?? "";
 }
+
+/** The reminders list's summary of finished reminders (today's wording). */
+export function endedRemindersSummary(count: number): string {
+  return `${count} ended`;
+}

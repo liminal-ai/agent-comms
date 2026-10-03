@@ -1,0 +1,44 @@
+▶ follow-up 6: an open conversation past 100 messages
+  ✔ 6: a new message changes the read key even when the view still holds 100 messages (0.597945ms)
+  ✔ 6: the key doesn't change when nothing new arrived, and is undefined before the view loads (0.154992ms)
+✔ follow-up 6: an open conversation past 100 messages (1.553026ms)
+▶ after sign-off: the ended reminders summary
+  ✖ says the list holds only recent ended reminders (reminders.list returns 15 per finished state) (0.79642ms)
+✖ after sign-off: the ended reminders summary (0.923689ms)
+ℹ tests 3
+ℹ suites 2
+ℹ pass 2
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 95.064494
+
+✖ failing tests:
+
+test at test/followup.test.ts:20:3
+✖ says the list holds only recent ended reminders (reminders.list returns 15 per finished state) (0.79642ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '12 ended'
+  - '12 recently ended (older not shown)'
+        ^
+  
+      at TestContext.<anonymous> (file:///srv/agents/hazel/agent-comms/apps/web/test/followup.test.ts:21:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at node:internal/test_runner/test:1792:71
+      at node:internal/per_context/primordials:466:82
+      at new Promise (<anonymous>)
+      at new SafePromise (node:internal/per_context/primordials:435:3)
+      at node:internal/per_context/primordials:466:9
+      at Array.map (<anonymous>) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '12 ended',
+    expected: '12 recently ended (older not shown)',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
