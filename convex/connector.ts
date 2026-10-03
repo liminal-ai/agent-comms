@@ -254,6 +254,8 @@ export const delivered = mutation({
   handler: async (ctx, args) => {
     const machine = await requireMachine(ctx, args.machine);
     const { d } = await deliveryForMachine(ctx, machine, args.deliveryId);
+    // Answered by `comms reply` before this write landed (docs/10 1): change nothing but the claim.
+    if (d.state === "replied" && d.turnId === undefined) return { delivery: await releaseReplied(ctx, d, machine, args.claimId) };
     if (d.state !== "claimed") {
       if (d.turnId === args.turnId && d.state !== "pending") return { delivery: await stateRef(ctx, d) };
       fail("conflict", `delivery ${d._id} is ${d.state}${d.turnId ? ` in turn ${d.turnId}` : ""}`);
@@ -537,10 +539,11 @@ export const reply = mutation({
       origin: { via: args.via ?? "cli" },
     });
     // The reply is the answer to the recipient's open delivery of the request: one waiting for
-    // an explicit answer (ambiguous, uncertain), or one still in its turn (docs/09 4: the turn's
-    // final text is then not collected). A delivered request keeps its claim, so the connector
-    // following the turn finishes it cleanly (collect and the other outcomes change nothing).
-    for (const state of ["delivered", "ambiguous", "uncertain"] as const) {
+    // an explicit answer (ambiguous, uncertain), or one in its turn (docs/09 4: the turn's final
+    // text is then not collected), including one whose `delivered` write hasn't landed yet
+    // (claimed: docs/10 1, the reply race). The claim stays, so the connector finishes cleanly:
+    // `prepare` refuses to send it, and delivered, collect and the outcomes change nothing.
+    for (const state of ["claimed", "delivered", "ambiguous", "uncertain"] as const) {
       const open = await ctx.db
         .query("deliveries")
         .withIndex("by_recipient_state", (q) => q.eq("recipientId", me._id).eq("state", state))

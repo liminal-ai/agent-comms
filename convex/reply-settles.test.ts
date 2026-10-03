@@ -168,7 +168,8 @@ describe("docs/10 1: the reply race (a reply while the delivery is still claimed
     const answers = await answersTo(t, sent.message.id);
     expect(answers.map((x) => x.text)).toEqual(["real answer"]);
     expect((await awaitWait(t, "a", sent.message.id)).wait.results[0]).toMatchObject({ state: "answered", answer: { id: reply.message.id } });
-    expect(await delivery(t, deliveryId)).toMatchObject({ state: "replied", answerMessageId: reply.message.id, claim: undefined });
+    expect(await delivery(t, deliveryId)).toMatchObject({ state: "replied", answerMessageId: reply.message.id });
+    expect((await delivery(t, deliveryId) as { claim?: unknown }).claim).toBeUndefined();
   });
 
   it("3. crash after dispatch, reply, recovery: the delivery stays replied; the restart check never runs on it", async () => {
@@ -191,7 +192,8 @@ describe("docs/10 1: the reply race (a reply while the delivery is still claimed
     expect((await delivery(t, deliveryId))!).toMatchObject({ state: "replied" });
     const again = await t.mutation(api.connector.delivered, { machine: m1, deliveryId, claimId, turnId: "t1" });
     expect(again.delivery.state).toBe("replied");
-    expect(await delivery(t, deliveryId)).toMatchObject({ state: "replied", claim: undefined });
+    expect(await delivery(t, deliveryId)).toMatchObject({ state: "replied" });
+    expect((await delivery(t, deliveryId) as { claim?: unknown }).claim).toBeUndefined();
   });
 });
 
