@@ -7,7 +7,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Component, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Alerts, Inbox, Registry, Reminders } from "./Capabilities.tsx";
-import { alertsView, defaultPostingAs, inboxBadge, ownerChoices, parsePromotion, titleWithUnread } from "./lib/view.ts";
+import { alertsView, conversationReadKey, defaultPostingAs, inboxBadge, ownerChoices, parsePromotion, titleWithUnread } from "./lib/view.ts";
 
 const TOKEN_KEY = "agent-comms.adminToken";
 const AS_KEY = "agent-comms.as";
@@ -297,10 +297,10 @@ function ConversationView({ token, id, as, names, readAs }: { token: string; id:
   // Open is read: whatever in this conversation is in @as's inbox is marked read, whether or
   // not it's among the unread the page has loaded (fix pass 2), including messages that
   // arrive while it's open. Idempotent: a conversation with nothing unread changes nothing.
-  const messageCount = view?.messages.length;
+  const readKey = conversationReadKey(view);
   useEffect(() => {
-    if (readAs && messageCount !== undefined) markRead({ adminToken: token, human: as, conversationId: id }).catch(() => {});
-  }, [readAs, messageCount, token, as, id, markRead]);
+    if (readAs && readKey !== undefined) markRead({ adminToken: token, human: as, conversationId: id }).catch(() => {});
+  }, [readAs, readKey, token, as, id, markRead]);
   const post = useMutation(api.conversations.postAs);
   const addMember = useMutation(api.conversations.addMember);
   const removeMember = useMutation(api.conversations.removeMember);
