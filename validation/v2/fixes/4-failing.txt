@@ -1,0 +1,76 @@
+
+ RUN  v5.0.3 /srv/agents/cedar/agent-comms
+
+ ❯  convex  convex/reply-settles.test.ts (5 tests | 3 failed) 225ms
+   ❯ docs/09 4: an explicit reply settles the request (5)
+     × reply during the turn completes the delivery and settles the wait; the turn's final text isn't collected 169ms
+     × a later outcome never reopens or overwrites it, and posts nothing 15ms
+     ✓ the other order: the turn's answer is collected first; a later reply is an ordinary follow-up 14ms
+     × a reminder fire answered by comms reply is recorded and reported once, with the reply 22ms
+     ✓ only the recipient's own reply completes it; a reply to a request not yet delivered completes nothing 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL   convex  convex/reply-settles.test.ts > docs/09 4: an explicit reply settles the request > reply during the turn completes the delivery and settles the wait; the turn's final text isn't collected
+AssertionError: expected undefined to be '0000000000000000010011deliveries' // Object.is equality
+
+- Expected:
+"0000000000000000010011deliveries"
+
++ Received:
+undefined
+
+ ❯ convex/reply-settles.test.ts:58:29
+     56|     const { sent, deliveryId, outcome } = await inTurn(t);
+     57|     const reply = await t.mutation(api.connector.reply, { machine: m1,…
+     58|     expect(reply.completed).toBe(deliveryId);
+       |                             ^
+     59|     expect(await delivery(t, deliveryId)).toMatchObject({ state: "repl…
+     60|     const { wait } = await awaitWait(t, "a", sent.message.id);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL   convex  convex/reply-settles.test.ts > docs/09 4: an explicit reply settles the request > a later outcome never reopens or overwrites it, and posts nothing
+AssertionError: ambiguous: expected { …(12) } to match object { state: 'replied', …(1) }
+(11 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "answerMessageId": "000000000000000000010014messages",
+    "state": "replied",
+  }
+
+ ❯ convex/reply-settles.test.ts:82:51
+     80|             : await t.mutation(api.connector.uncertain, { ...outcome, …
+     81|       expect(r.delivery.state, late).toBe("replied");
+     82|       expect(await delivery(t, deliveryId), late).toMatchObject({ stat…
+       |                                                   ^
+     83|       expect((await answersTo(t, sent.message.id)).map((m) => m.text),…
+     84|       expect((await awaitWait(t, "a", sent.message.id)).wait.results[0…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL   convex  convex/reply-settles.test.ts > docs/09 4: an explicit reply settles the request > a reminder fire answered by comms reply is recorded and reported once, with the reply
+AssertionError: expected 'Replied to the reminder.' to be 'all green' // Object.is equality
+
+Expected: "all green"
+Received: "Replied to the reminder."
+
+ ❯ convex/reply-settles.test.ts:111:42
+    109|     await t.mutation(api.connector.collect, { machine: m1, deliveryId:…
+    110|     const shown = await t.query(api.reminders.get, { adminToken: ADMIN…
+    111|     expect(shown.fires[0]!.answer?.text).toBe("all green");
+       |                                          ^
+    112|     const inbox = (await t.query(api.inbox.list, { adminToken: ADMIN, …
+    113|     expect(inbox).toEqual([`Reminder st (${reminder.id}): @b answered:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  08:17:14
+   Duration  577ms (tests 47%, transform 37%, environment 9%, import 7%, worker 1%)
+
