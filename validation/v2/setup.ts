@@ -29,9 +29,9 @@ execFileSync("git", ["-C", fixture, "-c", "user.name=Cedar", "-c", "user.email=c
 const projectId = randomUUID();
 await t3.call("projects.mutate", { type: "project.create", commandId: randomUUID(), projectId, title: "agent-comms V2 port (synthetic)", workspaceRoot: fixture, createWorkspaceRootIfMissing: false });
 
-// v2ann and v2bob: Claude, full access inside the fixture (they run the comms CLI); v2cat: Claude, approval-required.
+// All approval-required (standing rule, docs/deploy-checklist.md): the harness approves only exactly-matched commands.
 const threads: Record<string, string> = {};
-for (const [name, runtimeMode] of [["v2ann", "full-access"], ["v2bob", "full-access"], ["v2cat", "approval-required"]] as const) {
+for (const [name, runtimeMode] of [["v2ann", "approval-required"], ["v2bob", "approval-required"], ["v2cat", "approval-required"]] as const) {
   const threadId = randomUUID();
   await t3.call("orchestration.dispatchCommand", {
     type: "thread.create", commandId: randomUUID(), projectId, threadId, title: `comms ${name}`,
