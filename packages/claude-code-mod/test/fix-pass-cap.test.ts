@@ -63,6 +63,18 @@ describe("fix pass 1.1: the waiter's turn", () => {
 });
 
 describe("fix pass 1.1: answer-seen", () => {
+  /**
+   * Follow-up 7: a "never confirms" check proves the queue drained before it asserts. A main-loop
+   * proof sent after the case under test must arrive, and be the only one: answer-seen reports go
+   * out in order, so anything the case wrongly queued would have been sent first.
+   */
+  const drainProof = { waitId: "w_drain", messageId: "m_drain", token: "d".repeat(32) };
+  async function drained(session: FakeSession, mod: ReturnType<typeof makeMod>): Promise<string[]> {
+    mod.onToolResult({ toolUseId: "tu_drain", text: renderAnswerWithProof(drainProof, "@d answered (m_drain):", "ok") });
+    await pumpUntil(mod, () => session.ops("answer-seen").some((o) => o.proofs.some((p: { waitId: string }) => p.waitId === "w_drain")), "the main-loop proof sent after it");
+    return session.ops("answer-seen").flatMap((o) => o.proofs.map((p: { waitId: string }) => p.waitId));
+  }
+
   async function inTurn(extra: { callTimeoutMs?: number } = {}) {
     const session = new FakeSession(ctx.socketPath);
     const mod = makeMod(session, "sess-1", "mod-a", extra);
@@ -83,32 +95,28 @@ describe("fix pass 1.1: answer-seen", () => {
     const { session, mod } = await inTurn();
     mod.onToolCall({ toolUseId: "tu_2", tool: "Bash", agentId: "a_helper" });
     mod.onToolResult({ toolUseId: "tu_2", agentId: "a_helper", text: printed });
-    for (let i = 0; i < 3; i++) await mod.tick();
-    assert.equal(session.ops("answer-seen").length, 0);
+    assert.deepEqual(await drained(session, mod), ["w_drain"]);
   });
 
   it("1.1: truncated output (Claude Code's persisted preview, no end line) never confirms", async () => {
     const { session, mod } = await inTurn();
     const preview = `<persisted-output>\nOutput too large (56.4KB). Full output saved to: /tmp/x.txt\n\nPreview (first 2KB):\n${printed.split("\n").slice(0, 4).join("\n")}`;
     mod.onToolResult({ toolUseId: "tu_3", text: preview });
-    for (let i = 0; i < 3; i++) await mod.tick();
-    assert.equal(session.ops("answer-seen").length, 0);
+    assert.deepEqual(await drained(session, mod), ["w_drain"]);
   });
 
   it("1.1: the ids alone (a comms status listing, quoted text) never confirm", async () => {
     const { session, mod } = await inTurn();
     mod.onToolResult({ toolUseId: "tu_4", text: "message m_1 in wait w_1: @t3-native answered\n> Forty-two." });
     mod.onToolResult({ toolUseId: "tu_5", text: printed.split("\n").map((l) => `> ${l}`).join("\n") });
-    for (let i = 0; i < 3; i++) await mod.tick();
-    assert.equal(session.ops("answer-seen").length, 0);
+    assert.deepEqual(await drained(session, mod), ["w_drain"]);
   });
 
   it("1.1: a backgrounded command's tool result never confirms", async () => {
     const { session, mod } = await inTurn();
     mod.onToolCall({ toolUseId: "tu_6", tool: "Bash", background: true });
     mod.onToolResult({ toolUseId: "tu_6", text: "Command running in background with ID: b1. Output is being written to: /tmp/b1.output" });
-    for (let i = 0; i < 3; i++) await mod.tick();
-    assert.equal(session.ops("answer-seen").length, 0);
+    assert.deepEqual(await drained(session, mod), ["w_drain"]);
   });
 
   it("1.1: a tool result with no main turn running sends nothing", async () => {
@@ -116,8 +124,8 @@ describe("fix pass 1.1: answer-seen", () => {
     const mod = makeMod(session);
     await mod.start();
     mod.onToolResult({ toolUseId: "tu_7", text: printed });
-    for (let i = 0; i < 3; i++) await mod.tick();
-    assert.equal(session.ops("answer-seen").length, 0);
+    mod.onTurnStart("turn-1", "a later turn");
+    assert.deepEqual(await drained(session, mod), ["w_drain"]);
   });
 
   it("1.1: answer-seen is retried if the connector can't be reached, so a restart inside the window doesn't lose it", async () => {
