@@ -35,7 +35,7 @@ for (const [name, runtimeMode] of [["v2ann", "full-access"], ["v2bob", "full-acc
   const threadId = randomUUID();
   await t3.call("orchestration.dispatchCommand", {
     type: "thread.create", commandId: randomUUID(), projectId, threadId, title: `comms ${name}`,
-    modelSelection: { instanceId: "claudeAgent", model: "claude-sonnet-4-6" }, runtimeMode, interactionMode: "default",
+    modelSelection: { instanceId: "claudeAgent", model: "claude-sonnet-5-5", options: [{ id: "contextWindow", value: "1m" }] }, runtimeMode, interactionMode: "default",
     branch: null, worktreePath: null, createdBy: "user", creationSource: "web",
   });
   threads[name] = threadId;

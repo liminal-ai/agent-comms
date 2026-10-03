@@ -1,0 +1,1 @@
+{"lane":"http://127.0.0.1:13976","defaultModelSelection":{"instanceId":"claudeAgent","model":"claude-sonnet-5-5","options":[{"id":"contextWindow","value":"1m"}]}}
