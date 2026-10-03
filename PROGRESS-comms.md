@@ -112,3 +112,9 @@ Owner: Cedar. Plan: [docs/01-comms-lane.md](docs/01-comms-lane.md).
 - [x] Close-out 2: the upgrade's history migration and fallback-due backfill run on live and recorded (`closeout/live-upgrade.journal.txt`)
 - Deployed code: see `closeout/live-upgrade.journal.txt` (updated at every deploy)
 
+
+## V2 port (docs/08 section 2)
+- [x] `packages/adapter-t3/src/v2`: `message.dispatch`, our run = `run.userMessageId`, foreign input and outcome read from one snapshot, commandId `comms-cmd-<delivery>` (persisted by T3 across restarts), thread re-read before any retry; real protocol-2 client; connector `t3.protocol: 2` (default 1, so the deployed connector is unchanged)
+- [x] Live on stock 13976 with a scratch Convex and connector: baseline, busy thread, queue, steer, restart-steer (refused by Claude), Stop, claim loss, crash after accept, Stop while down, connector restart, receipt rule, T3 restart, commandId across a restart: all as expected, one message and one run per delivery (`validation/v2/README.md`)
+- Standing rule: synthetic test agents approval-required, exact approvals only (`docs/deploy-checklist.md`)
+- Open, not in the port: `docs/finding-reply-then-collect.md` (Alder, Wrenn, Lee); the rest of the handoff acceptance (UI, LHC, combined run, sustained trial) before the deployed connector moves off 3780
