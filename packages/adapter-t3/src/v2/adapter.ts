@@ -17,7 +17,9 @@
 //   every run's status and which run every message is in. So the restart check works
 //   from one snapshot, with no replay (T3 replays at most 128 events).
 // - The turn is over at `waiting` (checkpoint pending); we read the outcome at
-//   `completed`, or after `waitingSettleMs` of `waiting`.
+//   `completed`, or after `waitingSettleMs` (30 s) of `waiting`: a heuristic bound for a
+//   checkpoint that's slow or never lands. Why and what it risks: docs/t3-v2-notes.md,
+//   "the waiting settle".
 
 import { type Delivery, renderDelivery, renderUnmatchedNotice } from "@agent-comms/protocol";
 import { type Check, type Gate, type HandOff, messageIdFor, noticeIdFor, type Outcome, type T3Adapter, type Target } from "../adapter.ts";

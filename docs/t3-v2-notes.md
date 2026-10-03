@@ -253,6 +253,15 @@ Observable consequences:
 
 ---
 
+### What the adapter does: the `waiting` settle (`waitingSettleMs`, 30 s)
+
+`packages/adapter-t3/src/v2/adapter.ts` reads our run's outcome when the run is `completed`, or after it has sat in `waiting` for `waitingSettleMs` (default 30 s), whichever comes first. The restart check (`check`) reads `waiting` as still running.
+
+- **Why wait at all:** at `waiting` the agent's turn is over, but the checkpoint isn't captured yet and background work may still be draining; whether a late assistant message can land in `waiting` is unverified. `completed` is the state after which the run's records don't change (short of a rollback, which we report as uncertain).
+- **Why not wait for `completed` only:** checkpoint capture can be slow or never land (a failed capture, a provider without checkpoints), and the requester would wait forever. 30 s covers a normal capture (seconds in the live checks) and bounds the worst case.
+- **What it risks:** if an assistant message lands in `waiting` more than 30 s after the turn ended, the answer read earlier is the one collected. A rollback after we collected doesn't undo the collected answer.
+- **Unit test:** "a run stuck in waiting (checkpoint never lands) is read after the settle window" (`test/v2-adapter.test.ts`). The value is a heuristic, not a T3 guarantee; revisit if T3 documents when `waiting` ends.
+
 ## 6. Tool output visibility
 
 **Confirmed: command and tool output text is not available to a wire client, and v2 is stricter than 0.0.44's 84-char preview.** All wire paths go through `WireProjection.ts`: HTTP snapshots (`http.ts:156`), WS snapshots (`ws.ts:751`), and live events plus replay (`projectDomainEventForWire`, `ws.ts:682, 707`; `WireProjection.ts:142-150`).
