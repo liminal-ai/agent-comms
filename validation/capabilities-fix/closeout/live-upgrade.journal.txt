@@ -9,3 +9,8 @@ $ node scripts/upgrade.ts --url http://127.0.0.1:3240 --admin-token-file ~/.conf
 # {"alertHistoryDone":true,"ownersSet":0,"systemCreated":[],"systemRepaired":[]} (that version didn't yet report the
 # fallback-due backfill count). The run above, on 2b7cda5, reports it: 0. Live has no answered wait results, so the
 # backfill had nothing to do either time.
+
+# 2026-10-03 14:54 UTC: deploy of main d87e55b (docs/09 option A + the v0.0.44 stream fix + docs/10 reply race; approved by Alder's re-check).
+# Full check on main: exit 0 (172 vitest, all node suites 0 fail). Push to 127.0.0.1:3240: "Convex functions ready", no schema change.
+# scripts/upgrade.ts: {"alertHistoryDone":true,"fallbackDueBackfilled":0,"ownersSet":0,"systemCreated":[],"systemRepaired":[]}
+# agent-comms-connector.service restarted: "T3 adapter: http://127.0.0.1:3780 (orchestration protocol 1)", listening on the default socket; comms status answers.
