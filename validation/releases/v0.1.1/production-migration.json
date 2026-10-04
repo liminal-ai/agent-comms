@@ -1,0 +1,28 @@
+{
+  "version": "0.1.1",
+  "cloud": "https://merry-octopus-486.convex.cloud",
+  "allRecordsAndIdsPreserved": true,
+  "tableCounts": {
+    "migrations": 1,
+    "alertConfig": 1,
+    "machines": 1,
+    "alerts": 9,
+    "participants": 24,
+    "inbox": 30,
+    "reminderFires": 30,
+    "reminders": 31,
+    "conversations": 78,
+    "waits": 128,
+    "waitResults": 130,
+    "members": 199,
+    "deliveries": 676,
+    "messages": 662
+  },
+  "sqliteBackupIntegrity": "ok",
+  "rollback": "/home/leemoore/lim-rollback/comms/production-20261003-202654",
+  "oldBackend": "paused and stopped",
+  "units": [
+    "comms-prod-connector.service",
+    "comms-prod-web.service"
+  ]
+}

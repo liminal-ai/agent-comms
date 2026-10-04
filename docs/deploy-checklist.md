@@ -1,5 +1,7 @@
 # Deploying and recovering agent-comms
 
+> Historical source-checkout deployment instructions. Current production/staging run versioned artifacts with Convex cloud; use [released environments](releases.md) and the [platform machine record](https://github.com/liminal-ai/platform/blob/main/machines/lim-builder.md). Keep the recovery/migration history below as reference, not as the current install procedure.
+
 A checklist for the installed services on a host (lim-builder today): the local Convex backend (`agent-comms-convex.service`), the connector (`agent-comms-connector.service`, run from `main` in `/srv/work/agent-comms`), and the `comms` wrapper on PATH. Secrets live in `~/.config/agent-comms/` and are only ever passed by file; never print them.
 
 ## Deploying a change

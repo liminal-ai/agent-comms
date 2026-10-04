@@ -1,5 +1,7 @@
 # Running agent-comms on a machine (lim-builder)
 
+> Historical source-checkout deployment instructions. Current production/staging run versioned artifacts with Convex cloud; use [released environments](../docs/releases.md) and the [platform machine record](https://github.com/liminal-ai/platform/blob/main/machines/lim-builder.md). Keep the recovery/migration history below as reference, not as the current install procedure.
+
 Two `systemd --user` services, both running `main` from `/srv/work/agent-comms`. Nothing they read lives in a builder's or agent's home folder.
 
 | What | Where |
