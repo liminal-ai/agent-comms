@@ -7,7 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Scope from "effect/Scope";
 import type { HarnessAdapter } from "./adapter.ts";
-import { loadConfig } from "./config.ts";
+import { loadConfig, verifyT3Binding } from "./config.ts";
 import { runConnector } from "./connector.ts";
 import { type ConvexTransport, describeFailure, makeServerApi } from "./server-api.ts";
 
@@ -19,6 +19,7 @@ if (values.help || !values.config) {
 
 const log = (line: string) => console.error(`${new Date().toISOString()} ${line}`);
 const config = loadConfig(values.config);
+if (config.adapters?.includes("t3") && config.t3) await verifyT3Binding(config.t3);
 for (const w of config.warnings) log(`warning: ${w}`);
 
 // The Convex client's own logging prints server errors, which can echo a call's arguments (the

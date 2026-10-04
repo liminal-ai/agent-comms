@@ -13,7 +13,7 @@ const TOKEN_KEY = "agent-comms.adminToken";
 const AS_KEY = "agent-comms.as";
 
 export function App() {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || __DEV_ADMIN_TOKEN__);
+  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || window.commsConfig?.adminToken || __DEV_ADMIN_TOKEN__);
   if (!token) return <TokenGate onToken={(t) => (localStorage.setItem(TOKEN_KEY, t), setToken(t))} />;
   return (
     <Boundary onReset={() => (localStorage.removeItem(TOKEN_KEY), setToken(""))}>
