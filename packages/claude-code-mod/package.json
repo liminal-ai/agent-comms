@@ -7,7 +7,7 @@
   "scripts": {
     "sync-protocol": "node scripts/sync-protocol.ts",
     "typecheck": "node scripts/sync-protocol.ts --check && tsc -p tsconfig.json",
-    "test": "node scripts/sync-protocol.ts --check && node --test 'test/**/*.test.ts'"
+    "test": "node scripts/sync-protocol.ts --check && node --test \"test/**/*.test.ts\""
   },
   "devDependencies": {
     "@agent-comms/connector-stub": "workspace:*",

@@ -1,3 +1,5 @@
+import { windowsEndpoint } from '../../windows-pipe/src/index.mjs';
+import { randomUUID } from 'node:crypto';
 import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { request } from "node:http";
@@ -69,7 +71,7 @@ const onlyDelivery = (items: PollItem[]): Delivery => {
 async function start(existing?: StubComms) {
   const dir = join(root, `run-${++n}`);
   await mkdir(dir);
-  sock = join(dir, "agent-comms", "connector.sock");
+  sock = process.platform === "win32" ? windowsEndpoint("stub-test-"+randomUUID()) : join(dir, "agent-comms", "connector.sock");
   recordPath = join(dir, "record.jsonl");
   comms = existing ?? StubComms.fromFixture(fixture);
   server = await startStubServer({ socketPath: sock, comms, recordPath, pollWaitMs: 100 });
@@ -327,7 +329,7 @@ describe("stub restart", () => {
   });
 });
 
-describe("socket directory", () => {
+describe("socket directory", {skip:process.platform === "win32" ? "POSIX directory security; Windows pipe security has dedicated tests" : false}, () => {
   it("creates an owner-only directory and refuses a wider one", async () => {
     const base = await mkdtemp(join(root, "sock-"));
     await prepareSocketPath(join(base, "fresh", "c.sock"));

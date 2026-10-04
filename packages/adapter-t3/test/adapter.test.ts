@@ -491,9 +491,7 @@ describe("fix pass 2.2 / 2.3", () => {
 
   it("2.3 the real client: an HTTP 4xx refusal is rejected; a 5xx or a dropped connection is not", async () => {
     const { createServer } = await import("node:http");
-    const { mkdtemp, writeFile } = await import("node:fs/promises");
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
+    const { privateFixture } = await import("../../windows-pipe/test/private-fixture.mjs");
     const { makeT3Client } = await import("../src/t3/client.ts");
     let mode: "400" | "500" | "drop" = "400";
     const server = createServer((req, res) => {
@@ -503,9 +501,9 @@ describe("fix pass 2.2 / 2.3", () => {
     });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
     const port = (server.address() as { port: number }).port;
-    const dir = await mkdtemp(join(tmpdir(), "t3client-"));
-    await writeFile(join(dir, "token"), "dummy-bearer", { mode: 0o600 });
-    const client = makeT3Client({ baseUrl: `http://127.0.0.1:${port}`, authFile: join(dir, "token"), log: () => {} });
+    const fixture = await privateFixture("dummy-bearer");
+    try {
+    const client = makeT3Client({ baseUrl: `http://127.0.0.1:${port}`, authFile: fixture.path, log: () => {} });
     const turn = { messageId: "comms-d", text: "x", runtimeMode: "auto", interactionMode: "default" };
     const kind = async () => client.startTurn("th", turn).then(() => "ok", (e) => (e instanceof T3Rejected ? "rejected" : "transport"));
     mode = "400";
@@ -514,7 +512,7 @@ describe("fix pass 2.2 / 2.3", () => {
     assert.equal(await kind(), "transport");
     mode = "drop";
     assert.equal(await kind(), "transport");
-    server.close();
+    } finally { server.closeAllConnections(); server.close(); await fixture.cleanup(); }
   });
 });
 

@@ -9,7 +9,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
-    "test": "node --test --test-timeout=30000 'test/**/*.test.ts'"
+    "test": "node --test --test-timeout=30000 \"test/**/*.test.ts\""
   },
   "devDependencies": {
     "@types/node": "catalog:",

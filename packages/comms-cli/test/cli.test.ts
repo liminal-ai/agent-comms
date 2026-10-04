@@ -1,3 +1,5 @@
+import { windowsEndpoint } from '../../windows-pipe/src/index.mjs';
+import { createHash } from 'node:crypto';
 import { CLI_EXIT } from "@agent-comms/protocol";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
@@ -12,7 +14,8 @@ import { StubComms, startStubServer, type StubServer } from "@agent-comms/connec
 import { EXIT, run } from "../src/cli.ts";
 
 const root = await mkdtemp(join(tmpdir(), "comms-cli-test-"));
-const socket = join(root, "agent-comms", "connector.sock");
+const testEndpoint=(name:string)=>process.platform === "win32" ? windowsEndpoint("cli-test-"+createHash("sha256").update(root+name).digest("hex").slice(0,24)) : join(root,name);
+const socket = process.platform === "win32" ? testEndpoint("main") : join(root, "agent-comms", "connector.sock");
 let server: StubServer;
 
 before(async () => {
@@ -119,7 +122,7 @@ describe("comms CLI against the stub", () => {
   });
 
   it("exits 3 when no connector is listening", async () => {
-    const r = await run(["--socket", join(root, "nothing.sock"), "status"], {
+    const r = await run(["--socket", testEndpoint("nothing.sock"), "status"], {
       env: {},
       stdout: () => {},
       stderr: () => {},
@@ -131,7 +134,7 @@ describe("comms CLI against the stub", () => {
   it("runs as a real binary, quickly", async () => {
     const bin = fileURLToPath(new URL("../src/main.ts", import.meta.url));
     const started = Date.now();
-    const { stdout } = await promisify(execFile)(bin, ["status"], { env: { ...process.env, AGENT_COMMS_SOCKET: socket } });
+    const { stdout } = await promisify(execFile)(process.platform === "win32" ? process.execPath : bin, process.platform === "win32" ? [bin, "status"] : ["status"], { env: { ...process.env, AGENT_COMMS_SOCKET: socket } });
     const elapsed = Date.now() - started;
     assert.match(stdout, /^stub on box/);
     assert.ok(elapsed < 1500, `took ${elapsed}ms`);
@@ -220,7 +223,7 @@ describe("fix pass 1.7: a dropped send keeps its key", () => {
   }
 
   it("a connector that drops after reading the send: the retry, with the same key, posts once", async () => {
-    const proxySock = join(root, "drop-once.sock");
+    const proxySock = testEndpoint("drop-once.sock");
     const proxy = await dropProxy(proxySock, socket, 1);
     try {
       let stdout = "";
@@ -242,7 +245,7 @@ describe("fix pass 1.7: a dropped send keeps its key", () => {
   });
 
   it("Alder's repro: when it gives up, it prints the --key line and exits 3 (unreachable), not 1 (refused)", async () => {
-    const proxySock = join(root, "drop-always.sock");
+    const proxySock = testEndpoint("drop-always.sock");
     const proxy = await dropProxy(proxySock, socket, Infinity);
     try {
       let stdout = "";
@@ -282,7 +285,7 @@ describe("P3 bug 5: -- protects text starting with @", () => {
 
 describe("P3 bug 9a: a refused await mid-wait", () => {
   it("exits 1 (refused) and doesn't promise the thread", async () => {
-    const path = join(root, "refuse-await.sock");
+    const path = testEndpoint("refuse-await.sock");
     let calls = 0;
     const wait = { id: "w_1", messageId: "m_1", waiter: { id: "p", name: "cedar", kind: "agent" }, until: Date.now() + 60_000, active: true, inInbox: [], createdAt: Date.now(),
       results: [{ recipient: { id: "q", name: "hazel", kind: "agent" }, state: "open", delivery: { id: "d_1", state: "delivered" }, at: Date.now() }] };
@@ -349,7 +352,7 @@ describe("follow-up 1: the key survives every transport failure after a drop", (
   };
 
   it("Reed's repro: the connector dies mid-send and is back in 3 s; the retry with the same key posts it once", async () => {
-    const path = join(root, "dies-back.sock");
+    const path = testEndpoint("dies-back.sock");
     const proxy = await dyingProxy(path, 3_000);
     const text = `followup-1 back ${Date.now()}`;
     let stderr = "";
@@ -364,7 +367,7 @@ describe("follow-up 1: the key survives every transport failure after a drop", (
   });
 
   it("Alder's repro: the connector dies mid-send and stays down; the CLI gives up with exit 3 and prints the --key line", async () => {
-    const path = join(root, "dies-down.sock");
+    const path = testEndpoint("dies-down.sock");
     const proxy = await dyingProxy(path, null);
     let stderr = "";
     const code = await run(["--socket", path, "send", "--as", "cedar", "--continue", "@hazel", "followup-1 down"], { env: {}, stdout: () => {}, stderr: (t) => (stderr += t), readStdin: async () => "" });

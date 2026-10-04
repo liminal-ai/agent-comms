@@ -2,9 +2,8 @@
 // owner-only Unix socket. Validates requests, hands them to the handlers, and
 // shapes the replies.
 
-import { chmod, unlink } from "node:fs/promises";
 import { createServer, type IncomingMessage } from "node:http";
-import { prepareSocketPath } from "@agent-comms/connector-stub";
+import { listenLocal } from '@agent-comms/connector-stub';
 import {
   decodeRequest,
   ERROR_STATUS,
@@ -71,19 +70,12 @@ export async function serveLoopback(socketPath: string, handlers: Handlers, log:
   server.requestTimeout = 120_000;
   server.keepAliveTimeout = 5_000;
 
-  await prepareSocketPath(socketPath);
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(socketPath, () => resolve());
-  });
-  await chmod(socketPath, 0o600);
+  const closeTransport = await listenLocal(server, socketPath);
 
   return {
     socketPath,
     close: async () => {
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-      await unlink(socketPath).catch(() => {});
+      await closeTransport();
     },
   };
 }

@@ -1,3 +1,5 @@
+import { windowsEndpoint } from '../../windows-pipe/src/index.mjs';
+import { randomUUID } from 'node:crypto';
 // Test harness: the real Convex functions (convex-test), the real connector
 // and loopback socket, and a scripted mod session speaking the protocol.
 
@@ -86,7 +88,7 @@ export async function world() {
   const tr = transport(t);
   const serverApi = makeServerApi(tr, { machine, callTimeout: "2 seconds" });
   const dir = await mkdtemp(join(tmpdir(), "connector-test-"));
-  const socket = join(dir, "agent-comms", "connector.sock");
+  const socket = process.platform === "win32" ? windowsEndpoint("integration-" + randomUUID()) : join(dir, "agent-comms", "connector.sock");
   return { t, tr, api: serverApi, socket, dir };
 }
 

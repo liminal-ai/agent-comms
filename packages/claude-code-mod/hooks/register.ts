@@ -91,6 +91,8 @@ export function register(on: any) {
     try {
       const participant = nonEmpty(await $.env.get("AGENT_COMMS_PARTICIPANT"));
       if (!participant || mod) return result;
+      // Windows host stdin support is unverified; keep standalone integration off.
+      if (await $.env.get("OS") === "Windows_NT") return result;
       const socket = await resolveSocket($);
       if (!socket) return result;
       const home = nonEmpty(await $.env.get("HOME")) ?? ".";

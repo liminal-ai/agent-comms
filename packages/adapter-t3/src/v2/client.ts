@@ -10,7 +10,7 @@
 // checkout. The bearer is read from a file and never printed; the ticketed URL is
 // never logged.
 
-import { readFileSync } from "node:fs";
+import { readCredential } from "../../../windows-pipe/src/secret.mjs";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -57,7 +57,7 @@ const redact = (text: string) => text.replace(/wsTicket=[^&\s"']+/g, "wsTicket=<
 
 export function makeT3ClientV2(options: V2ClientOptions): V2Client {
   const baseUrl = options.baseUrl.replace(/\/$/, "");
-  const bearer = () => readFileSync(options.authFile, "utf8").trim();
+  const bearer = () => readCredential(options.authFile).trim();
   const authHeaders = () => ({ authorization: `Bearer ${bearer()}` });
   let session: Session | null = null;
   let connecting: Promise<Session> | null = null;

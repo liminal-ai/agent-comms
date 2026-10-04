@@ -1,3 +1,5 @@
+import { createWindowsAgent } from '../../windows-pipe/src/agent.mjs';
+import { windowsEndpoint } from '../../windows-pipe/src/index.mjs';
 // A loopback client for Node: one request per call, over the connector's
 // Unix socket. The mod has its own (`$.http.fetch` with `socketPath`); both
 // speak the same protocol through the same `opPath` and `parseResponse`.
@@ -25,13 +27,13 @@ export class ConnectionLost extends ConnectorUnreachable {}
 export function resolveSocketPath(explicit?: string): string {
   const path =
     explicit ??
-    socketPath({
+    (process.platform === "win32" ? process.env[SOCKET_ENV] ?? windowsEndpoint() : socketPath({
       platform: process.platform,
       override: process.env[SOCKET_ENV],
       xdgRuntimeDir: process.env.XDG_RUNTIME_DIR,
       home: homedir(),
       uid: process.getuid?.(),
-    });
+    }));
   if (!path) throw new ConnectorUnreachable(`can't work out the connector socket path; set ${SOCKET_ENV}`);
   return path;
 }
@@ -39,9 +41,11 @@ export function resolveSocketPath(explicit?: string): string {
 export function call<K extends Op>(socket: string, op: K, body: Requests[K]): Promise<ResponseBody<K>> {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
+    const agent = process.platform === "win32" ? createWindowsAgent(socket) : undefined;
     const req = request(
       {
         socketPath: socket,
+        ...(agent ? {agent} : {}),
         path: opPath(op),
         method: "POST",
         headers: { "content-type": "application/json", "content-length": Buffer.byteLength(payload) },

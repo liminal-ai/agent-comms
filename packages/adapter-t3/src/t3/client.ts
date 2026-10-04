@@ -9,7 +9,7 @@
 // T3 checkout. The bearer is read from a file and never printed.
 
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readCredential } from "../../../windows-pipe/src/secret.mjs";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -42,7 +42,7 @@ interface Session {
 
 export function makeT3Client(options: T3ClientOptions): T3Client {
   const baseUrl = options.baseUrl.replace(/\/$/, "");
-  const bearer = () => readFileSync(options.authFile, "utf8").trim();
+  const bearer = () => readCredential(options.authFile).trim();
   const authHeaders = () => ({ authorization: `Bearer ${bearer()}` });
   let session: Session | null = null;
   let connecting: Promise<Session> | null = null;

@@ -1,3 +1,4 @@
+import { privateFixture } from '../packages/windows-pipe/test/private-fixture.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm, mkdir, copyFile, symlink } from 'node:fs/promises';
@@ -40,9 +41,9 @@ test('binding refuses a different T3 before sending any credential', async () =>
 });
 
 test('binding requires both expected identity and an authenticated session', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'comms-binding-'));
+  const fixture = await privateFixture('fixture-token');
   try {
-    const authFile = join(dir, 'token'); await writeFile(authFile, 'fixture-token');
+    const authFile = fixture.path;
     const config = { baseUrl: 'http://localhost:13976', authFile, environmentId: 'staging' };
     let accept = false;
     const request = async (url, options) => {
@@ -52,7 +53,7 @@ test('binding requires both expected identity and an authenticated session', asy
     };
     await assert.rejects(verifyT3Binding(config, request), /credential rejected/);
     accept = true; await verifyT3Binding(config, request);
-  } finally { await rm(dir, { recursive: true }); }
+  } finally { await fixture.cleanup(); }
 });
 
 test('one web build serves each environment config at runtime, without leaking other files', async () => {

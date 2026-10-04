@@ -1,3 +1,6 @@
+import { windowsEndpoint } from '../../windows-pipe/src/index.mjs';
+import { createWindowsAgent } from '../../windows-pipe/src/agent.mjs';
+import { randomUUID } from 'node:crypto';
 // Shared test support: the real connector stub on a Unix socket, and a fake
 // Claude Code session standing in for the engine's `$`.
 import assert from "node:assert/strict";
@@ -18,7 +21,8 @@ export const fixture: Fixture = {
 
 export function rawCall(socketPath: string, path: string, body: string, method = "POST"): Promise<{ status: number; text: string }> {
   return new Promise((resolve, reject) => {
-    const req = request({ socketPath, path, method, headers: { "content-type": "application/json" } }, (res) => {
+    const agent=process.platform === "win32" ? createWindowsAgent(socketPath) : undefined;
+    const req = request({ ...(agent ? {agent} : {}), socketPath, path, method, headers: { "content-type": "application/json" } }, (res) => {
       const chunks: Buffer[] = [];
       res.on("data", (c: Buffer) => chunks.push(c));
       res.on("end", () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString() }));
@@ -108,8 +112,11 @@ export function useStub(prefix: string): StubContext & { restart(existing?: Stub
     root ??= await mkdtemp(join(tmpdir(), prefix));
     const dir = join(root, `s${++n}`);
     await mkdir(dir, { recursive: true });
-    ctx.socketPath = join(dir, "agent-comms", "connector.sock");
+    ctx.socketPath = process.platform === "win32" ? windowsEndpoint("mod-test-" + randomUUID()) : join(dir, "agent-comms", "connector.sock");
     await start();
+    // Warm the real Windows helper before tests impose 150ms report deadlines.
+    // The actual hung-call timeout assertions remain unchanged.
+    if(process.platform === "win32") await rawCall(ctx.socketPath, "/v1/status", "{}");
   });
   afterEach(() => ctx.server.close());
   after(() => (root ? rm(root, { recursive: true, force: true }) : undefined));

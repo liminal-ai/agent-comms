@@ -2,7 +2,6 @@
 // Records every request and response as JSON lines when asked to.
 
 import { appendFileSync } from "node:fs";
-import { chmod, unlink } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
   DEFAULT_POLL_WAIT_MS,
@@ -16,7 +15,7 @@ import {
   type Op,
   type Requests,
 } from "@agent-comms/protocol";
-import { prepareSocketPath } from "./socket.ts";
+import { listenLocal } from './local-transport.ts';
 import { type PostInput, StubComms, StubError } from "./state.ts";
 
 const MAX_BODY_BYTES = 4_000_000;
@@ -172,20 +171,13 @@ export async function startStubServer(options: StubServerOptions): Promise<StubS
   server.requestTimeout = 120_000;
   server.keepAliveTimeout = 5_000;
 
-  await prepareSocketPath(socketPath);
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(socketPath, () => resolve());
-  });
-  await chmod(socketPath, 0o600);
+  const closeTransport = await listenLocal(server, socketPath);
   record({ event: "listening", socketPath, machine: comms.record.machine });
 
   return {
     socketPath,
     close: async () => {
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-      await unlink(socketPath).catch(() => {});
+      await closeTransport();
     },
   };
 }
