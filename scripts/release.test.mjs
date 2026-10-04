@@ -1,10 +1,35 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, mkdir, copyFile, symlink } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { webServer } from './serve-web.mjs';
 import { verifyT3Binding } from '../packages/connector/src/config.ts';
+
+test('web service starts through the deployed current symlink', { timeout: 10_000 }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'comms-launch-'));
+  let child;
+  try {
+    const release = join(dir, 'release');
+    await mkdir(join(release, 'web'), { recursive: true });
+    await copyFile(new URL('./serve-web.mjs', import.meta.url), join(release, 'serve-web.mjs'));
+    await writeFile(join(release, 'web/index.html'), 'released web');
+    await symlink(release, join(dir, 'current'), 'dir');
+    const config = join(dir, 'config.json');
+    await writeFile(config, JSON.stringify({ environment: 'staging', convexUrl: 'https://staging.example.test', port: 0 }));
+    child = spawn(process.execPath, [join(dir, 'current/serve-web.mjs'), config], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const result = await Promise.race([
+      once(child.stdout, 'data').then(([data]) => data.toString()),
+      once(child, 'exit').then(([code]) => { throw new Error(`web exited before listening: ${code}`); }),
+    ]);
+    assert.match(result, /Comms staging web: 127.0.0.1:/);
+  } finally {
+    if (child && child.exitCode === null) { const stopped = once(child, 'exit'); child.kill(); await stopped; }
+    await rm(dir, { recursive: true });
+  }
+});
 
 test('binding refuses a different T3 before sending any credential', async () => {
   const requests = [];
