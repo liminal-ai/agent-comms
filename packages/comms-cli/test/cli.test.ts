@@ -133,11 +133,14 @@ describe("comms CLI against the stub", () => {
 
   it("runs as a real binary, quickly", async () => {
     const bin = fileURLToPath(new URL("../src/main.ts", import.meta.url));
+    // Windows cold-starts the verified PowerShell bridge. It must still exit
+    // before the five-second idle keep-alive timeout, without weakening Unix's budget.
+    const budget = process.platform === 'win32' ? 5000 : 1500;
     const started = Date.now();
-    const { stdout } = await promisify(execFile)(process.platform === "win32" ? process.execPath : bin, process.platform === "win32" ? [bin, "status"] : ["status"], { env: { ...process.env, AGENT_COMMS_SOCKET: socket } });
+    const { stdout } = await promisify(execFile)(process.platform === "win32" ? process.execPath : bin, process.platform === "win32" ? [bin, "status"] : ["status"], { env: { ...process.env, AGENT_COMMS_SOCKET: socket }, timeout: budget });
     const elapsed = Date.now() - started;
     assert.match(stdout, /^stub on box/);
-    assert.ok(elapsed < 1500, `took ${elapsed}ms`);
+    assert.ok(elapsed < budget, `took ${elapsed}ms (budget ${budget}ms)`);
   });
 });
 
