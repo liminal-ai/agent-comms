@@ -4,7 +4,8 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {powershellPath} from '../src/runtime.mjs';
-import {Bridge,windowsEndpoint} from '../src/index.mjs';
+import {Bridge,windowsEndpoint,listenWindows,connectWindows} from '../src/index.mjs';
+import {createServer,request,Agent} from 'node:http';
 const exec=promisify(execFile);
 const windows=process.platform==='win32';
 for(const name of ['private-pipe.ps1','http-interop.ps1','secret-negative.ps1','secret.ps1','bridge.mjs','comms.mjs'])test(name,{skip:!windows,timeout:60000},async()=>{
@@ -48,4 +49,39 @@ test('both adapters reject broad-ACL credentials again after file replacement',{
   const client=factory({baseUrl:'http://127.0.0.1:1',authFile,log:()=>{}});
   try{for(const content of ['dummy-first','dummy-replacement']){await rm(authFile,{force:true});await writeFile(authFile,content);await assert.rejects(client.getThread('fixture'),/private|Secret|validate-secret|Command failed/i);}}finally{await client.close();}
  }}finally{await rm(authFile,{force:true});await rmdir(dir);}
+});
+
+
+test('Windows HTTP enforces header/body deadlines and remains usable',{skip:!windows,timeout:30000},async()=>{
+ const endpoint=windowsEndpoint('http-timeouts-'+process.pid);
+ const server=createServer({headersTimeout:150,requestTimeout:300,connectionsCheckingInterval:25},(req,res)=>{
+  req.resume();req.on('end',()=>res.end('healthy'));
+ });
+ const close=await listenWindows(server,endpoint);
+ const agent=new Agent({keepAlive:false});agent.createConnection=(_options,callback)=>connectWindows(endpoint,callback);
+ async function partialRequest(payload){
+  const socket=await new Promise((resolve,reject)=>connectWindows(endpoint,(error,socket)=>error?reject(error):resolve(socket)));
+  return new Promise((resolve,reject)=>{
+   let body='';const timer=setTimeout(()=>{socket.destroy();reject(Error('HTTP deadline did not close partial request'));},3000);
+   socket.on('data',chunk=>body+=chunk.toString());socket.once('error',error=>{clearTimeout(timer);reject(error);});
+   socket.once('close',()=>{clearTimeout(timer);resolve(body);});socket.write(payload);
+  });
+ }
+ try {
+  assert.match(await partialRequest('GET / HTTP/1.1\r\nHost: incomplete'),/^HTTP\/1\.1 408 /);
+  assert.match(await partialRequest('POST / HTTP/1.1\r\nHost: local\r\nContent-Length: 4\r\n\r\nx'),/^HTTP\/1\.1 408 /);
+  const body=await new Promise((resolve,reject)=>{
+   const req=request({socketPath:endpoint,agent},res=>{let body='';res.on('data',chunk=>body+=chunk);res.on('end',()=>resolve(body));});
+   req.on('error',reject);req.end();
+  });
+  assert.equal(body,'healthy');
+ }finally{agent.destroy();await close();}
+});
+
+test('Windows HTTP closes its lifecycle when bridge startup fails',{skip:!windows,timeout:30000},async()=>{
+ const endpoint=windowsEndpoint('http-startup-failure-'+process.pid);
+ const owner=new Bridge('server',endpoint,()=>{});await owner.ready;
+ const server=createServer();let closed=false;server.once('close',()=>closed=true);
+ try {await assert.rejects(listenWindows(server,endpoint));assert.equal(closed,true);}
+ finally {await owner.close();}
 });

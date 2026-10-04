@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { webServer } from './serve-web.mjs';
 import { verifyT3Binding } from '../packages/connector/src/config.ts';
 
-test('web service starts through the deployed current symlink', { timeout: 10_000 }, async () => {
+test('web service starts through the deployed current directory link', { timeout: 10_000 }, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'comms-launch-'));
   let child;
   try {
@@ -17,7 +17,8 @@ test('web service starts through the deployed current symlink', { timeout: 10_00
     await mkdir(join(release, 'web'), { recursive: true });
     await copyFile(new URL('./serve-web.mjs', import.meta.url), join(release, 'serve-web.mjs'));
     await writeFile(join(release, 'web/index.html'), 'released web');
-    await symlink(release, join(dir, 'current'), 'dir');
+    // Windows directory junctions exercise the same realpath launch without symlink privileges.
+    await symlink(release, join(dir, 'current'), process.platform === 'win32' ? 'junction' : 'dir');
     const config = join(dir, 'config.json');
     await writeFile(config, JSON.stringify({ environment: 'staging', convexUrl: 'https://staging.example.test', port: 0 }));
     child = spawn(process.execPath, [join(dir, 'current/serve-web.mjs'), config], { stdio: ['ignore', 'pipe', 'pipe'] });

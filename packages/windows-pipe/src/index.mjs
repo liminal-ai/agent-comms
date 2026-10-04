@@ -55,5 +55,23 @@ export class Bridge {
  fail(error){if(this.closed)return;this.closed=true;clearTimeout(this.timer);this.reject(error);for(const socket of this.sockets.values())socket.destroy(error);this.sockets.clear();this.child.stdin.destroy();this.child.kill();if(this.started&&!this.closing)queueMicrotask(()=>this.onFailure?.(error));}
  async close(){if(this.closed)return;this.closing=true;const exit=new Promise(resolve=>this.child.once('exit',resolve));for(const socket of this.sockets.values())socket.destroy();this.child.stdin.end();const timer=setTimeout(()=>this.child.kill(),3000);await exit;clearTimeout(timer);}
 }
-export async function listenWindows(server,endpoint){const bridge=new Bridge('server',endpoint,socket=>server.emit('connection',socket),error=>server.emit('error',error));await bridge.ready;return ()=>bridge.close();}
+export async function listenWindows(server,endpoint){
+ // HTTP initializes header/request deadline tracking on 'listening'. Initialize
+ // before the helper can deliver a connection, even though no net.Server listens.
+ let httpClose;
+ const closeHttp=()=>httpClose??=new Promise(resolve=>{
+  // HTTP close cleans its tracker; net.Server reports NOT_RUNNING because the
+  // pipe bridge owns the listener. Its close callback still signals cleanup.
+  server.close(()=>resolve());
+ });
+ server.emit('listening');
+ let bridge;
+ try {
+  bridge=new Bridge('server',endpoint,socket=>server.emit('connection',socket),error=>{
+   void closeHttp();server.emit('error',error);
+  });
+  await bridge.ready;
+ } catch(error) {await closeHttp();throw error;}
+ return async()=>{try{await bridge.close();}finally{await closeHttp();}};
+}
 export function connectWindows(endpoint,callback){const bridge=new Bridge('client',endpoint);bridge.ready.then(socket=>{socket.once('close',()=>bridge.close());callback(null,socket)},error=>callback(error));}

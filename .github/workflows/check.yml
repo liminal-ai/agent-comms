@@ -4,7 +4,11 @@ permissions:
   contents: read
 jobs:
   check:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -17,3 +21,7 @@ jobs:
       - run: pnpm build:release 0.0.0-ci
       - run: node dist/agent-comms-0.0.0-ci/comms.mjs --help
       - run: node dist/agent-comms-0.0.0-ci/connector.mjs --help
+
+      - name: Exercise bundled Windows transport
+        if: runner.os == 'Windows'
+        run: node packages/windows-pipe/test/bundle.mjs 0.0.0-ci
