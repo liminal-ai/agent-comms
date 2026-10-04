@@ -6,6 +6,9 @@ $file=Join-Path $dir 'test-value.txt'
 Set-Content -LiteralPath $file -Value 'disposable-test-value' -NoNewline
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
 $acl=[Security.AccessControl.FileSecurity]::new()
+# Elevated test runners can default new files to Administrators ownership.
+# Set only this newly created disposable fixture to the current test user.
+$acl.SetOwner($sid)
 $acl.SetAccessRuleProtection($true,$false)
 $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl','Allow'))
 [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]::new($file),$acl)
