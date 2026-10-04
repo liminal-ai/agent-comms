@@ -26,7 +26,25 @@ export interface ConnectorConfig {
     authFile: string;
     /** T3's orchestration protocol: 1 for v0.0.44 (the default), 2 from v0.0.46. */
     protocol?: 1 | 2;
+    /** Stable ID from /.well-known/t3/environment; refuses a different server. */
+    environmentId?: string;
   };
+}
+
+export async function verifyT3Binding(t3: NonNullable<ConnectorConfig["t3"]>, request: typeof fetch = fetch): Promise<void> {
+  if (!t3.environmentId) return;
+  const base = t3.baseUrl.replace(/^ws/, "http").replace(/\/$/, "");
+  const descriptor = await request(`${base}/.well-known/t3/environment`, { signal: AbortSignal.timeout(10_000) });
+  if (!descriptor.ok || (await descriptor.json() as { environmentId?: string }).environmentId !== t3.environmentId) {
+    throw new Error("T3 environment identity mismatch; refusing to connect");
+  }
+  const token = readFileSync(expand(t3.authFile), "utf8").trim();
+  const session = await request(`${base}/api/auth/session`, {
+    headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000),
+  });
+  if (!session.ok || (await session.json() as { authenticated?: boolean }).authenticated !== true) {
+    throw new Error("T3 credential rejected for the configured environment");
+  }
 }
 
 export interface LoadedConfig extends ConnectorConfig {

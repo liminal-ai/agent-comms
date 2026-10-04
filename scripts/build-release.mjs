@@ -1,0 +1,23 @@
+import { build } from 'esbuild';
+import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
+
+const version = process.argv[2];
+if (!version || !/^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/.test(version)) throw new Error('Pass a release version');
+const dest = resolve('dist', `agent-comms-${version}`);
+await mkdir('dist', { recursive: true });
+await mkdir(dest, { recursive: false });
+await build({
+  entryPoints: {
+    connector: 'packages/connector/src/main.ts', comms: 'packages/comms-cli/src/main.ts',
+    upgrade: 'scripts/upgrade.ts', setup: 'scripts/dev-setup.ts',
+  }, outdir: dest, outExtension: { '.js': '.mjs' }, bundle: true, platform: 'node', format: 'esm', target: 'node24',
+  banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
+});
+execFileSync('pnpm', ['--filter', '@agent-comms/web', 'build'], { stdio: 'inherit', shell: process.platform === 'win32' });
+await cp('apps/web/dist', `${dest}/web`, { recursive: true });
+for (const name of ['serve-web.mjs', 'run-convex.mjs']) await cp(`scripts/${name}`, `${dest}/${name}`);
+const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+await writeFile(`${dest}/release.json`, JSON.stringify({ version, commit, node: '24.18.0', convexBackend: 'precompiled-2026-09-28-5c7cb5b' }, null, 2)+'\n');
+console.log(dest);

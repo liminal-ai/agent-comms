@@ -6,12 +6,15 @@
     "typecheck": "pnpm -r typecheck && tsc -p convex/tsconfig.json",
     "test": "pnpm -r --workspace-concurrency=1 --filter '!@agent-comms/connector' test && vitest run",
     "test:convex": "vitest run --project convex",
-    "check": "pnpm typecheck && pnpm test"
+    "test:release": "node --test scripts/release.test.mjs",
+    "build:release": "node scripts/build-release.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm test:release"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
     "@types/node": "24.12.4",
     "convex-test": "0.0.60",
+    "esbuild": "0.27.0",
     "typescript": "7.0.2",
     "vitest": "5.0.3"
   },

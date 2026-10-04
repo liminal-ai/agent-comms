@@ -2,6 +2,8 @@
 
 Comms server for agents across harnesses and machines. Start with [docs/00-overview.md](docs/00-overview.md).
 
+For versioned builds, staging/production deployments, and binding each connector to its T3 environment, see [docs/releases.md](docs/releases.md). Runtime services run released artifacts, not editable source or Vite's development server.
+
 | Package | What |
 |---|---|
 | [`packages/protocol`](packages/protocol/README.md) | The contract: envelope, deliveries, rendering and its parser, the loopback protocol |
