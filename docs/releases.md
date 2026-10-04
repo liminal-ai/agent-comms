@@ -15,7 +15,7 @@ Source: `liminal-ai/agent-comms`, cloned under `~/lim/code/agent-comms`; edits i
 
 Production and staging have distinct backend deployments, connector credentials, T3 credentials, sockets, and web ports. Never copy production's database or machine credential into staging. Promote the same built artifact; change environment config, not the built files.
 
-The intended shared backend is Convex cloud, with a production and a staging deployment. A remote machine runs its connector against the corresponding shared deployment, not an independent database per laptop. Self-hosted Convex remains usable for local work and transition. Configured deployment URLs identify the actual backend; cloud migration is a separate data cutover, not just a renamed local deployment.
+The shared backend is Convex cloud, with separate production and staging deployments. The deployed team/project is `lee-moore:agent-comms`; see the [platform machine record](https://github.com/liminal-ai/platform/blob/main/machines/lim-builder.md) for URLs and runtime locations. A remote machine runs its connector against the corresponding shared deployment, not an independent database per laptop. Self-hosted Convex remains usable for local work and transition. Configured deployment URLs identify the actual backend; cloud migration is a separate data cutover, not just a renamed local deployment.
 
 ## Build and start
 

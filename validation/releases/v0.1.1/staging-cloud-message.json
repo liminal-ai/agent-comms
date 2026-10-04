@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-04T00:41:01.865Z",
+  "projectId": "ffdafa1c-9efc-4ac9-8675-16d2e3b4471b",
+  "threadId": "a28bd61b-d4c2-4fb4-9b54-5abaf5eeddde",
+  "name": "release-b65d95c9",
+  "version": "0.1.1",
+  "t3": "13976",
+  "convex": "https://diligent-hare-926.convex.cloud",
+  "conversationId": "j978bg5skgtzsmq23jmy7desrd8fn8h3",
+  "messageId": "jx728wqhzvn5s283csk137b0ax8fndxz",
+  "delivery": "replied",
+  "runs": [
+    {
+      "id": "run:thread:a28bd61b-d4c2-4fb4-9b54-5abaf5eeddde:ordinal:1",
+      "status": "completed"
+    }
+  ],
+  "answers": [
+    {
+      "sender": "release-b65d95c9",
+      "text": "Confirmed: I received the comms deployment check from @lee."
+    }
+  ],
+  "passed": true,
+  "testThreadRemoved": true
+}
