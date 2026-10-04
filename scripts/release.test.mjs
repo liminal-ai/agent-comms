@@ -9,7 +9,8 @@ import { join } from 'node:path';
 import { webServer } from './serve-web.mjs';
 import { verifyT3Binding } from '../packages/connector/src/config.ts';
 
-test('web service starts through the deployed current directory link', { timeout: 10_000 }, async () => {
+for (const lowerDrive of (process.platform === 'win32' ? [false, true] : [false])) {
+test('web service starts through the deployed current directory link' + (lowerDrive ? ' with lower-case drive spelling' : ''), { timeout: 10_000 }, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'comms-launch-'));
   let child;
   try {
@@ -21,7 +22,8 @@ test('web service starts through the deployed current directory link', { timeout
     await symlink(release, join(dir, 'current'), process.platform === 'win32' ? 'junction' : 'dir');
     const config = join(dir, 'config.json');
     await writeFile(config, JSON.stringify({ environment: 'staging', convexUrl: 'https://staging.example.test', port: 0 }));
-    child = spawn(process.execPath, [join(dir, 'current/serve-web.mjs'), config], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const entry = join(dir, 'current/serve-web.mjs');
+    child = spawn(process.execPath, [lowerDrive ? entry[0].toLowerCase() + entry.slice(1) : entry, config], { stdio: ['ignore', 'pipe', 'pipe'] });
     const result = await Promise.race([
       once(child.stdout, 'data').then(([data]) => data.toString()),
       once(child, 'exit').then(([code]) => { throw new Error(`web exited before listening: ${code}`); }),
@@ -32,6 +34,7 @@ test('web service starts through the deployed current directory link', { timeout
     await rm(dir, { recursive: true });
   }
 });
+}
 
 test('binding refuses a different T3 before sending any credential', async () => {
   const requests = [];
