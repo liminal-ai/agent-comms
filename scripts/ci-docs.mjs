@@ -83,7 +83,7 @@ export function checkScope(discover, validate) {
 }
 
 function main() {
-  let range, validationHead;
+  let range, validationBase, validationHead;
   const scope = checkScope(() => {
     const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
     range = revisionRange(process.env.GITHUB_EVENT_NAME, event, process.env.GITHUB_SHA);
@@ -91,9 +91,15 @@ function main() {
     // but validate what will land, including changes contributed by the base.
     validationHead = process.env.GITHUB_EVENT_NAME === 'pull_request'
       ? git('rev-parse', 'HEAD').trim() : range.head;
-    return classifyNameStatus(git('diff', '--no-ext-diff', '--find-renames', '--name-status', '-z', range.base, range.head, '--'));
+    const branchScope = classifyNameStatus(git('diff', '--no-ext-diff', '--find-renames', '--name-status', '-z', range.base, range.head, '--'));
+    validationBase = process.env.GITHUB_EVENT_NAME === 'pull_request' ? event.pull_request.base.sha : range.base;
+    // Base-side renames can move a PR's changed document. Classify the actual
+    // merge delta too, so validation paths exist and still satisfy the allowlist.
+    return branchScope.mode === 'docs' && process.env.GITHUB_EVENT_NAME === 'pull_request'
+      ? classifyNameStatus(git('diff', '--no-ext-diff', '--find-renames', '--name-status', '-z', validationBase, validationHead, '--'))
+      : branchScope;
   }, result => {
-    git('diff', '--check', range.base, validationHead, '--');
+    git('diff', '--check', validationBase, validationHead, '--');
     for (const path of result.paths) {
       // Read committed merge content, not mutable working-tree files.
       const text = git('show', `${validationHead}:${path}`);

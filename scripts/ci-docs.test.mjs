@@ -197,3 +197,36 @@ test('PR validates the checked-out merge when valid branch edits combine into in
   assert.match(result.stderr, /Documentation syntax validation failed/);
   assert.equal(existsSync(output), false);
 });
+
+test('PR validates a document at its base-side renamed path in the merge', () => {
+  const root = mkdtempSync(join(tmpdir(), 'comms-ci-rename-'));
+  const repo = join(root, 'repo');
+  mkdirSync(repo);
+  const git = (...args) => execFileSync('git', ['-c', 'user.name=CI Fixture', '-c', 'user.email=fixture@example.invalid',
+    '-c', 'commit.gpgsign=false', ...args], { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  git('init', '--quiet', '-b', 'base');
+  mkdirSync(join(repo, 'docs'));
+  const text = '# Guide\n\n' + Array.from({ length: 10 }, (_, i) => `Paragraph ${i}.\n`).join('\n');
+  writeFileSync(join(repo, 'docs/old.md'), text);
+  git('add', '.'); git('commit', '--quiet', '-m', 'initial');
+  git('branch', 'pr');
+  git('mv', 'docs/old.md', 'docs/new.md'); git('commit', '--quiet', '-m', 'rename on base');
+  const base = git('rev-parse', 'HEAD');
+  git('checkout', '--quiet', 'pr');
+  writeFileSync(join(repo, 'docs/old.md'), text + '\nPR update.\n');
+  git('add', '.'); git('commit', '--quiet', '-m', 'edit on PR');
+  const head = git('rev-parse', 'HEAD');
+  git('merge', '--quiet', '--no-ff', 'base', '-m', 'synthetic PR merge');
+  const merge = git('rev-parse', 'HEAD');
+  assert.equal(existsSync(join(repo, 'docs/old.md')), false);
+  assert.match(git('show', `${merge}:docs/new.md`), /PR update/);
+  const event = join(root, 'event.json');
+  const output = join(root, 'output');
+  writeFileSync(event, JSON.stringify({ pull_request: { base: { sha: base }, head: { sha: head } } }));
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('./ci-docs.mjs', import.meta.url))], {
+    cwd: repo, encoding: 'utf8', env: { ...process.env, GITHUB_EVENT_NAME: 'pull_request',
+      GITHUB_EVENT_PATH: event, GITHUB_SHA: merge, GITHUB_OUTPUT: output },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(output, 'utf8'), 'mode=docs\n');
+});

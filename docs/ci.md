@@ -5,7 +5,8 @@ Both existing check names remain: `check (ubuntu-24.04)` and `check (windows-202
 Each runs the small CI-helper tests and classifies the complete Git diff before
 installing application dependencies. PR classification uses the merge base and
 PR head; documentation validation reads the checked-out merge commit so combined
-base/head edits are checked before merging. Pushes use the event's before/head
+base/head edits are checked before merging. The base-tip-to-merge diff also must
+qualify as docs-only and supplies validation paths after base-side renames. Pushes use the event's before/head
 revisions. Missing history, unknown
 events/statuses or an empty diff select full CI.
 
