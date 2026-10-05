@@ -1,6 +1,8 @@
 # Released comms environments
 
-Source: `liminal-ai/agent-comms`, cloned under `~/lim/code/agent-comms`; edits in `~/lim/wt/agent-comms/<task>`. Pull requests run `pnpm check` and a packaging smoke check. A `v<version>` tag builds and publishes `agent-comms-<version>.tar.gz` with SHA256SUMS. Node 24.18.0 is the runtime requirement. The JavaScript/web artifact is independent of host CPU; the current connector requires Unix sockets (Linux, macOS, or WSL2 on Windows).
+Source: `liminal-ai/agent-comms`, cloned under `~/lim/code/agent-comms`; edits in `~/lim/wt/agent-comms/<task>`. Pull requests run `pnpm check` and a packaging smoke check. A `v<version>` tag builds and publishes `agent-comms-<version>.tar.gz` with SHA256SUMS. Node 24.18.0 is the runtime requirement. The JavaScript/web artifact is independent of host CPU. Linux and macOS use Unix sockets; **v0.1.2 and newer support native Windows ARM64/x64** through current-user named pipes, with native PowerShell 7.6.5 and Node matching the Windows architecture. WSL is not required for that connector/CLI path. Standalone Windows Claude hooks remain disabled.
+
+For native Windows **staging**, follow the [platform runbook](https://github.com/liminal-ai/platform/blob/main/wiki/comms-windows-native-setup.md). It covers prerequisites, protected current-user credentials, the SID pipe, T3 binding and the normal-user logon task. The Unix examples below remain applicable to Linux/macOS; do not apply their permission modes or symlink layout literally to Windows.
 
 ## What is deployed
 
@@ -25,7 +27,7 @@ pnpm check
 pnpm build:release 0.1.0
 ```
 
-The resulting directory contains `connector.mjs`, `comms.mjs`, `setup.mjs`, `upgrade.mjs`, `serve-web.mjs`, `run-convex.mjs`, `web/`, and `release.json`. It needs no node_modules or source checkout at runtime. Backend functions are deployed from the matching source revision with the Convex CLI; they reside in the selected Convex deployment.
+The resulting directory contains `connector.mjs`, `comms.mjs`, `setup.mjs`, `upgrade.mjs`, `serve-web.mjs`, `run-convex.mjs`, `web/`, and `release.json`. Windows-capable releases also include the `.cs` and `.ps1` companions beside the `.mjs` entrypoints; preserve them when installing or copying an artifact. It needs no node_modules or source checkout at runtime. Backend functions are deployed from the matching source revision with the Convex CLI; they reside in the selected Convex deployment.
 
 Connector example (replace every example value with the selected environment's actual values):
 
@@ -47,7 +49,7 @@ Connector example (replace every example value with the selected environment's a
 
 Get `environmentId` from the intended T3's `/.well-known/t3/environment`, cross-check it against that server's deployment record, and issue the bearer token from that same T3 home. At startup the connector checks identity before sending its credential, then requires a valid authenticated session. A mismatch fails startup. Existing legacy configurations without `environmentId` remain compatible; new installations must set it.
 
-The socket's parent is owner-only (0700). Secret files are 0600. Give each machine+environment a unique machine ID when registering its secret in Convex. An agent home in comms uses that ID and a thread ID from that exact T3 server. Use an explicit `AGENT_COMMS_SOCKET` in the environment's CLI wrapper; do not let staging silently use the production default.
+On Unix, the socket's parent is owner-only (0700) and secret files are 0600. Native Windows instead requires current-user ownership and private DACLs, a current-user SID pipe and the configured PowerShell helper path; use the Windows runbook rather than translating `chmod`. Give each machine+environment a unique machine ID when registering its secret in Convex. An agent home in comms uses that ID and a thread ID from that exact T3 server. Use an explicit `AGENT_COMMS_SOCKET` in the environment's CLI wrapper; do not let staging silently use the production default.
 
 Web example:
 
@@ -69,7 +71,7 @@ node current/serve-web.mjs config/web.json
 AGENT_COMMS_SOCKET=/absolute/socket/path node current/comms.mjs status
 ```
 
-Production processes belong in a service manager, with fixed absolute paths and restart-on-failure. Linux uses systemd user units; Mac uses launchd. Do not use `vite`, `vite preview`, or source TypeScript to serve the deployed web/connector.
+Production processes belong in a service manager, with fixed absolute paths and restart-on-failure. Linux uses systemd user units; Mac uses launchd. The documented native Windows staging setup uses an Interactive/Limited per-user Scheduled Task and explicit versioned paths, without requiring symlinks or elevation. Do not use `vite`, `vite preview`, or source TypeScript to serve the deployed web/connector.
 
 ## Promote and roll back
 
