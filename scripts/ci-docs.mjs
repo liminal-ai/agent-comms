@@ -83,16 +83,20 @@ export function checkScope(discover, validate) {
 }
 
 function main() {
-  let range;
+  let range, validationHead;
   const scope = checkScope(() => {
     const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
     range = revisionRange(process.env.GITHUB_EVENT_NAME, event, process.env.GITHUB_SHA);
+    // Actions checks out the synthetic merge for PRs; classify the branch diff
+    // but validate what will land, including changes contributed by the base.
+    validationHead = process.env.GITHUB_EVENT_NAME === 'pull_request'
+      ? git('rev-parse', 'HEAD').trim() : range.head;
     return classifyNameStatus(git('diff', '--no-ext-diff', '--find-renames', '--name-status', '-z', range.base, range.head, '--'));
   }, result => {
-    git('diff', '--check', range.base, range.head, '--');
+    git('diff', '--check', range.base, validationHead, '--');
     for (const path of result.paths) {
-      // Read the classified revision, not an unrelated working-tree file.
-      const text = git('show', `${range.head}:${path}`);
+      // Read committed merge content, not mutable working-tree files.
+      const text = git('show', `${validationHead}:${path}`);
       try {
         validateFences(text, body => {
           if (process.platform !== 'win32') execFileSync('bash', ['--noprofile', '--norc', '-n'], {

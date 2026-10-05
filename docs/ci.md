@@ -4,7 +4,9 @@
 Both existing check names remain: `check (ubuntu-24.04)` and `check (windows-2025)`.
 Each runs the small CI-helper tests and classifies the complete Git diff before
 installing application dependencies. PR classification uses the merge base and
-PR head; pushes use the event's before/head revisions. Missing history, unknown
+PR head; documentation validation reads the checked-out merge commit so combined
+base/head edits are checked before merging. Pushes use the event's before/head
+revisions. Missing history, unknown
 events/statuses or an empty diff select full CI.
 
 Only `README.md` and Markdown files under `docs/` qualify as docs-only. Both sides
