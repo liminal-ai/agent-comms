@@ -57,8 +57,10 @@ export function validateFences(text, checkShell = () => {}) {
   let lines = [];
   for (const line of text.split(/\r?\n/)) {
     if (!fence) {
-      const start = /^ {0,3}(`{3,}|~{3,})([^`~]*)$/.exec(line);
-      if (start) { fence = { marker: start[1][0], length: start[1].length, language: start[2].trim() }; lines = []; }
+      const start = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+      if (start && !(start[1][0] === '`' && start[2].includes('`'))) {
+        fence = { marker: start[1][0], length: start[1].length, language: start[2].trim() }; lines = [];
+      }
     } else if (new RegExp(`^ {0,3}${fence.marker}{${fence.length},}\\s*$`).test(line)) {
       const body = lines.join('\n');
       if (fence.language === 'json') JSON.parse(body);
@@ -97,7 +99,10 @@ function main() {
             input: body, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, BASH_ENV: '', ENV: '' },
           });
         });
-      } catch { throw new Error(`Documentation syntax validation failed: ${JSON.stringify(path)}`); }
+      } catch (cause) {
+        const detail = cause.stderr?.toString().trim() || cause.message;
+        throw new Error(`Documentation syntax validation failed: ${JSON.stringify(path)}: ${detail}`, { cause });
+      }
     }
   });
   console.log(`CI mode: ${scope.mode} (${scope.reason})`);

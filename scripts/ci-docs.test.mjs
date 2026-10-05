@@ -71,6 +71,8 @@ test('real Git/process fixtures publish docs/full and never publish success afte
     result = run(commit());
     assert.notEqual(result.status, 0);
     assert.equal(result.output, '');
+    assert.match(result.stderr, /syntax error.*unexpected end of file/i);
+    assert.match(result.stderr, /line \d+/);
   }
   writeFileSync(join(repo, 'docs/guide.md'), '# Guide\n\n```json\n{broken}\n```\n');
   const invalid = commit();
@@ -78,6 +80,8 @@ test('real Git/process fixtures publish docs/full and never publish success afte
   assert.notEqual(result.status, 0);
   assert.equal(result.output, '');
   assert.match(result.stderr, /Documentation syntax validation failed/);
+  assert.match(result.stderr, /Expected (?:double-quoted )?property name|Unexpected token/);
+  assert.match(result.stderr, /\[cause\]: SyntaxError/);
   writeFileSync(join(repo, 'docs/guide.md'), '# Trailing whitespace  \n');
   result = run(commit());
   assert.notEqual(result.status, 0);
@@ -136,4 +140,15 @@ test('fences validate JSON and shell syntax without executing examples', () => {
   assert.throws(() => validateFences('```sh\necho example'), /Unclosed/);
   assert.throws(() => validateFences('```sh\nif\n```', () => { throw new Error('shell syntax'); }), /shell syntax/);
   validateFences('````text\n```\n````\n```text\nnot executable\n```');
+});
+
+test('fence info strings follow marker-specific rules and still require explicit closure', () => {
+  for (const [opener, closer] of [['```text title=~', '```'], ['~~~text `example`', '~~~']]) {
+    validateFences(`${opener}\nexample\n${closer}`);
+    assert.throws(() => validateFences(`${opener}\nexample`), /Unclosed fenced block/);
+  }
+  // Backticks are forbidden in a backtick opener's info string.
+  validateFences('```text `example`\nnot an opening fence');
+  // The full marker run matters: a shorter run cannot close it.
+  assert.throws(() => validateFences('````text title=~\nexample\n```'), /Unclosed fenced block/);
 });

@@ -15,6 +15,9 @@ The release workflow is unchanged.
 Docs-only changes run Git whitespace checks and check changed documents for
 unclosed fenced blocks and invalid complete `json` examples. Ubuntu additionally
 uses `bash -n` for complete `sh`/`bash` examples; commands are never executed.
+Explicit closing fences are repository policy, stricter than CommonMark, which
+also permits a fenced block to end at EOF. This is a bounded scanner, not a full
+Markdown parser.
 These checks require no application dependency installation. Other fence languages,
 indented/nested code blocks, links, Markdown style and example runtime behavior
 are not validated. Use a `text` fence for deliberately incomplete/pseudocode
