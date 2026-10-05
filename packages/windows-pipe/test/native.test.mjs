@@ -6,8 +6,32 @@ import {fileURLToPath} from 'node:url';
 import {powershellPath} from '../src/runtime.mjs';
 import {Bridge,windowsEndpoint,listenWindows,connectWindows} from '../src/index.mjs';
 import {createServer,request,Agent} from 'node:http';
+import childProcess from 'node:child_process';
+import {syncBuiltinESMExports} from 'node:module';
 const exec=promisify(execFile);
 const windows=process.platform==='win32';
+test('endpoints accept local, domain, and Entra identities without changing the user namespace',async(t)=>{
+ const saved=process.env.AGENT_COMMS_POWERSHELL;
+ process.env.AGENT_COMMS_POWERSHELL=process.execPath;
+ let identity;
+ const readSid=t.mock.method(childProcess,'execFileSync',()=>identity);
+ syncBuiltinESMExports();
+ try {
+  let sequence=0;
+  for(const sid of ['S-1-5-21-111-222-333-1001','S-1-12-1-111-222-333-444','S-1-5-18']){
+   identity=sid;
+   const {windowsEndpoint}=await import(`../src/index.mjs?identity-test=${++sequence}`);
+   assert.equal(windowsEndpoint('fixture'),`\\\\.\\pipe\\agent-comms-${sid}-fixture`);
+   assert.throws(()=>windowsEndpoint('../other'),/suffix/);
+  }
+  identity='S-1-12-1-111\\other';
+  const {windowsEndpoint}=await import('../src/index.mjs?identity-test=invalid');
+  assert.throws(()=>windowsEndpoint('fixture'),/SID/);
+ }finally{
+  readSid.mock.restore();syncBuiltinESMExports();
+  if(saved===undefined)delete process.env.AGENT_COMMS_POWERSHELL;else process.env.AGENT_COMMS_POWERSHELL=saved;
+ }
+});
 for(const name of ['private-pipe.ps1','http-interop.ps1','secret-negative.ps1','secret.ps1','bridge.mjs','comms.mjs','client-retry.mjs'])test(name,{skip:!windows,timeout:60000},async()=>{
  const path=fileURLToPath(new URL(name,import.meta.url));
  const ps=name.endsWith('.ps1');

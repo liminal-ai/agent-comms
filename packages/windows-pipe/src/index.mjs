@@ -6,7 +6,7 @@ const script=fileURLToPath(new URL('./bridge.ps1',import.meta.url));
 let sid;
 export function windowsEndpoint(suffix='connector') {
  sid??=execFileSync(powershellPath(),['-NoProfile','-NonInteractive','-Command','[Security.Principal.WindowsIdentity]::GetCurrent().User.Value'],{encoding:'utf8',windowsHide:true}).trim();
- if(!/^S-1-5-21-(\d+-){3}\d+$/.test(sid))throw Error('Unsupported Windows user SID');
+ if(!/^S-1-\d+(?:-\d+){1,15}$/.test(sid))throw Error('Unsupported Windows user SID');
  if(!/^[a-z0-9-]{1,64}$/.test(suffix))throw Error('Invalid pipe suffix');
  return `\\\\.\\pipe\\agent-comms-${sid}-${suffix}`;
 }
