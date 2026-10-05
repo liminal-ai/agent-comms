@@ -27,12 +27,15 @@ async function run($: Dollar, argv: string[]): Promise<string | undefined> {
 }
 
 async function resolveSocket($: Dollar): Promise<string | null> {
+  // The hook runtime exposes host commands, not Node's process.platform. Require
+  // a supported POSIX host even when a socket override is supplied.
+  const system = await run($, ["uname", "-s"]);
+  if (system !== "Darwin" && system !== "Linux") return null;
+  const platform = system === "Darwin" ? "darwin" : "linux";
   const override = nonEmpty(await $.env.get("AGENT_COMMS_SOCKET"));
   if (override) return override;
   const xdgRuntimeDir = nonEmpty(await $.env.get("XDG_RUNTIME_DIR"));
   const home = nonEmpty(await $.env.get("HOME"));
-  const system = await run($, ["uname", "-s"]);
-  const platform = system === "Darwin" ? "darwin" : system === "Linux" ? "linux" : (system ?? "linux").toLowerCase();
   const uidText = platform === "linux" && !xdgRuntimeDir ? await run($, ["id", "-u"]) : undefined;
   const uid = uidText !== undefined && /^\d+$/.test(uidText) ? Number(uidText) : undefined;
   return socketPath({ platform, xdgRuntimeDir, home, uid });
@@ -92,7 +95,7 @@ export function register(on: any) {
       const participant = nonEmpty(await $.env.get("AGENT_COMMS_PARTICIPANT"));
       if (!participant || mod) return result;
       // Windows host stdin support is unverified; keep standalone integration off.
-      if (await $.env.get("OS") === "Windows_NT") return result;
+      if (nonEmpty(await $.env.get("OS"))?.toLowerCase() === "windows_nt") return result;
       const socket = await resolveSocket($);
       if (!socket) return result;
       const home = nonEmpty(await $.env.get("HOME")) ?? ".";
