@@ -1,3 +1,5 @@
+import { windowsEndpoint } from '../../windows-pipe/src/index.mjs';
+import { readPrivateWindowsSecret } from '../../windows-pipe/src/secret.mjs';
 // The connector's config file. The machine secret lives in its own file,
 // referenced by path, so the config can be shown without showing the secret.
 
@@ -38,7 +40,7 @@ export async function verifyT3Binding(t3: NonNullable<ConnectorConfig["t3"]>, re
   if (!descriptor.ok || (await descriptor.json() as { environmentId?: string }).environmentId !== t3.environmentId) {
     throw new Error("T3 environment identity mismatch; refusing to connect");
   }
-  const token = readFileSync(expand(t3.authFile), "utf8").trim();
+  const token = (process.platform === "win32" ? readPrivateWindowsSecret(expand(t3.authFile)) : readFileSync(expand(t3.authFile), "utf8")).trim();
   const session = await request(`${base}/api/auth/session`, {
     headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000),
   });
@@ -64,18 +66,18 @@ export function loadConfig(path: string): LoadedConfig {
   const warnings: string[] = [];
   const secretFile = expand(config.secretFile);
   const mode = statSync(secretFile).mode & 0o777;
-  if (mode & 0o077) warnings.push(`${secretFile} is readable by others (mode ${mode.toString(8)}); chmod 600 it`);
-  const secret = readFileSync(secretFile, "utf8").trim();
+  if (process.platform !== "win32" && (mode & 0o077)) warnings.push(`${secretFile} is readable by others (mode ${mode.toString(8)}); chmod 600 it`);
+  const secret = (process.platform === "win32" ? readPrivateWindowsSecret(secretFile) : readFileSync(secretFile, "utf8")).trim();
   if (secret.length < 16) throw new Error(`${secretFile}: the machine secret must be at least 16 characters`);
   const socket =
     config.socket ??
-    socketPath({
+    (process.platform === "win32" ? process.env[SOCKET_ENV] ?? windowsEndpoint() : socketPath({
       platform: process.platform,
       override: process.env[SOCKET_ENV],
       xdgRuntimeDir: process.env.XDG_RUNTIME_DIR,
       home: homedir(),
       uid: process.getuid?.(),
-    });
+    }));
   if (!socket) throw new Error(`can't work out the socket path; set "socket" in ${path}`);
   if (config.t3?.protocol !== undefined && config.t3.protocol !== 1 && config.t3.protocol !== 2) {
     throw new Error(`config ${path}: "t3.protocol" must be 1 or 2`);

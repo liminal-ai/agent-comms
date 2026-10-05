@@ -1,0 +1,4 @@
+# Protocol sync compares a generated LF header plus source bytes. Keep both
+# copies deterministic even when a Windows checkout enables core.autocrlf.
+packages/protocol/src/*.ts text eol=lf
+packages/claude-code-mod/hooks/protocol/*.ts text eol=lf

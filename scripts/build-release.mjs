@@ -15,6 +15,10 @@ await build({
   }, outdir: dest, outExtension: { '.js': '.mjs' }, bundle: true, platform: 'node', format: 'esm', target: 'node24',
   banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
 });
+// Runtime companion files resolve beside the bundled entrypoint via import.meta.url.
+for (const name of ['bridge.ps1','PrivatePipe.cs','Bridge.cs','validate-secret.ps1','SecretFile.cs']) {
+  await cp(`packages/windows-pipe/src/${name}`, `${dest}/${name}`);
+}
 execFileSync('pnpm', ['--filter', '@agent-comms/web', 'build'], { stdio: 'inherit', shell: process.platform === 'win32' });
 await cp('apps/web/dist', `${dest}/web`, { recursive: true });
 for (const name of ['serve-web.mjs', 'run-convex.mjs']) await cp(`scripts/${name}`, `${dest}/${name}`);

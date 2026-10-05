@@ -4,11 +4,12 @@
   "type": "module",
   "scripts": {
     "typecheck": "pnpm -r typecheck && tsc -p convex/tsconfig.json",
-    "test": "pnpm -r --workspace-concurrency=1 --filter '!@agent-comms/connector' test && vitest run",
+    "test": "pnpm -r --workspace-concurrency=1 --filter \"!@agent-comms/connector\" test && vitest run && pnpm test:windows",
     "test:convex": "vitest run --project convex",
     "test:release": "node --test scripts/release.test.mjs",
     "build:release": "node scripts/build-release.mjs",
-    "check": "pnpm typecheck && pnpm test && pnpm test:release"
+    "check": "pnpm typecheck && pnpm test && pnpm test:release",
+    "test:windows": "node --test packages/windows-pipe/test/native.test.mjs"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",

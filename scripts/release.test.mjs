@@ -1,3 +1,4 @@
+import { privateFixture } from '../packages/windows-pipe/test/private-fixture.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm, mkdir, copyFile, symlink } from 'node:fs/promises';
@@ -8,7 +9,8 @@ import { join } from 'node:path';
 import { webServer } from './serve-web.mjs';
 import { verifyT3Binding } from '../packages/connector/src/config.ts';
 
-test('web service starts through the deployed current symlink', { timeout: 10_000 }, async () => {
+for (const lowerDrive of (process.platform === 'win32' ? [false, true] : [false])) {
+test('web service starts through the deployed current directory link' + (lowerDrive ? ' with lower-case drive spelling' : ''), { timeout: 10_000 }, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'comms-launch-'));
   let child;
   try {
@@ -16,10 +18,12 @@ test('web service starts through the deployed current symlink', { timeout: 10_00
     await mkdir(join(release, 'web'), { recursive: true });
     await copyFile(new URL('./serve-web.mjs', import.meta.url), join(release, 'serve-web.mjs'));
     await writeFile(join(release, 'web/index.html'), 'released web');
-    await symlink(release, join(dir, 'current'), 'dir');
+    // Windows directory junctions exercise the same realpath launch without symlink privileges.
+    await symlink(release, join(dir, 'current'), process.platform === 'win32' ? 'junction' : 'dir');
     const config = join(dir, 'config.json');
     await writeFile(config, JSON.stringify({ environment: 'staging', convexUrl: 'https://staging.example.test', port: 0 }));
-    child = spawn(process.execPath, [join(dir, 'current/serve-web.mjs'), config], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const entry = join(dir, 'current/serve-web.mjs');
+    child = spawn(process.execPath, [lowerDrive ? entry[0].toLowerCase() + entry.slice(1) : entry, config], { stdio: ['ignore', 'pipe', 'pipe'] });
     const result = await Promise.race([
       once(child.stdout, 'data').then(([data]) => data.toString()),
       once(child, 'exit').then(([code]) => { throw new Error(`web exited before listening: ${code}`); }),
@@ -30,6 +34,7 @@ test('web service starts through the deployed current symlink', { timeout: 10_00
     await rm(dir, { recursive: true });
   }
 });
+}
 
 test('binding refuses a different T3 before sending any credential', async () => {
   const requests = [];
@@ -40,9 +45,9 @@ test('binding refuses a different T3 before sending any credential', async () =>
 });
 
 test('binding requires both expected identity and an authenticated session', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'comms-binding-'));
+  const fixture = await privateFixture('fixture-token');
   try {
-    const authFile = join(dir, 'token'); await writeFile(authFile, 'fixture-token');
+    const authFile = fixture.path;
     const config = { baseUrl: 'http://localhost:13976', authFile, environmentId: 'staging' };
     let accept = false;
     const request = async (url, options) => {
@@ -52,7 +57,7 @@ test('binding requires both expected identity and an authenticated session', asy
     };
     await assert.rejects(verifyT3Binding(config, request), /credential rejected/);
     accept = true; await verifyT3Binding(config, request);
-  } finally { await rm(dir, { recursive: true }); }
+  } finally { await fixture.cleanup(); }
 });
 
 test('one web build serves each environment config at runtime, without leaking other files', async () => {

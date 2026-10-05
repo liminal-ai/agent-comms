@@ -12,7 +12,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --test --test-timeout=30000 'test/**/*.test.ts'"
+    "test": "node --test --test-timeout=30000 \"test/**/*.test.ts\""
   },
   "dependencies": {
     "@agent-comms/protocol": "workspace:*",

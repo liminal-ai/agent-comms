@@ -108,8 +108,16 @@ describe("CommsMod against the stub", () => {
     await ctx.restart(new StubComms(ctx.comms.record));
 
     mod.onTurnComplete({ turnId: "turn-1", reason: "answer", answer: "finished" });
-    await pumpUntil(mod, () => session.ops("register").length >= 2 || session.ops("outcome").length >= 1, "re-registration or outcome");
-    await pumpUntil(mod, async () => (await deliveryState(deliveryId)) === "replied", "replied");
+    // Cold Windows helper recovery can cross the 10s call deadline and 15s
+    // bridge startup guard; keep a finite bound without shortening either.
+    const recoveryMs = process.platform === "win32" ? 20_000 : 5_000;
+    try {
+      await pumpUntil(mod, () => session.ops("register").length >= 2 || session.ops("outcome").length >= 1, "re-registration or outcome", recoveryMs);
+      await pumpUntil(mod, async () => (await deliveryState(deliveryId)) === "replied", "replied", recoveryMs);
+    } catch (error) {
+      // Fixture-only calls contain dummy participants and messages, never credentials.
+      throw new Error(`Restart recovery failed: ${JSON.stringify({logs:session.logs,calls:session.calls,inFlightPolls:session.inFlightPolls})}`, {cause:error});
+    }
     assert.equal(session.submitted.length, 1, "never submitted twice");
   });
 

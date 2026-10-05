@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --test 'test/**/*.test.ts'"
+    "test": "node --test \"test/**/*.test.ts\""
   },
   "dependencies": {
     "@agent-comms/protocol": "workspace:*",

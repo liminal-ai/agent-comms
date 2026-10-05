@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { windowsEndpoint } from '../../windows-pipe/src/index.mjs';
 // comms-stub: the stub connector. Serves the loopback protocol on the socket,
 // with no Convex behind it. See ../README.md.
 
@@ -37,13 +38,13 @@ if (values.help) {
 
 const socket =
   values.socket ??
-  defaultSocketPath({
+  (process.platform === "win32" ? process.env[SOCKET_ENV] ?? windowsEndpoint() : defaultSocketPath({
     platform: process.platform,
     override: process.env[SOCKET_ENV],
     xdgRuntimeDir: process.env.XDG_RUNTIME_DIR,
     home: homedir(),
     uid: process.getuid?.(),
-  });
+  }));
 if (!socket) {
   console.error("comms-stub: can't work out the socket path; pass --socket");
   process.exit(2);
