@@ -52,7 +52,14 @@ export class Bridge {
   if(op==='A'){socket.next();return;}
   if(op==='C'){socket.push(null);socket.destroy();return;}throw Error('Unknown bridge frame');
  }
- fail(error){if(this.closed)return;this.closed=true;clearTimeout(this.timer);this.reject(error);for(const socket of this.sockets.values())socket.destroy(error);this.sockets.clear();this.child.stdin.destroy();this.child.kill();if(this.started&&!this.closing)queueMicrotask(()=>this.onFailure?.(error));}
+ fail(error){
+  if(this.closed)return;this.closed=true;clearTimeout(this.timer);this.reject(error);
+  // An opened pipe may already have delivered a keyed send. Report connection
+  // loss so callers retry with the same key; keep startup failures unchanged.
+  const lost=Object.assign(new Error(error.message,{cause:error}),{code:'ECONNRESET'});
+  for(const socket of this.sockets.values())socket.destroy(lost);
+  this.sockets.clear();this.child.stdin.destroy();this.child.kill();if(this.started&&!this.closing)queueMicrotask(()=>this.onFailure?.(error));
+ }
  async close(){if(this.closed)return;this.closing=true;const exit=new Promise(resolve=>this.child.once('exit',resolve));for(const socket of this.sockets.values())socket.destroy();this.child.stdin.end();const timer=setTimeout(()=>this.child.kill(),3000);await exit;clearTimeout(timer);}
 }
 export async function listenWindows(server,endpoint){

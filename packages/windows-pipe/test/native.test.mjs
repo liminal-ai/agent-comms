@@ -8,7 +8,7 @@ import {Bridge,windowsEndpoint,listenWindows,connectWindows} from '../src/index.
 import {createServer,request,Agent} from 'node:http';
 const exec=promisify(execFile);
 const windows=process.platform==='win32';
-for(const name of ['private-pipe.ps1','http-interop.ps1','secret-negative.ps1','secret.ps1','bridge.mjs','comms.mjs'])test(name,{skip:!windows,timeout:60000},async()=>{
+for(const name of ['private-pipe.ps1','http-interop.ps1','secret-negative.ps1','secret.ps1','bridge.mjs','comms.mjs','client-retry.mjs'])test(name,{skip:!windows,timeout:60000},async()=>{
  const path=fileURLToPath(new URL(name,import.meta.url));
  const ps=name.endsWith('.ps1');
  await exec(ps?powershellPath():process.execPath,ps?['-NoProfile','-NonInteractive','-File',path]:[path],{windowsHide:true,timeout:55000});
