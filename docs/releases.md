@@ -1,8 +1,8 @@
 # Released comms environments
 
-Source: `liminal-ai/agent-comms`, cloned under `~/lim/code/agent-comms`; edits in `~/lim/wt/agent-comms/<task>`. Pull requests run `pnpm check` and a packaging smoke check. A `v<version>` tag builds and publishes `agent-comms-<version>.tar.gz` with SHA256SUMS. Node 24.18.0 is the runtime requirement. The JavaScript/web artifact is independent of host CPU. Linux and macOS use Unix sockets; **v0.1.2 and newer support native Windows ARM64/x64** through current-user named pipes, with native PowerShell 7.6.5 and Node matching the Windows architecture. WSL is not required for that connector/CLI path. Standalone Windows Claude hooks remain disabled.
+Source: `liminal-ai/agent-comms`, cloned under `~/lim/code/agent-comms`; edits in `~/lim/wt/agent-comms/<task>`. Code pull requests run `pnpm check` and a packaging smoke check; allowlisted docs-only changes use [lightweight documentation validation](ci.md). A `v<version>` tag builds and publishes `agent-comms-<version>.tar.gz` with SHA256SUMS. Node 24.18.0 is the runtime requirement. The JavaScript/web artifact is independent of host CPU. Linux and macOS use Unix sockets; **v0.1.2 and newer support native Windows ARM64/x64** through current-user named pipes, with native PowerShell 7 (validated version pinned in the platform runbook) and Node matching the Windows architecture. WSL is not required for that connector/CLI path. Standalone Windows Claude hooks remain disabled.
 
-For native Windows **staging**, follow the [platform runbook](https://github.com/liminal-ai/platform/blob/main/wiki/comms-windows-native-setup.md). It covers prerequisites, protected current-user credentials, the SID pipe, T3 binding and the normal-user logon task. The Unix examples below remain applicable to Linux/macOS; do not apply their permission modes or symlink layout literally to Windows.
+For a normal native Windows installation, follow the [platform runbook](https://github.com/liminal-ai/platform/blob/main/wiki/comms-windows-native-setup.md). It covers prerequisites, protected current-user credentials, the SID pipe, local T3 binding and the normal-user logon task. Normal Macs and Windows machines have one installation connected to production comms, with no environment choice; only lim-builder has separate production and staging. The [ARM64 VM](https://github.com/liminal-ai/platform/blob/main/machines/leemoore785f.md) and [NucBox x64](https://github.com/liminal-ai/platform/blob/main/machines/nucbox-m6ultra.md) have live source-build messaging evidence. Neither record establishes a fresh v0.1.2 archive installation; NucBox reboot/login acceptance remains outstanding. The Unix examples below remain applicable to Linux/macOS; do not apply their permission modes or symlink layout literally to Windows.
 
 ## What is deployed
 
@@ -71,7 +71,7 @@ node current/serve-web.mjs config/web.json
 AGENT_COMMS_SOCKET=/absolute/socket/path node current/comms.mjs status
 ```
 
-Production processes belong in a service manager, with fixed absolute paths and restart-on-failure. Linux uses systemd user units; Mac uses launchd. The documented native Windows staging setup uses an Interactive/Limited per-user Scheduled Task and explicit versioned paths, without requiring symlinks or elevation. Do not use `vite`, `vite preview`, or source TypeScript to serve the deployed web/connector.
+Production processes belong in a service manager, with fixed absolute paths and restart-on-failure. Linux uses systemd user units; Mac uses launchd. The documented native Windows setup uses an Interactive/Limited per-user Scheduled Task and explicit versioned paths, without requiring symlinks or elevation. Do not use `vite`, `vite preview`, or source TypeScript to serve the deployed web/connector.
 
 ## Promote and roll back
 
