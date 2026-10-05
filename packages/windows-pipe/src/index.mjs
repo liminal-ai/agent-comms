@@ -22,7 +22,7 @@ class PipeSocket extends Duplex {
  _write(data,encoding,callback){this.touch();const chunks=[];for(let i=0;i<data.length;i+=32768)chunks.push(data.subarray(i,i+32768));this.pending={chunks,callback};this.next();}
  next(){const p=this.pending;if(!p)return;const chunk=p.chunks.shift();if(!chunk){this.pending=null;p.callback();return;}this.bridge.send('D',this.id,chunk.toString('base64'));}
  _final(callback){callback();this.destroy();}
- _destroy(error,callback){clearTimeout(this.idleTimer);this.bridge.sockets.delete(this.id);this.bridge.send('C',this.id);if(this.pending){const p=this.pending;this.pending=null;p.callback(error??Error('Pipe closed'));}callback(error);}
+ _destroy(error,callback){clearTimeout(this.idleTimer);this.bridge.sockets.delete(this.id);this.bridge.send('C',this.id);if(this.pending){const p=this.pending;this.pending=null;p.callback(error??Object.assign(Error('Pipe closed'),{code:'ECONNRESET'}));}callback(error);}
  touch(){clearTimeout(this.idleTimer);if(this.timeoutMs){this.idleTimer=setTimeout(()=>this.emit('timeout'),this.timeoutMs);this.idleTimer.unref();}}
  setTimeout(ms,callback){this.timeoutMs=ms;if(callback){if(ms===0)this.removeListener('timeout',callback);else this.once('timeout',callback);}this.touch();return this;}
  setNoDelay(){return this;}

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {StubComms} from '../../connector-stub/src/index.ts';
 import {run} from '../../comms-cli/src/cli.ts';
+import {call,ConnectionLost} from '../../comms-cli/src/client.ts';
 import {createWindowsAgent} from '../src/agent.mjs';
 import {listenWindows,windowsEndpoint} from '../src/index.mjs';
 
@@ -48,3 +49,15 @@ for(const fault of ['exit','EIO']) {
   assert.equal(history.messages.length,1);
  }finally{agent.destroy();await close();}
 }
+
+// Closing the remote pipe before all write chunks are acknowledged is also a
+// dropped request, including when the helper itself remains healthy.
+const endpoint=windowsEndpoint('write-drop-'+process.pid);
+const agent=createWindowsAgent(endpoint);
+const server=createServer(req=>req.once('data',()=>req.socket.destroy()));
+const close=await listenWindows(server,endpoint);
+try {
+ await assert.rejects(call(endpoint,'send',{
+  as:'sender',to:['recipient'],key:'partial-write',text:'x'.repeat(1024*1024),
+ }),ConnectionLost);
+}finally{agent.destroy();await close();}
