@@ -8,7 +8,7 @@ export const HELP = `usage: oaidot <stdio|listen|ack|recover|send|reply|read|lis
 stdio serves bounded JSON-line requests {id,method,input} until stdin closes; requires --config.
 listen blocks on the subscription, prints ONE delivery-offer JSON line, then exits. Optional --lease-ms <ms>.
 ack takes {"deliveryId":"...","claimId":"..."} from stdin. Only the actual parent calls it after receipt.
-recover reads acknowledged unfinished requests; optional stdin {"cursor":"...","limit":20} pages older work.
+recover reads acknowledged unfinished requests; optional stdin {"cursor":"...","limit":5} pages older work.
 Other commands take request JSON on stdin (empty means {}). Identity and parent binding come only from configuration.
 send/reply require a stable key. stdout is JSON; diagnostics go to stderr.
 `;
