@@ -1,0 +1,8 @@
+{
+  "participant": "grok",
+  "socket": "/run/user/1000/agent-comms/connector.sock",
+  "home": "~/.grok-comms",
+  "answerTimeout": "20m",
+  "pollWaitMs": 25000,
+  "wakeWebhook": { "url": "http://127.0.0.1:8787/grokbot-wake", "includeText": false }
+}
