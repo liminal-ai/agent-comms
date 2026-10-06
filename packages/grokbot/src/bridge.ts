@@ -322,7 +322,7 @@ export class Bridge {
       this.stats.checks++;
       const id = item.check.deliveryId;
       const known = isDeliveryId(id) ? (this.pending.get(id) ?? (await this.store.get(id))) : null;
-      const answer = checkAnswer(item.check, known, this.state!.historyStartedAt);
+      const answer = checkAnswer(item.check, known);
       this.log(`check ${id} (${item.check.state}): answering ${answer.found}${answer.found === "yes" ? ` (${answer.turn})` : ""}`);
       await this.store.log("check", { deliveryId: id, state: item.check.state, found: answer.found });
       this.checkQueue.push(answer);

@@ -27,7 +27,9 @@ export const USAGE = `usage: grokbot <command> [options]
 
 Commands:
   run                          run the bridge daemon in the foreground
-  inbox [--all] [--json]       list pending items (--all: done ones too)
+  inbox [--all] [--json] [--limit <n>] [--skip <n>]
+                               list pending items, oldest first (--all: done ones too);
+                               20 at a time (at most 100), with a one-line preview each
   show <delivery-id> [--json]  a delivery as Grok Bot should read it, and how to answer it
   answer <delivery-id> <text…> answer a request (text from --file <f>, or - for stdin)
   ack <delivery-id>            mark an answer or notice read, or close a timed-out request
@@ -56,6 +58,10 @@ function localTime(iso: string | undefined): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+const INBOX_PAGE = 20;
+const INBOX_MAX_PAGE = 100;
+const PREVIEW_CHARS = 160;
 
 function firstLine(text: string, max = 100): string {
   const line = text.split(/\r\n|[\n\r\u2028\u2029]/).find((l) => l.trim()) ?? "";
@@ -97,6 +103,8 @@ export async function run(argv: string[], io: CliIo): Promise<number> {
         socket: { type: "string" },
         participant: { type: "string" },
         all: { type: "boolean" },
+        limit: { type: "string" },
+        skip: { type: "string" },
         json: { type: "boolean" },
         file: { type: "string" },
         wait: { type: "string" },
@@ -142,16 +150,25 @@ export async function run(argv: string[], io: CliIo): Promise<number> {
       return EXIT.ok;
 
     case "inbox": {
-      const items = await store.list({ all: values.all === true });
+      const limit = values.limit === undefined ? INBOX_PAGE : Number(values.limit);
+      const skip = values.skip === undefined ? 0 : Number(values.skip);
+      if (!Number.isInteger(limit) || limit < 1 || limit > INBOX_MAX_PAGE || !Number.isInteger(skip) || skip < 0) {
+        io.stderr(`grokbot: --limit is 1-${INBOX_MAX_PAGE} and --skip is 0 or more\n`);
+        return EXIT.usage;
+      }
+      const all = await store.list({ all: values.all === true });
+      const items = all.slice(skip, skip + limit);
+      const more = all.length - skip - items.length;
+      // Full text and answers are read with `show`; the listing stays small however long the backlog.
       if (values.json) {
         const summaries = items.map((item) => {
-          const { delivery, rendered, events, ...summary } = item;
-          return { ...summary, file: store.pathOf(item) };
+          const { delivery, rendered, events, text, answer, notice, ...summary } = item;
+          return { ...summary, preview: firstLine(text, PREVIEW_CHARS), file: store.pathOf(item) };
         });
-        io.stdout(`${JSON.stringify(summaries, null, 2)}\n`);
+        io.stdout(`${JSON.stringify({ total: all.length, skip, items: summaries, more: Math.max(0, more) }, null, 2)}\n`);
         return EXIT.ok;
       }
-      if (items.length === 0) {
+      if (all.length === 0) {
         io.stdout(values.all ? "the inbox is empty\n" : "nothing pending\n");
         return EXIT.ok;
       }
@@ -160,9 +177,10 @@ export async function run(argv: string[], io: CliIo): Promise<number> {
         const due = item.state === "awaiting-answer" ? `  due ${localTime(item.deadlineAt)}` : "";
         io.stdout(
           `${done} ${item.deliveryId}  ${item.kind}  ${item.state}  from @${item.from.name}  ${conversationLabel(item)}  received ${localTime(item.receivedAt)}${due}\n` +
-            `        ${firstLine(item.text)}\n`,
+            `        ${firstLine(item.text, PREVIEW_CHARS)}\n`,
         );
       }
+      if (more > 0) io.stdout(`${more} more: grokbot inbox${values.all ? " --all" : ""} --skip ${skip + items.length}\n`);
       return EXIT.ok;
     }
 

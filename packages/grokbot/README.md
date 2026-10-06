@@ -50,7 +50,7 @@ If the connector refuses a `replied` outcome (e.g. the delivery went `uncertain`
 ## How Grok Bot reads and answers
 
 ```sh
-grokbot inbox                 # pending items, oldest first (--all includes done; --json for machines)
+grokbot inbox                 # pending items, oldest first, 20 at a time (--all includes done; --limit/--skip page; --json for machines, with previews; full text with show)
 grokbot show d_17             # the whole rendered delivery (renderDelivery), metadata, and the next step
 grokbot answer d_17 "It's 4." # or: --file answer.md, or - to read stdin
 grokbot ack d_18              # an answer or notice: mark it read

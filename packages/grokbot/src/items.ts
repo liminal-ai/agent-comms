@@ -100,18 +100,15 @@ export type CheckAnswer =
   | ({ deliveryId: string; found: "yes"; turnId: string; turn: "completed" } & (OutcomeBody | { outcome?: undefined }));
 
 /**
- * The answer to a restart check, from what the inbox knows. Deliveries are
- * written to the inbox before `delivered` is reported, so a claimed delivery
- * the inbox doesn't have (and that's younger than this inbox) never reached
- * Grok Bot: `no` makes the connector offer it again. Anything else the inbox
- * can't account for is `unknown`, which never re-runs it.
+ * The answer to a restart check, from what the inbox knows. A delivery this
+ * inbox doesn't have is `unknown`, never `no`: another session for the same
+ * participant (a superseded bridge, or a Claude Code terminal registered under
+ * the name) may have received and run it, and `no` would make the connector
+ * run it again. `unknown` never re-runs; the delivery is surfaced instead.
  */
-export function checkAnswer(check: DeliveryCheck, item: InboxItem | null, historyStartedAt: number): CheckAnswer {
+export function checkAnswer(check: DeliveryCheck, item: InboxItem | null): CheckAnswer {
   const base = { deliveryId: check.deliveryId };
-  if (!item) {
-    if (check.state === "claimed" && check.createdAt >= historyStartedAt) return { ...base, found: "no" };
-    return { ...base, found: "unknown", detail: "not in grokbot's inbox, which can't rule it out" };
-  }
+  if (!item) return { ...base, found: "unknown", detail: "not in this grokbot inbox; another session may have run it" };
   if (item.kind !== "request") return { ...base, found: "yes", turnId: item.turnId, turn: "completed" };
   if (item.outcome) return { ...base, found: "yes", turnId: item.turnId, turn: "completed", ...item.outcome };
   return { ...base, found: "yes", turnId: item.turnId, turn: "running" };

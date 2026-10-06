@@ -119,17 +119,18 @@ describe("items", () => {
 
   it("answers restart checks from the inbox", () => {
     const check = (state: "claimed" | "delivered", createdAt = 500) => ({ deliveryId: "d_1", messageId: "m_d_1", state, createdAt });
-    // Not in the inbox: `no` only for a claimed delivery younger than the inbox.
-    assert.deepEqual(checkAnswer(check("claimed", 500), null, 100), { deliveryId: "d_1", found: "no" });
-    assert.equal(checkAnswer(check("claimed", 50), null, 100).found, "unknown");
-    assert.equal(checkAnswer(check("delivered", 500), null, 100).found, "unknown");
+    // Not in the inbox: never `no`, even for a young claimed delivery. Another session for this
+    // participant (superseded, or a Claude Code terminal) may have run it; `no` would re-run it.
+    assert.equal(checkAnswer(check("claimed", 500), null).found, "unknown");
+    assert.equal(checkAnswer(check("claimed", 50), null).found, "unknown");
+    assert.equal(checkAnswer(check("delivered", 500), null).found, "unknown");
     const item = newItem(delivery(), { now: 0, answerTimeoutMs: 1000 });
-    assert.deepEqual(checkAnswer(check("claimed"), item, 0), { deliveryId: "d_1", found: "yes", turnId: "grok-d_1", turn: "running" });
+    assert.deepEqual(checkAnswer(check("claimed"), item), { deliveryId: "d_1", found: "yes", turnId: "grok-d_1", turn: "running" });
     item.outcome = { outcome: "replied", answer: "4" };
     // Flat outcome fields, as on the wire.
-    assert.deepEqual(checkAnswer(check("delivered"), item, 0), { deliveryId: "d_1", found: "yes", turnId: "grok-d_1", turn: "completed", outcome: "replied", answer: "4" });
+    assert.deepEqual(checkAnswer(check("delivered"), item), { deliveryId: "d_1", found: "yes", turnId: "grok-d_1", turn: "completed", outcome: "replied", answer: "4" });
     const notice = newItem(delivery({ kind: "notice" }), { now: 0, answerTimeoutMs: 1 });
-    assert.deepEqual(checkAnswer(check("delivered"), notice, 0), { deliveryId: "d_1", found: "yes", turnId: "grok-d_1", turn: "completed" });
+    assert.deepEqual(checkAnswer(check("delivered"), notice), { deliveryId: "d_1", found: "yes", turnId: "grok-d_1", turn: "completed" });
   });
 
   it("plans answers and acks by state", () => {
@@ -330,6 +331,17 @@ describe("bridge (scripted connector)", () => {
     await waitFor("a poll", () => client.ops("poll").length > 0);
     assert.equal(client.ops("register")[0]!.body.harness, "claude-code");
     assert.equal(client.ops("register")[0]!.body.status, "idle");
+  });
+
+  it("answers a restart check for a delivery it never received with unknown, so the connector won't re-run it", async () => {
+    // As after a connector restart or a superseded session: a claimed delivery this inbox never saw,
+    // created after the inbox started, which another session for the participant may have run.
+    const client = new ScriptedClient((op, body) => okFor(op, body));
+    const { bridge } = await bridgeWith(client);
+    await waitFor("registration", () => bridge.isRegistered);
+    client.push([{ type: "check", check: { deliveryId: "d_9", messageId: "m_d_9", state: "claimed", createdAt: Date.now() } }]);
+    await waitFor("check-result", () => client.ops("check-result").length === 1);
+    assert.equal(client.ops("check-result")[0]!.body.found, "unknown");
   });
 
   it("persists before reporting delivered, goes busy, and registers again on unknown_session from a report", async () => {
