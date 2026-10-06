@@ -239,7 +239,7 @@ describe("grokbot bridge against the stub connector", { skip }, () => {
     assert.equal((await deliveryState("d_1")).state, "replied");
   });
 
-  it("answers a check for a claimed delivery it never saw with no, so it's offered again", async () => {
+  it("answers a check for a claimed delivery another session took with unknown, so it isn't run twice", async () => {
     // Start once so the inbox's history begins before the message exists.
     const first = newBridge();
     await first.start();
@@ -255,10 +255,12 @@ describe("grokbot bridge against the stub connector", { skip }, () => {
 
     const bridge = newBridge();
     await bridge.start();
-    await waitFor("in the inbox", () => existsSync(join(home, "inbox", "d_1.json")));
-    await waitFor("delivered", async () => (await deliveryState("d_1"))?.state === "delivered");
+    // The lost session may have run it: grokbot can't rule that out, so it's not offered again.
+    await waitFor("check answered", async () => (await records()).some((r) => r.path === "/v1/check-result"));
     const check = (await records()).find((r) => r.path === "/v1/check-result");
-    assert.equal(check?.request.found, "no");
+    assert.equal(check?.request.found, "unknown");
+    await waitFor("surfaced as uncertain", async () => (await deliveryState("d_1"))?.state === "uncertain");
+    assert.equal(existsSync(join(home, "inbox", "d_1.json")), false);
   });
 
   it("delivers notices without collecting anything, and ack marks them read", async () => {
