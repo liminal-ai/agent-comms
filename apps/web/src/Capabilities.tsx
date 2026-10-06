@@ -3,7 +3,7 @@
 // logic is in lib/view.ts.
 
 import type { Alert, Reminder, ReminderAction, RegistryEntry } from "@agent-comms/protocol";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "./lib/backend.tsx";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import {

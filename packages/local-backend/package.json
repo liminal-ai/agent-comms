@@ -1,0 +1,22 @@
+{
+  "name": "@agent-comms/local-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local mode: runs this repository's Convex functions (pinned convex 1.46.0) on SQLite in one process. Not a general Convex runtime.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./modules": "./src/modules.ts",
+    "./convex-test": "./test/convex-test-shim.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "convex": "1.46.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

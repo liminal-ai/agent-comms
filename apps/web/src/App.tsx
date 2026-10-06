@@ -1,22 +1,21 @@
 // Lee's view onto the comms server. Plain on purpose: a side pane (the agent
 // registry, the inbox, reminders, alerts), conversations, one conversation with
-// its delivery states, and a composer. Everything is a live Convex subscription;
-// the dev admin token is kept in localStorage.
+// its delivery states, and a composer. Everything is a live subscription (Convex, or the local service);
+// the admin token is kept in localStorage (local mode: this tab's sessionStorage).
 
-import { useMutation, useQuery } from "convex/react";
 import { Component, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Alerts, Inbox, Registry, Reminders } from "./Capabilities.tsx";
+import { tokens, useMutation, useQuery } from "./lib/backend.tsx";
 import { alertsView, conversationReadKey, defaultPostingAs, inboxBadge, ownerChoices, parsePromotion, titleWithUnread } from "./lib/view.ts";
 
-const TOKEN_KEY = "agent-comms.adminToken";
 const AS_KEY = "agent-comms.as";
 
 export function App() {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || window.commsConfig?.adminToken || __DEV_ADMIN_TOKEN__);
-  if (!token) return <TokenGate onToken={(t) => (localStorage.setItem(TOKEN_KEY, t), setToken(t))} />;
+  const [token, setToken] = useState(() => tokens.get() || window.commsConfig?.adminToken || __DEV_ADMIN_TOKEN__);
+  if (!token) return <TokenGate onToken={(t) => (tokens.set(t), setToken(t))} />;
   return (
-    <Boundary onReset={() => (localStorage.removeItem(TOKEN_KEY), setToken(""))}>
+    <Boundary onReset={() => (tokens.forget(), setToken(""))}>
       <Main token={token} />
     </Boundary>
   );

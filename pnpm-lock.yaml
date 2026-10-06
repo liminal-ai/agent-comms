@@ -162,8 +162,46 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
+  packages/local-backend:
+    dependencies:
+      convex:
+        specifier: 1.46.0
+        version: 1.46.0(react@19.3.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
   packages/protocol:
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
+  packages/service:
+    dependencies:
+      '@agent-comms/connector':
+        specifier: workspace:*
+        version: link:../connector
+      '@agent-comms/local-backend':
+        specifier: workspace:*
+        version: link:../local-backend
+      '@agent-comms/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      convex:
+        specifier: 1.46.0
+        version: 1.46.0(react@19.3.0)
+    devDependencies:
+      '@agent-comms/comms-cli':
+        specifier: workspace:*
+        version: link:../comms-cli
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4
