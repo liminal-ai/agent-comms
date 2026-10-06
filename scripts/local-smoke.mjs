@@ -26,12 +26,15 @@ const port = await new Promise((done) => { const s = createServer().listen(0, '1
 const socket = process.platform === 'win32' ? windowsEndpoint(`local-smoke-${process.pid}`) : join(root, 'run', 'connector.sock');
 const config = join(root, 'service.json');
 await writeFile(config, JSON.stringify({ mode: 'local', environment: 'smoke', dataDir: join(root, 'data'), owner: 'lee', machine: 'smoke', socket, web: { port } }));
-const node = (script, args, env = {}) => exec(process.execPath, [join(release, script), ...args], { cwd: root, env: { ...process.env, ...env }, windowsHide: true, timeout: 30_000 });
+// Processes run from outside the fixture: on Windows a pipe bridge left by a killed service
+// still holds its working directory for a moment, which would keep the fixture from being removed.
+const outside = tmpdir();
+const node = (script, args, env = {}) => exec(process.execPath, [join(release, script), ...args], { cwd: outside, env: { ...process.env, ...env }, windowsHide: true, timeout: 30_000 });
 const comms = (...args) => node('comms.mjs', args, { AGENT_COMMS_SOCKET: socket }).then((r) => r.stdout);
 
 let child;
 async function start() {
-  child = spawn(process.execPath, [join(release, 'service.mjs'), '--config', config], { cwd: root, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+  child = spawn(process.execPath, [join(release, 'service.mjs'), '--config', config], { cwd: outside, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
   let log = '';
   child.stderr.on('data', (d) => { log += d; });
   const deadline = Date.now() + 20_000;
@@ -64,5 +67,6 @@ try {
   console.log('Local mode from the release: start, register, send, read, restart: pass');
 } finally {
   if (child && child.exitCode === null) await stop();
-  await rm(root, { recursive: true, force: true });
+  // Windows releases a killed service's files and pipe bridge shortly after exit: retry briefly.
+  await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 }
