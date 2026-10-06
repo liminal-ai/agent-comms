@@ -31,7 +31,7 @@ export function isName(value: unknown): value is ParticipantName {
 /** `system`: the deploy-time senders `reminders` and `alerts`; no home, no presence, never addressed or delivered to. */
 export type ParticipantKind = "human" | "agent" | "system";
 export type ParticipantState = "active" | "paused" | "retired";
-export type Harness = "t3" | "claude-code" | "web" | "oaidot";
+export type Harness = "t3" | "claude-code" | "web" | "muse" | "oaidot";
 
 /** How a participant is referred to inside messages and deliveries. */
 export interface ParticipantRef {
@@ -63,7 +63,7 @@ export interface ConversationRef {
 
 /** Where a message entered the system. */
 /** `system`: posted by a system participant (a reminder fire, a report, an alert). */
-export type Via = "t3" | "claude-code" | "cli" | "web" | "system";
+export type Via = "t3" | "claude-code" | "cli" | "web" | "system" | "muse" | "oaidot";
 
 export interface Origin {
   via: Via;

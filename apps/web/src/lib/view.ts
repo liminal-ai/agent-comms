@@ -69,9 +69,9 @@ export function presenceView(e: RegistryEntry, now: number): { status: PresenceS
   if (!p) return e.participant.kind === "system" ? { status: "system", label: "system" } : { status: "person", label: "person" };
   if (p.stale) return { status: "stale", label: `connector not heard from (last update ${clockTime(p.at)})` };
   if (p.status === "offline") {
-    return e.harness === "claude-code"
-      ? { status: "unconnected", label: "mod not connected" }
-      : { status: "offline", label: "offline (T3 or its thread unreachable)" };
+    if (e.harness === "claude-code") return { status: "unconnected", label: "mod not connected" };
+    if (e.harness === "muse") return { status: "offline", label: "offline (muse connector unreachable)" };
+    return { status: "offline", label: "offline (T3 or its thread unreachable)" };
   }
   if (p.status === "busy") return { status: "busy", label: "busy" };
   return { status: "idle", label: p.idleSince !== undefined ? `idle for ${span(now - p.idleSince)}` : "idle" };
@@ -90,7 +90,7 @@ export function liveStale(e: RegistryEntry, machineSeen: number | null, now: num
 
 export interface PromotionForm {
   name: string;
-  harness: "t3" | "claude-code";
+  harness: "t3" | "claude-code" | "muse";
   machine: string;
   /** The T3 thread id; ignored for a Claude Code terminal (its locator is its name). */
   locator: string;
@@ -102,7 +102,7 @@ export interface PromotionForm {
 export function parsePromotion(
   f: PromotionForm,
   people: readonly string[],
-): Parsed<{ name: string; kind: "agent"; home: { machine: string; harness: "t3" | "claude-code"; locator: string }; owner: string }> {
+): Parsed<{ name: string; kind: "agent"; home: { machine: string; harness: "t3" | "claude-code" | "muse"; locator: string }; owner: string }> {
   if (!NAME_PATTERN.test(f.name)) return { ok: false, error: "Names are lowercase letters, digits, - and _." };
   if (RESERVED_NAMES.includes(f.name)) return { ok: false, error: `@${f.name} is reserved.` };
   const machine = f.machine.trim();
