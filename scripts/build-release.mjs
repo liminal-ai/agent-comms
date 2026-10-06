@@ -11,7 +11,7 @@ await mkdir(dest, { recursive: false });
 await build({
   entryPoints: {
     connector: 'packages/connector/src/main.ts', comms: 'packages/comms-cli/src/main.ts',
-    upgrade: 'scripts/upgrade.ts', setup: 'scripts/dev-setup.ts', service: 'packages/service/src/main.ts',
+    upgrade: 'scripts/upgrade.ts', setup: 'scripts/dev-setup.ts', service: 'packages/service/src/main.ts', grokbot: 'packages/grokbot/src/main.ts',
   }, outdir: dest, outExtension: { '.js': '.mjs' }, bundle: true, platform: 'node', format: 'esm', target: 'node24',
   banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
 });

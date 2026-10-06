@@ -90,6 +90,9 @@ describe("items", () => {
     assert.equal(parseDeliveryHeader(item.rendered)?.deliveryId, "d_1");
     assert.match(item.rendered, /^Source: agent-comms/m);
     assert.match(item.rendered, /An answer is expected/);
+    assert.match(item.rendered, /grokbot answer d_1 "<your answer>"/);
+    // Grok Bot's final message isn't collected: none of the turn-collection wording.
+    assert.doesNotMatch(item.rendered, /Reply normally|final message in this turn|comms reply/);
     assert.equal(item.deliveredReported, false);
   });
 

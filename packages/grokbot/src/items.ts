@@ -13,6 +13,14 @@ import {
 } from "@agent-comms/protocol";
 import { DONE_STATES, type InboxItem, type ItemState } from "./store.ts";
 
+/** Grok Bot has no turn to collect: an answer is only what it sends with `grokbot answer`. */
+export function grokAnswerInstructions(r: { deliveryId: string; sender: string }): string[] {
+  return [
+    `An answer is expected. Send it with \`grokbot answer ${r.deliveryId} "<your answer>"\` (or \`--file <f>\`); it goes back to @${r.sender} as the reply. Nothing else you write is sent, so make the answer complete on its own.`,
+    `If it isn't answered in time the request is closed as unanswered; you can still send the answer the same way afterwards.`,
+  ];
+}
+
 /** The turn id the bridge reports for a delivery: one "turn" per delivery. */
 export function turnIdFor(deliveryId: string): string {
   return `grok-${deliveryId}`;
@@ -45,7 +53,7 @@ export function newItem(delivery: Delivery, options: { now: number; answerTimeou
     ...(delivery.message.inReplyTo ? { inReplyTo: delivery.message.inReplyTo } : {}),
     text: delivery.message.text,
     // Grok Bot's harness doesn't label where text came from, so the rendering carries its own source line.
-    rendered: renderDelivery(delivery, { harnessLabelsSource: false }),
+    rendered: renderDelivery(delivery, { harnessLabelsSource: false, answerInstructions: grokAnswerInstructions }),
     receivedAt: at,
     turnId: turnIdFor(delivery.id),
     state: request ? "awaiting-answer" : "unread",

@@ -63,22 +63,11 @@ The files are meant to be read directly too. `inbox/*.json` are the pending item
 
 To start a conversation or follow one up, Grok Bot uses the ordinary [comms CLI](../comms-cli/src/cli.ts) as `@grok` on the same socket: `comms send --as grok @lee "…"`, `comms read --as grok <conversation>`, `comms reply --as grok <messageId> "…"`.
 
-The rendered text tells the model to "reply normally". For Grok Bot, that means `grokbot answer`. Its final message isn't collected, because there is no turn to collect from.
+The rendered text tells Grok Bot to answer with `grokbot answer <delivery-id>`. Its final message isn't collected, because there is no turn to collect from, so the rendering never says to "reply normally".
 
 ## Setup (Lee)
 
-1. **Register the machine.** Pick an id for Grok Bot's box, e.g. `grok-box`, and make a secret of 16 or more characters on that box (`umask 077; openssl rand -hex 32 > ~/.config/agent-comms/grok-box.secret`). Give its hash to Convex and promote `@grok` with a Claude Code home there. Use a seed for `setup.mjs` (the release's bundle of `scripts/dev-setup.ts`; existing participants are left alone):
-
-   ```json
-   {
-     "machine": { "id": "grok-box", "secretFile": "~/.config/agent-comms/grok-box.secret" },
-     "participants": [
-       { "name": "grok", "kind": "agent", "owner": "lee", "home": { "machine": "grok-box", "harness": "claude-code", "locator": "grok" } }
-     ]
-   }
-   ```
-
-   `node setup.mjs --url <convex url> --admin-token-file <file> --seed grok-seed.json`. These are `directory.registerMachine` and `directory.promote({name: "grok", kind: "agent", owner: "lee", home: {machine: "grok-box", harness: "claude-code", locator: "grok"}})`. The locator isn't used for Claude Code homes; the session id comes from the bridge. The secret must end up on Grok Bot's box, mode 0600. Only the connector reads it.
+1. **Register the machine and promote `@grok`.** Pick an id for Grok Bot's box, e.g. `grok-box`, and make a secret of 16 or more characters on that box (`umask 077; openssl rand -hex 32 > ~/.config/agent-comms/grok-box.secret`). The secret must stay on Grok Bot's box, mode 0600; only the connector reads it. Register it in production with the operator procedure in the platform repository's `wiki/comms-cloud-operations.md` ("Register in production from the remote session"), which runs `directory.registerMachine` on lim-builder with the admin token kept there. Don't use `setup.mjs` for this: it also runs a database-wide upgrade. Then promote `@grok` with a Claude Code home on that machine: `directory.promote({name: "grok", kind: "agent", owner: "lee", home: {machine: "grok-box", harness: "claude-code", locator: "grok"}})`. The locator isn't used for Claude Code homes; the session id comes from the bridge.
 
 2. **Run the connector on Grok Bot's box** (from a release: `connector.mjs`), with no T3 adapter. Claude Code homes are always on:
 
@@ -93,7 +82,7 @@ The rendered text tells the model to "reply normally". For Grok Bot, that means 
 
    As a systemd user service, like [`deploy/systemd/agent-comms-connector.service`](../../deploy/systemd/agent-comms-connector.service) but with the release's `connector.mjs`.
 
-3. **Run the bridge.** It needs Node 24 (the repo pins 24.18.0). From a checkout, `node packages/grokbot/src/main.ts run`. As an installed file, `pnpm --filter @agent-comms/grokbot build` makes `packages/grokbot/dist/grokbot.mjs`, a single file with no dependencies. Run it in the background with [`deploy/grokbot.service`](deploy/grokbot.service) (`systemctl --user enable --now grokbot`, logs with `journalctl --user -u grokbot -f`). Set `AGENT_COMMS_SOCKET` to the connector's socket for both the bridge and Grok Bot's `comms` CLI.
+3. **Run the bridge.** It needs Node 24 (the repo pins 24.18.0). From a release, `node grokbot.mjs run` (the release carries `grokbot.mjs` beside `connector.mjs`). From a checkout, `node packages/grokbot/src/main.ts run`. As an installed file, `pnpm --filter @agent-comms/grokbot build` makes `packages/grokbot/dist/grokbot.mjs`, a single file with no dependencies. Run it in the background with [`deploy/grokbot.service`](deploy/grokbot.service) (`systemctl --user enable --now grokbot`, logs with `journalctl --user -u grokbot -f`). Set `AGENT_COMMS_SOCKET` to the connector's socket for both the bridge and Grok Bot's `comms` CLI.
 
 4. **Check.** `grokbot status` should say `registered`, and the web view should show `@grok` as idle. Send it a request (`comms send --as lee @grok "ping?"` from any machine, or from the web view) and watch it appear in `grokbot inbox`.
 

@@ -73,6 +73,11 @@ export interface RenderOptions {
   harnessLabelsSource: boolean;
   /** How long a quoted request inside an answer delivery may be. */
   maxQuotedRequestChars?: number;
+  /**
+   * How to answer a request, for a harness whose turn isn't collected (its final
+   * message isn't sent back). Replaces the default "reply normally" lines.
+   */
+  answerInstructions?: (request: { messageId: string; deliveryId: string; sender: string; me: string }) => string[];
 }
 
 const SOURCE_LINE =
@@ -152,12 +157,16 @@ function build(delivery: Delivery, options: RenderOptions, budget: Budget): stri
     lines.push(...quote(body));
     lines.push(...attachments);
     lines.push("");
+    if (options.answerInstructions) {
+      lines.push(...options.answerInstructions({ messageId: message.id, deliveryId: delivery.id, sender: message.sender.name, me }));
+    } else {
     lines.push(
       `An answer is expected. Reply normally: your final message in this turn is sent back to @${message.sender.name} as your answer, so make it complete on its own. Finish the work before your final message; if you must end the turn first, send the result later with \`comms reply\`. If you answer with \`comms reply\` during this turn, that is your answer and your final message isn't sent.`,
     );
     lines.push(
       `If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with \`comms reply --as ${me} ${message.id} "<your answer>"\`.`,
     );
+    }
     if (reminder) {
       lines.push(
         `This is a reminder from @${reminder.setBy}, sent by @reminders. If what it asks for is finished for good, stop it with \`comms reminder done ${reminder.reminderId} --as ${me}\`. If you can't proceed, pause it with \`comms reminder blocked ${reminder.reminderId} "<why>" --as ${me}\`; it stops firing until resumed.`,
