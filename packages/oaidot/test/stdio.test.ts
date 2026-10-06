@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { PassThrough } from "node:stream";
 import { describe, it, type TestContext } from "node:test";
@@ -11,7 +11,9 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const fixture = fileURLToPath(new URL("./fixtures/stdio-host.ts", import.meta.url));
 
 function host(t: TestContext, delay = 0, text = "stdio-event-proof") {
-  const child = spawn(process.execPath, [fixture, "--delay-ms", String(delay), "--text", text], { stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn(process.execPath, [fixture, "--delay-ms", String(delay), "--text", text], {
+    stdio: ["pipe", "pipe", "pipe", "ipc"],
+  }) as ChildProcessWithoutNullStreams;
   const waiting = new Map<Wire["id"], Array<(response: Wire) => void>>();
   const received = new Map<Wire["id"], Wire[]>();
   let stdout = "";
@@ -50,7 +52,7 @@ function host(t: TestContext, delay = 0, text = "stdio-event-proof") {
   const send = (id: string | number, method: string, input: object = {}) => { child.stdin.write(JSON.stringify({ id, method, input }) + "\n"); };
   const call = async (id: string | number, method: string, input: object = {}) => { send(id, method, input); return wait(id); };
   const finish = async () => {
-    const result = await Promise.race([exited, sleep(2_000).then(() => { throw new Error(`Fixture did not exit on EOF. ${stderr}`); })]);
+    const result = await Promise.race([exited, sleep(2_000).then(() => { throw new Error(`Fixture did not exit after close/cancellation. ${stderr}`); })]);
     assert.equal(result.code, 0, stderr);
     assert.equal(result.signal, null, stderr);
     assert.equal(stdout, "");
@@ -58,8 +60,14 @@ function host(t: TestContext, delay = 0, text = "stdio-event-proof") {
     return JSON.parse(stderr.trim().split("\n").at(-1)!);
   };
   const close = () => { child.stdin.end(); return finish(); };
+  const cancelHost = async () => {
+    await new Promise<void>((resolve, reject) => {
+      child.send({ type: "fixture-abort-host" }, (error) => error ? reject(error) : resolve());
+    });
+    return finish();
+  };
   const terminate = () => { child.kill("SIGTERM"); return finish(); };
-  return { child, send, call, wait, close, terminate };
+  return { child, send, call, wait, close, cancelHost, terminate };
 }
 
 describe("oaidot socket-free stdio host", () => {
@@ -186,7 +194,22 @@ describe("oaidot socket-free stdio host", () => {
   });
 
   it("closes a real subprocess on host cancellation while stdin remains open", async (t) => {
-    const h = host(t);
+    const h = host(t, 60_000);
+    h.send("waiting", "listen");
+    await h.call("ready", "list");
+    assert.equal(h.child.stdin.writableEnded, false);
+    // Windows subprocess.kill("SIGTERM") forcibly terminates the child and
+    // cannot exercise graceful AbortSignal cleanup. IPC triggers that same
+    // host cancellation path portably, while preserving all exit assertions.
+    const ended = await h.cancelHost();
+    assert.equal(ended.subscriptions, 1);
+    assert.equal(ended.receives, 0);
+    assert.equal(ended.acknowledgements, 0);
+    assert.equal(ended.unsubscribes, ended.subscriptions);
+  });
+
+  it("handles POSIX SIGTERM with graceful host cleanup", { skip: process.platform === "win32" }, async (t) => {
+    const h = host(t, 60_000);
     h.send("waiting", "listen");
     await h.call("ready", "list");
     const ended = await h.terminate();

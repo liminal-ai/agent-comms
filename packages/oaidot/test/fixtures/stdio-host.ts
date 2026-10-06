@@ -114,16 +114,27 @@ const native = await makeNativeTransport(api);
 const client = new OaidotClient({ participant, locator, socketPath: "/unused-no-socket", transport: native.transport });
 const signal = new AbortController();
 for (const name of ["SIGINT", "SIGTERM"] as const) process.once(name, () => signal.abort());
-if (values.once) {
-  // The same one-shot call used by the production `listen` command, with no
-  // stdin/log polling: its process completes when the subscribed offer arrives.
-  try {
-    await writeOutput(process.stdout, JSON.stringify(await client.listen({ signal: signal.signal })) + "\n");
-  } finally { await native.close(); }
-} else {
-  await serveStdio(client, {
-    input: process.stdin, signal: signal.signal, close: native.close,
-    write: (line) => writeOutput(process.stdout, line),
-  });
+// Test-only control channel: exercise AbortSignal cleanup on Windows without
+// pretending that subprocess.kill("SIGTERM") behaves like a POSIX signal.
+const cancelHost = (message: unknown) => {
+  if (message && typeof message === "object" && (message as { type?: unknown }).type === "fixture-abort-host") signal.abort();
+};
+process.on("message", cancelHost);
+try {
+  if (values.once) {
+    // The same one-shot call used by the production `listen` command, with no
+    // stdin/log polling: its process completes when the subscribed offer arrives.
+    try {
+      await writeOutput(process.stdout, JSON.stringify(await client.listen({ signal: signal.signal })) + "\n");
+    } finally { await native.close(); }
+  } else {
+    await serveStdio(client, {
+      input: process.stdin, signal: signal.signal, close: native.close,
+      write: (line) => writeOutput(process.stdout, line),
+    });
+  }
+} finally {
+  process.off("message", cancelHost);
+  if (process.connected) process.disconnect();
 }
 process.stderr.write(JSON.stringify({ fixtureClosed: true, ...counters }) + "\n");
