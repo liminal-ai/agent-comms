@@ -310,7 +310,7 @@ export const collect = mutation({
       // The request was accepted while the agent was active and a member: its answer still lands (2.4).
       inFlight: true,
       text: clipAnswer(args.answer),
-      origin: { via: (d.target ?? recipient.home)?.harness === "t3" ? "t3" : "claude-code" },
+      origin: { via: (d.target ?? recipient.home)?.harness ?? "claude-code" },
     });
     await ctx.db.patch(d._id, {
       state: "replied",
