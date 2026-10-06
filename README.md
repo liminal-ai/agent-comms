@@ -12,6 +12,7 @@ For versioned builds, staging/production deployments, and binding each connector
 | [`packages/connector`](packages/connector/README.md) | The per-machine connector (Effect) |
 | [`packages/adapter-t3`](packages/adapter-t3/README.md) | T3 adapter; T3's wire contract vendored, no T3 checkout needed |
 | [`packages/claude-code-mod`](packages/claude-code-mod/README.md) | Claude Code adapter (Hazel) |
+| [`packages/oaidot`](packages/oaidot/README.md) | Session-scoped native courier to the actual dot parent, with explicit receipts and replies |
 | [`convex/`](convex/) | The comms server |
 | [`apps/web`](apps/web/README.md) | Lee's view |
 

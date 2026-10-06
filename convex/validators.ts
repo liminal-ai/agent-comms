@@ -8,7 +8,7 @@ export const participantKind = v.union(v.literal("human"), v.literal("agent"), v
 /** What `promote` creates: system participants are created at deploy, never promoted. */
 export const promotableKind = v.union(v.literal("human"), v.literal("agent"));
 export const participantState = v.union(v.literal("active"), v.literal("paused"), v.literal("retired"));
-export const harness = v.union(v.literal("t3"), v.literal("claude-code"), v.literal("web"));
+export const harness = v.union(v.literal("t3"), v.literal("claude-code"), v.literal("web"), v.literal("oaidot"));
 export const home = v.object({ machine: v.string(), harness, locator: v.string() });
 export const presenceStatus = v.union(v.literal("idle"), v.literal("busy"), v.literal("offline"));
 export const conversationKind = v.union(v.literal("dm"), v.literal("group"));

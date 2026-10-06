@@ -93,8 +93,10 @@ export default defineSchema({
     state: deliveryState,
     at: v.number(),
     detail: v.optional(v.string()),
-    /** Held from `claimed` through `delivered`; cleared when the delivery is finished. */
+    /** Push: held through delivered. Oaidot: cleared at explicit receipt. */
     claim: v.optional(claim),
+    /** Durable proof of an explicit oaidot receipt. Never exposed as an active claim. */
+    received: v.optional(v.object({ machine: v.string(), claimId: v.string(), at: v.number() })),
     turnId: v.optional(v.string()),
     /** The adapter's resume point in the harness, for recovery after a restart. Opaque. */
     cursor: v.optional(v.string()),

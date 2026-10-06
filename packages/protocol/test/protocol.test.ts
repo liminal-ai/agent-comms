@@ -49,7 +49,7 @@ describe("decodeRequest", () => {
     assert.deepEqual(OPS, [
       "status", "register", "unregister", "poll", "delivered", "outcome",
       "check-result", "presence", "answer-seen", "send", "reply", "await", "ack", "message-status",
-      "agents", "agents-set", "remind", "reminders", "reminder", "reminder-update", "read", "list",
+      "agents", "agents-set", "remind", "reminders", "reminder", "reminder-update", "read", "receive", "receive-ack", "list",
     ]);
     assert.equal(isOp("send"), true);
     assert.equal(isOp("toString"), false);
@@ -74,6 +74,15 @@ describe("decodeRequest", () => {
   it("bounds poll waits", () => {
     assert.equal(decodeRequest("poll", { sessionId: "s-1", waitMs: 25_000 }).ok, true);
     assert.equal(decodeRequest("poll", { sessionId: "s-1", waitMs: 25_001 }).ok, false);
+  });
+
+  it("bounds native courier offers and requires a receipt claim", () => {
+    assert.equal(decodeRequest("receive", { as: "dot", locator: "parent-dot", limit: 20, leaseMs: 600_000, waitMs: 25_000 }).ok, true);
+    for (const invalid of [{ limit: 0 }, { limit: 21 }, { leaseMs: 999 }, { leaseMs: 600_001 }, { waitMs: 25_001 }]) {
+      assert.equal(decodeRequest("receive", { as: "dot", locator: "parent-dot", ...invalid }).ok, false);
+    }
+    assert.equal(decodeRequest("receive-ack", { as: "dot", locator: "parent-dot", deliveryId: "d_1", claimId: "claim_1" }).ok, true);
+    assert.equal(decodeRequest("receive-ack", { as: "dot", locator: "parent-dot", deliveryId: "d_1" }).ok, false);
   });
 
   it("decodes each outcome kind", () => {
