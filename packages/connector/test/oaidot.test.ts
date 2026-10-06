@@ -3,7 +3,7 @@ import { call } from "@agent-comms/comms-cli/client";
 import { opPath, type Requests, type Responses } from "@agent-comms/protocol";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../../convex/_generated/api.js";
 import { createWindowsAgent } from "../../windows-pipe/src/agent.mjs";
 import { NativeReceives } from "../src/connector.ts";
@@ -78,8 +78,10 @@ describe("oaidot receive hold state machine", () => {
     const closing = holder.receive(req(25_000), new AbortController().signal);
     const rejected = expect(closing).rejects.toMatchObject({ code: "unavailable" });
     await sleep(20);
+    const closingAt = Date.now();
     holder.close();
     await rejected;
+    expect(Date.now() - closingAt).toBeLessThan(1_000);
     await Effect.runPromise(w.api.send({ as: "a", to: ["dot-agent"], text: "No longer listening" }));
     holder.update(await snapshot(w));
     expect(observed.receives).toHaveLength(0);
@@ -428,17 +430,43 @@ describe("oaidot event-driven courier", () => {
     const w = await nativeWorld();
     const observed = counted(w.api);
     const connector = await start(observed.api, w.socket);
-    const held = call(w.socket, "receive", { as: "dot-agent", locator: "dot-agent", waitMs: 25_000 }).catch(() => undefined);
-    await sleep(100);
-    const before = Date.now();
-    await connector.stop();
-    running = running.filter((r) => r !== connector);
-    await held;
-    expect(Date.now() - before).toBeLessThan(1_000);
-    await Effect.runPromise(w.api.send({ as: "a", to: ["dot-agent"], text: "After connector close" }));
-    await sleep(100);
-    expect(observed.receives).toHaveLength(0);
-  });
+    let entered: () => void = () => {};
+    const listening = new Promise<void>((resolve) => { entered = resolve; });
+    let settled = false;
+    let serverResult: Promise<{ error?: unknown; at: number }> | undefined;
+    const receive = NativeReceives.prototype.receive;
+    // Observe the real holder's settlement without including pipe startup or
+    // teardown. The Windows transport has a separate PowerShell bridge process.
+    const spy = vi.spyOn(NativeReceives.prototype, "receive").mockImplementation(function (
+      this: NativeReceives, req: Requests["receive"], aborted: AbortSignal,
+    ) {
+      const result = receive.call(this, req, aborted);
+      serverResult = result.then(
+        () => { settled = true; return { at: Date.now() }; },
+        (error: unknown) => { settled = true; return { error, at: Date.now() }; },
+      );
+      entered();
+      return result;
+    });
+    try {
+      const held = call(w.socket, "receive", { as: "dot-agent", locator: "dot-agent", waitMs: 25_000 }).catch(() => undefined);
+      await listening; // The request reached the connector, even on slow pipe startup.
+      expect(settled).toBe(false);
+      const before = Date.now();
+      const stopping = connector.stop();
+      // Still await both the real client and all transport/process cleanup.
+      // The test's overall bound covers those separately from the holder's one-second bound.
+      const [result] = await Promise.all([serverResult!, stopping, held]);
+      running = running.filter((r) => r !== connector);
+      expect(result.error).toMatchObject({ code: "unavailable" });
+      expect(result.at - before).toBeLessThan(1_000);
+      await Effect.runPromise(w.api.send({ as: "a", to: ["dot-agent"], text: "After connector close" }));
+      await sleep(100);
+      expect(observed.receives).toHaveLength(0);
+    } finally {
+      spy.mockRestore();
+    }
+  }, process.platform === "win32" ? 15_000 : 5_000);
 
   it("rejects invalid or foreign identities even with an empty inbox", async () => {
     const w = await nativeWorld();
