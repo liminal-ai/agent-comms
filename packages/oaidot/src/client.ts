@@ -56,6 +56,25 @@ export function courierOffer(participant: string, locator: string, delivery: Del
   };
 }
 
+/** Recovery pages: each entry is rendered within MAX_COURIER_TEXT_CHARS, so a page stays bounded. */
+export const RECOVER_PAGE = 3;
+export const MAX_RECOVER_PAGE = 5;
+
+export interface RecoveredRequest {
+  deliveryId: string;
+  messageId: string;
+  conversationId: string;
+  kind: Delivery["message"]["kind"];
+  /** The request as the parent reads it, at most MAX_COURIER_TEXT_CHARS; the full conversation is available with `read`. */
+  text: string;
+}
+
+export interface RecoverPage {
+  requests: RecoveredRequest[];
+  hasMore: boolean;
+  nextCursor?: string;
+}
+
 export class OaidotClient {
   readonly participant: string;
   readonly locator: string;
@@ -66,6 +85,38 @@ export class OaidotClient {
     this.participant = options.participant;
     this.locator = options.locator;
     this.transport = options.transport ?? ((op, body) => loopbackCall(options.socketPath, op, body));
+  }
+
+  /**
+   * Acknowledged requests still awaiting an explicit reply, a bounded page at a time:
+   * rendered like an offer, never raw envelopes. Use `read` for full conversation text.
+   */
+  async recover(input: { limit?: unknown; cursor?: unknown }, signal?: AbortSignal): Promise<RecoverPage> {
+    const limit = input.limit ?? RECOVER_PAGE;
+    if (!Number.isInteger(limit) || (limit as number) < 1 || (limit as number) > MAX_RECOVER_PAGE) {
+      throw new OaidotError("bad_request", `recover limit must be an integer from 1 to ${MAX_RECOVER_PAGE}`);
+    }
+    if (input.cursor !== undefined && typeof input.cursor !== "string") throw new OaidotError("bad_request", "recover cursor must be a string");
+    const page = await this.call("receive", {
+      limit: limit as number,
+      includeDelivered: true,
+      waitMs: 0,
+      ...(input.cursor !== undefined ? { cursor: input.cursor as string } : {}),
+    }, signal);
+    return {
+      requests: page.deliveries.map((delivery) => {
+        if (delivery.recipient.name !== this.participant) throw new OaidotError("conflict", "recovered delivery belongs to another participant");
+        return {
+          deliveryId: delivery.id,
+          messageId: delivery.message.id,
+          conversationId: delivery.conversation.id,
+          kind: delivery.message.kind,
+          text: renderDelivery(delivery, { harnessLabelsSource: false, replyMode: "explicit", maxChars: MAX_COURIER_TEXT_CHARS }),
+        };
+      }),
+      hasMore: page.hasMore,
+      ...(page.nextCursor !== undefined ? { nextCursor: page.nextCursor } : {}),
+    };
   }
 
   /** Fixed identity: callers cannot select an arbitrary --as through tool input. */

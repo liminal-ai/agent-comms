@@ -81,7 +81,7 @@ export async function serveStdio(client: OaidotClient, options: StdioOptions): P
     }
     if (method === "recover") {
       only(input, ["limit", "cursor"]);
-      return client.call("receive", { ...input, limit: input.limit as number | undefined ?? 20, includeDelivered: true, waitMs: 0 }, signal);
+      return client.recover(input, signal);
     }
     const op = method === "ack" ? "receive-ack" : method;
     if (!["send", "reply", "read", "list", "agents", "message-status", "receive-ack"].includes(op)

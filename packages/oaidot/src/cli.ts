@@ -60,7 +60,9 @@ export async function run(argv: string[], io: IO): Promise<number> {
       const input: unknown = raw.trim() ? JSON.parse(raw) : {};
       if (!input || typeof input !== "object" || Array.isArray(input)) throw new OaidotError("bad_request", "input must be an object");
       if (command === "recover") {
-        result = await client.call("receive", { ...input, limit: (input as { limit?: number }).limit ?? 20, includeDelivered: true, waitMs: 0 });
+        const { limit, cursor, ...extra } = input as { limit?: unknown; cursor?: unknown };
+        if (Object.keys(extra).length) throw new OaidotError("bad_request", "recover takes only limit and cursor");
+        result = await client.recover({ limit, cursor });
       } else {
         const op = command === "ack" ? "receive-ack" : command;
         if (!(OPERATIONS as readonly string[]).includes(op)) throw new OaidotError("usage", HELP);

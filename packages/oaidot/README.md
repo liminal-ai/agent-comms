@@ -100,6 +100,8 @@ by `--participant` and `--locator`; `as` or `locator` in tool input is rejected.
 The programmatic `OaidotClient` exposes the same fixed-identity tools.
 `recover` retrieves acknowledged requests still awaiting an explicit reply;
 these are existing work to resume, not new deliveries or new model turns.
+Each comes back rendered like an offer (at most 8,000 characters), 3 per page by
+default and at most 5 (`limit`); `read` the conversation for full text.
 When `hasMore` is true, pass the returned `nextCursor` as `cursor` to enumerate
 the next page without answering older work first. Retired participants may
 recover and finish already-received work but cannot listen for fresh offers.

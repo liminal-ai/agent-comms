@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Op, Requests } from "@agent-comms/protocol";
 import { delivery, message } from "../../protocol/test/fixtures.ts";
-import { courierOffer, OaidotClient, MAX_COURIER_TEXT_CHARS, type Transport } from "../src/client.ts";
+import { courierOffer, OaidotClient, MAX_COURIER_TEXT_CHARS, MAX_RECOVER_PAGE, RECOVER_PAGE, type Transport } from "../src/client.ts";
 import { run } from "../src/cli.ts";
 
 const offer = () => delivery({ status: { state: "claimed", at: 1, claim: { machine: "box", claimId: "claim_1", leaseExpiresAt: Date.now() + 120_000 } } });
@@ -30,6 +30,32 @@ describe("oaidot native courier", () => {
     assert.equal(event.requiresAcknowledgement, true);
     assert.match(event.text, /An explicit answer is expected/);
     assert.doesNotMatch(event.text, /your final message in this turn is sent back/);
+  });
+
+  it("recovers a bounded page of rendered requests, never raw envelopes", async () => {
+    const big = (i: number) => {
+      const d = delivery({ status: { state: "delivered", at: 1 } });
+      d.id = `d_${i}`;
+      d.message.text = "x".repeat(32_000);
+      return d;
+    };
+    const asked: Requests["receive"][] = [];
+    const c = client(fake((_op, body) => {
+      asked.push(body as Requests["receive"]);
+      const limit = (body as Requests["receive"]).limit!;
+      return { ok: true, deliveries: Array.from({ length: limit }, (_, i) => big(i)), hasMore: true, nextCursor: "next" };
+    }));
+    const page = await c.recover({});
+    assert.equal(asked[0]!.limit, RECOVER_PAGE);
+    assert.equal(asked[0]!.includeDelivered, true);
+    assert.equal(page.requests.length, RECOVER_PAGE);
+    assert.ok(page.requests.every((r) => r.text.length <= MAX_COURIER_TEXT_CHARS));
+    assert.equal((page as unknown as { deliveries?: unknown }).deliveries, undefined);
+    assert.deepEqual([page.hasMore, page.nextCursor], [true, "next"]);
+    const largest = await c.recover({ limit: MAX_RECOVER_PAGE, cursor: "next" });
+    assert.equal(asked[1]!.cursor, "next");
+    assert.ok(JSON.stringify(largest).length < MAX_RECOVER_PAGE * MAX_COURIER_TEXT_CHARS + 2_000);
+    await assert.rejects(c.recover({ limit: MAX_RECOVER_PAGE + 1 }), /recover limit/);
   });
 
   it("a lost wake can be offered again with the same delivery ID and a new fenced claim", () => {

@@ -124,13 +124,16 @@ describe("oaidot socket-free stdio host", () => {
     assert.equal((await h.call("stale", "ack", { ...ack, claimId: "stale_claim" })).error?.code, "conflict");
     assert.equal((await h.call("ack", "ack", ack)).result.delivery.state, "delivered");
     assert.equal((await h.call("ack-again", "ack", ack)).result.delivery.state, "delivered");
-    assert.equal((await h.call("recover", "recover")).result.deliveries[0].id, event.deliveryId);
+    const recovered = (await h.call("recover", "recover")).result;
+    assert.equal(recovered.requests[0].deliveryId, event.deliveryId);
+    assert.match(recovered.requests[0].text, /An explicit answer is expected/);
+    assert.equal(recovered.deliveries, undefined);
     const reply = { messageId: event.messageId, text: "Explicit parent response", key: "parent_reply_1" };
     const answered = await h.call("reply", "reply", reply);
     assert.equal(answered.result.completed, event.deliveryId);
     assert.deepEqual((await h.call("reply-again", "reply", reply)).result, answered.result);
     assert.equal((await h.call("key-conflict", "reply", { ...reply, text: "Changed" })).error?.code, "conflict");
-    assert.deepEqual((await h.call("recovered", "recover")).result.deliveries, []);
+    assert.deepEqual((await h.call("recovered", "recover")).result.requests, []);
     stats = (await h.call("settled", "list")).result.fixture;
     assert.equal(stats.acknowledgements, 1);
     assert.equal(stats.replies, 1);
