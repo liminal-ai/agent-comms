@@ -12,7 +12,8 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2025]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # Windows runs the check suites more slowly (about 14 of its minutes before the packaged smoke).
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 25 || 15 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,6 +38,11 @@ jobs:
         run: node dist/agent-comms-0.0.0-ci/comms.mjs --help
       - if: steps.scope.outputs.mode != 'docs'
         run: node dist/agent-comms-0.0.0-ci/connector.mjs --help
+      - if: steps.scope.outputs.mode != 'docs'
+        run: node dist/agent-comms-0.0.0-ci/service.mjs --help
+      - name: Exercise local mode from the release
+        if: steps.scope.outputs.mode != 'docs'
+        run: node scripts/local-smoke.mjs 0.0.0-ci
 
       - name: Exercise bundled Windows transport
         if: runner.os == 'Windows' && steps.scope.outputs.mode != 'docs'

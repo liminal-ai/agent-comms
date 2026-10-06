@@ -6,12 +6,14 @@ Local validation on 2026-10-06, Node 24.19.0 and pnpm 11.19.0.
 
 - Whole-workspace TypeScript checks, including Convex
 - Protocol: 68 tests
-- Convex: 162 tests across 14 files, including 19 oaidot lifecycle tests
-- Shared receive holder: 13 socket-free tests against real `convex-test` functions
-- oaidot package: 20 tests (9 client, 3 stdout, 8 stdio)
+- Convex and SQLite: 324 test executions across 28 project files (162 per backend),
+  including 19 oaidot lifecycle tests on each backend
+- Shared receive holder: 26 socket-free test executions, 13 per backend
+- oaidot package: 21 tests (9 client, 1 mode-boundary, 3 stdout, 8 stdio)
 - Six of the stdio cases use an actual subprocess and the production native
   transport, receive holder, client and stdio host, with a fake subscription backend
-- Release build: `pnpm build:release 0.0.0-oaidot-check`
+- Release build: `pnpm build:release 0.0.0-oaidot-main-check`
+- Local SQLite backend unit suite: 19 tests
 - Release helper tests: 4 tests
 - CI helper tests: 12 tests
 - Git whitespace/diff checks
@@ -27,6 +29,20 @@ Independent review found and verified fixes for parent locator binding across
 same-machine rebind, retired-agent recovery, recovery pagination, stdout
 backpressure and deferred write errors, and native scope cleanup on startup
 failure.
+
+## Integration with current main
+
+Merged main at `90fe344561eaa37949699f2b334406b15a416ad1` (PR #8 local
+SQLite mode) into the feature branch. The only textual conflict was the lockfile;
+both workspace dependency sets were preserved. No local-mode implementation was
+replaced, and no additional adapter branches were merged.
+
+Both backend suites passed on the final rerun. An earlier concurrent run had one
+existing alert-scale test exceed its 5-second limit; the unchanged full rerun
+passed all 324 tests without increasing any timeout. A separate socket-free
+SQLite smoke verified native subscription wake, receipt/reply, locator fencing,
+filtered recovery pagination and cleanup. Direct `--config` stays Convex-only;
+a local service configuration is rejected before credential or store startup.
 
 ## Actual parent wake, fake backend
 
@@ -81,7 +97,9 @@ connector-stub tests fail while binding Unix sockets in this cloud workspace:
 `listen EPERM: operation not permitted .../connector.sock`. An escalated retry
 of the new loopback tests produced the same runtime error. Ten new real-loopback
 tests are retained for a socket-capable environment and were not validated here.
-The socket-free stdio path was tested instead; no socket/security settings changed.
+The release local-mode smoke was also attempted and reached the same Unix-socket
+EPERM during connector startup. The socket-free stdio path was tested instead;
+no socket/security settings changed.
 
 Production deployment, credentials, participant enrollment, a live Convex/peer
 round trip, and Windows execution were not performed. No deployment or credential changes

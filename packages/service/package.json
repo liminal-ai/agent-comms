@@ -1,0 +1,24 @@
+{
+  "name": "@agent-comms/service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The comms service: local mode (SQLite backend, connector and web in one process) or convex mode (the existing connector and web).",
+  "bin": {
+    "comms-service": "./src/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@agent-comms/connector": "workspace:*",
+    "@agent-comms/local-backend": "workspace:*",
+    "@agent-comms/protocol": "workspace:*",
+    "convex": "1.46.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "@agent-comms/comms-cli": "workspace:*"
+  }
+}

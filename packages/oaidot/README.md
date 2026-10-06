@@ -26,6 +26,13 @@ operations; the subscribed work snapshot drives held receives. Empty local hold
 renewals do not query Convex for an inbox;
 new work and claim-expiry timers release those holds.
 
+Mode boundary: `--config` accepts a Convex connector configuration. To use the
+isolated SQLite service from [local mode](../../docs/local-mode.md), start that
+service normally and point `--socket` at its explicit endpoint. Giving its
+`mode: "local"` service configuration to the direct host is refused before any
+credentials are read or store is opened. The local and shared Convex stores stay
+separate; the courier does not copy or federate them.
+
 This package is not a `HarnessAdapter` that claims to start or observe model
 turns. The shared protocol adds an `oaidot` home and a non-turn receipt path.
 Automatic answer collection remains unavailable. MCP could later expose the

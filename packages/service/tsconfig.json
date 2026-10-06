@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ],
+    "module": "preserve",
+    "moduleResolution": "bundler"
+  },
+  "include": [
+    "src",
+    "test"
+  ]
+}

@@ -49,16 +49,30 @@ export async function verifyT3Binding(t3: NonNullable<ConnectorConfig["t3"]>, re
   }
 }
 
+/** The per-user default: $AGENT_COMMS_SOCKET, else the platform's standard path (Windows: the current user's pipe). */
+export function defaultSocket(): string | null {
+  if (process.platform === "win32") return process.env[SOCKET_ENV] ?? windowsEndpoint();
+  return socketPath({
+    platform: process.platform,
+    override: process.env[SOCKET_ENV],
+    xdgRuntimeDir: process.env.XDG_RUNTIME_DIR,
+    home: homedir(),
+    uid: process.getuid?.(),
+  });
+}
+
 export interface LoadedConfig extends ConnectorConfig {
   socket: string;
   secret: string;
   warnings: string[];
 }
 
-const expand = (p: string) => (p.startsWith("~/") ? resolve(homedir(), p.slice(2)) : resolve(p));
+export const expand = (p: string) => (p.startsWith("~/") ? resolve(homedir(), p.slice(2)) : resolve(p));
 
 export function loadConfig(path: string): LoadedConfig {
-  const raw = JSON.parse(readFileSync(expand(path), "utf8")) as Partial<ConnectorConfig>;
+  const raw = JSON.parse(readFileSync(expand(path), "utf8")) as Partial<ConnectorConfig> & { mode?: unknown };
+  if (raw.mode === "local") throw new Error(`config ${path}: this is a local-mode service config; run it with service.mjs, not the connector`);
+  if (raw.mode !== undefined && raw.mode !== "convex") throw new Error(`config ${path}: "mode" must be "convex" for the connector`);
   for (const key of ["machine", "secretFile", "convexUrl"] as const) {
     if (typeof raw[key] !== "string" || !raw[key]) throw new Error(`config ${path}: "${key}" is required`);
   }
@@ -69,15 +83,7 @@ export function loadConfig(path: string): LoadedConfig {
   if (process.platform !== "win32" && (mode & 0o077)) warnings.push(`${secretFile} is readable by others (mode ${mode.toString(8)}); chmod 600 it`);
   const secret = (process.platform === "win32" ? readPrivateWindowsSecret(secretFile) : readFileSync(secretFile, "utf8")).trim();
   if (secret.length < 16) throw new Error(`${secretFile}: the machine secret must be at least 16 characters`);
-  const socket =
-    config.socket ??
-    (process.platform === "win32" ? process.env[SOCKET_ENV] ?? windowsEndpoint() : socketPath({
-      platform: process.platform,
-      override: process.env[SOCKET_ENV],
-      xdgRuntimeDir: process.env.XDG_RUNTIME_DIR,
-      home: homedir(),
-      uid: process.getuid?.(),
-    }));
+  const socket = config.socket ?? defaultSocket();
   if (!socket) throw new Error(`can't work out the socket path; set "socket" in ${path}`);
   if (config.t3?.protocol !== undefined && config.t3.protocol !== 1 && config.t3.protocol !== 2) {
     throw new Error(`config ${path}: "t3.protocol" must be 1 or 2`);
