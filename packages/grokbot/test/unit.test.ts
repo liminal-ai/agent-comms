@@ -342,7 +342,8 @@ describe("bridge (scripted connector)", () => {
     await waitFor("registration", () => bridge.isRegistered);
     client.push([{ type: "deliver", delivery: delivery() }]);
     await waitFor("delivered", () => client.ops("delivered").length === 2);
-    assert.ok((await store.get("d_1"))?.deliveredReported);
+    // The flag is written once the report's answer arrives, just after the call is recorded.
+    await waitFor("delivered recorded", async () => (await store.get("d_1"))?.deliveredReported);
     assert.equal(client.ops("register").length, 2);
     assert.deepEqual(client.ops("delivered")[1]!.body, { sessionId: bridge.sessionId, deliveryId: "d_1", turnId: "grok-d_1" });
     await waitFor("presence busy", () => client.ops("presence").some((c) => c.body.status === "busy") || client.ops("register")[1]!.body.status === "busy");
