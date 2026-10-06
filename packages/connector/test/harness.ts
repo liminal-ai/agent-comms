@@ -63,6 +63,41 @@ export function transport(t: Convex): ConvexTransport & { down: boolean } {
   return self as unknown as ConvexTransport & { down: boolean };
 }
 
+/**
+ * The SQLite backend's own transport (connector-sqlite project): watches are its
+ * commit-driven subscriptions, not polling. `down` refuses calls and holds back
+ * updates; coming back up resubscribes, as a reconnecting client would.
+ */
+type NativeBackend = { transport(): { query: Call; mutation: Call; watch: (ref: unknown, args: unknown, onValue: (v: unknown) => void, onError: (e: Error) => void) => () => void } };
+type Call = (ref: unknown, args: unknown) => Promise<unknown>;
+export function nativeTransport(backend: NativeBackend): ConvexTransport & { down: boolean } {
+  const native = backend.transport();
+  const watches = new Set<{ ref: unknown; args: unknown; onValue: (v: unknown) => void; onError: (e: Error) => void; stop: () => void }>();
+  let down = false;
+  const self = {
+    get down() {
+      return down;
+    },
+    set down(value: boolean) {
+      const back = down && !value;
+      down = value;
+      if (back) for (const w of watches) (w.stop(), (w.stop = native.watch(w.ref, w.args, w.onValue, w.onError)));
+    },
+    query: (ref: unknown, args: unknown) => (down ? Promise.reject(new Error("connection refused")) : native.query(ref, args)),
+    mutation: (ref: unknown, args: unknown) => (down ? Promise.reject(new Error("connection refused")) : native.mutation(ref, args)),
+    watch: (ref: unknown, args: unknown, onValue: (v: unknown) => void, onError: (e: Error) => void) => {
+      const w = { ref, args, onValue: (v: unknown) => void (down || onValue(v)), onError, stop: () => {} };
+      w.stop = native.watch(ref, args, w.onValue, onError);
+      watches.add(w);
+      return () => {
+        w.stop();
+        watches.delete(w);
+      };
+    },
+  };
+  return self as unknown as ConvexTransport & { down: boolean };
+}
+
 export async function world() {
   process.env.COMMS_ADMIN_TOKEN = ADMIN;
   const t = convexTest(schema, modules);
@@ -85,7 +120,8 @@ export async function world() {
     home: { machine: machine.id, harness: "t3", locator: "thread-1" },
   });
   await t.mutation(api.directory.upgrade, { adminToken: ADMIN, defaultOwner: "lee" });
-  const tr = transport(t);
+  const backend = (t as { backend?: () => Promise<NativeBackend> }).backend;
+  const tr = backend ? nativeTransport(await backend()) : transport(t);
   const serverApi = makeServerApi(tr, { machine, callTimeout: "2 seconds" });
   const dir = await mkdtemp(join(tmpdir(), "connector-test-"));
   const socket = process.platform === "win32" ? windowsEndpoint("integration-" + randomUUID()) : join(dir, "agent-comms", "connector.sock");
