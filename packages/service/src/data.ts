@@ -11,9 +11,9 @@
 // Credential files that no store vouches for are never adopted.
 
 import { createHash, randomBytes } from "node:crypto";
-import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
+import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
 import { join } from "node:path";
-import { protectPrivateWindowsFile, readPrivateWindowsSecret } from "../../windows-pipe/src/secret.mjs";
+import { privateWindowsDirectory, protectPrivateWindowsFile, readPrivateWindowsSecret } from "../../windows-pipe/src/secret.mjs";
 
 export const STORE_FILE = "comms.sqlite";
 export const ADMIN_TOKEN_FILE = "admin.token";
@@ -24,12 +24,22 @@ const pendingName = (name: string) => `.${name}.init`;
 const metaKey = (name: string) => `sha256:${name}`;
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
-/** Creates the directory owner-only, or checks an existing one is. */
+/**
+ * Creates the directory owner-only, or checks an existing one is, before the
+ * store or any credential is written in it. Windows: a new or empty directory
+ * is given a private DACL that everything inside inherits; a non-empty one
+ * must already have one.
+ */
 export function prepareDataDir(dir: string): void {
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const created = !existsSync(dir);
+  if (created) mkdirSync(dir, { recursive: true, mode: 0o700 });
   const st = lstatSync(dir);
   if (st.isSymbolicLink() || !st.isDirectory()) throw new Error(`${dir} isn't a plain directory; refusing to use it`);
-  if (process.platform === "win32") return; // Windows: the credential files' own private DACLs are checked.
+  if (process.platform === "win32") {
+    const mode = created || readdirSync(dir).length === 0 ? "protect" : "check";
+    if (!privateWindowsDirectory(dir, mode)) throw new Error(`${dir} isn't private to the current Windows user (owner, inheritance off, only the user's access); refusing to use it`);
+    return;
+  }
   const uid = process.getuid?.();
   if (uid !== undefined && st.uid !== uid) throw new Error(`${dir} is owned by uid ${st.uid}, not ${uid}; refusing to use it`);
   if (st.mode & 0o077) throw new Error(`${dir} has mode ${(st.mode & 0o777).toString(8)}; it must be owner-only (chmod 700)`);
@@ -52,12 +62,15 @@ export function stageCredentials(dir: string): Record<string, string> {
     const fd = openSync(pending, "wx", 0o600);
     try {
       writeSync(fd, value + "\n");
+      // On disk before the store records its hash (the store commits with synchronous=FULL).
+      fsyncSync(fd);
     } finally {
       closeSync(fd);
     }
     if (process.platform === "win32") protectPrivateWindowsFile(pending);
     meta[metaKey(name)] = sha256(value);
   }
+  syncDir(dir);
   return meta;
 }
 
@@ -68,7 +81,10 @@ export function settleCredential(dir: string, name: string, storeMeta: (key: str
   const path = join(dir, name);
   const pending = join(dir, pendingName(name));
   if (!existsSync(path)) {
-    if (existsSync(pending) && sha256(readCredential(pending)) === expected) renameSync(pending, path);
+    if (existsSync(pending) && sha256(readCredential(pending)) === expected) {
+      renameSync(pending, path);
+      syncDir(dir);
+    }
     else throw new Error(`${path} is missing; the store can't be used without it`);
   }
   const value = readCredential(path);
@@ -80,6 +96,17 @@ export function settleCredential(dir: string, name: string, storeMeta: (key: str
 /** Reads a credential the admin commands need; the running service has already checked it. */
 export function credential(dir: string, name: string): string {
   return readCredential(join(dir, name));
+}
+
+/** Makes renames and new entries in a directory durable (POSIX; Windows can't open a directory to sync it). */
+function syncDir(dir: string): void {
+  if (process.platform === "win32") return;
+  const fd = openSync(dir, "r");
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function readCredential(path: string): string {

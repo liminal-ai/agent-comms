@@ -16,7 +16,7 @@ await build({
   banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
 });
 // Runtime companion files resolve beside the bundled entrypoint via import.meta.url.
-for (const name of ['bridge.ps1','PrivatePipe.cs','Bridge.cs','validate-secret.ps1','SecretFile.cs','protect-secret.ps1']) {
+for (const name of ['bridge.ps1','PrivatePipe.cs','Bridge.cs','validate-secret.ps1','SecretFile.cs','protect-secret.ps1','private-dir.ps1']) {
   await cp(`packages/windows-pipe/src/${name}`, `${dest}/${name}`);
 }
 // The standalone Claude Code plugin (marketplace + plugin manifests and its hooks), loadable from the

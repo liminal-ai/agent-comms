@@ -14,6 +14,7 @@ import { windowsEndpoint } from "../../windows-pipe/src/index.mjs";
 import { type LocalConfig, loadServiceConfig } from "../src/config.ts";
 import { ADMIN_TOKEN_FILE, credential } from "../src/data.ts";
 import { type RunningLocal, startLocal } from "../src/local.ts";
+import { allowedHosts } from "../src/web.ts";
 
 const quiet = () => {};
 // The CLI client's answer, as the success body (a refusal throws in these tests).
@@ -23,10 +24,11 @@ afterEach(async () => {
   for (const r of running.splice(0)) await r.stop();
 });
 
+let fixtures = 0;
 function fixture(): LocalConfig {
   const dir = mkdtempSync(join(tmpdir(), "comms-service-"));
   chmodSync(dir, 0o700);
-  const socket = process.platform === "win32" ? windowsEndpoint(`service-test-${Date.now()}-${Math.random()}`) : join(dir, "run", "connector.sock");
+  const socket = process.platform === "win32" ? windowsEndpoint(`service-test-${process.pid}-${++fixtures}`) : join(dir, "run", "connector.sock");
   return { mode: "local", environment: "test", dataDir: join(dir, "data"), owner: "lee", machine: "box", socket, web: { port: 0 } };
 }
 
@@ -81,7 +83,7 @@ describe("a local service", () => {
   it("refuses a second service on the same store, leaving the first one's socket alone", async () => {
     const config = fixture();
     const r = await start(config);
-    const other = { ...config, socket: process.platform === "win32" ? windowsEndpoint(`other-${Date.now()}`) : `${config.socket}.2`, web: { port: 0 } };
+    const other = { ...config, socket: process.platform === "win32" ? windowsEndpoint(`service-other-${process.pid}-${++fixtures}`) : `${config.socket}.2`, web: { port: 0 } };
     await expect(startLocal(other, { log: quiet })).rejects.toThrow(/in use by another comms service/);
     expect((await call(config.socket, "status", {})).machine).toBe("box");
     expect(r.port).toBeGreaterThan(0);
@@ -208,6 +210,34 @@ describe("the web API", () => {
   });
 });
 
+describe("the web API's live queries, large", () => {
+  it("deliver a frame over 4 MiB whole (an inbox page of long messages)", async () => {
+    const config = fixture();
+    const r = await start(config);
+    await register(r, config, "alpha");
+    const text = "x".repeat(32_000);
+    for (let i = 0; i < 150; i++) await call(config.socket, "send", { as: "alpha", to: ["lee"], text: `${i} ${text}`.slice(0, 32_000) });
+    const adminToken = credential(config.dataDir, ADMIN_TOKEN_FILE);
+    const res = await api(r, config, "/api/watch", { queries: [{ id: "inbox", name: "inbox:list", args: { adminToken, human: "lee", limit: 200 } }] });
+    const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    while (!buffer.includes("\n")) buffer += (await reader.read()).value ?? "";
+    await reader.cancel();
+    const line = buffer.slice(0, buffer.indexOf("\n"));
+    expect(line.length).toBeGreaterThan(4 * 1024 * 1024);
+    const frame = JSON.parse(line) as { id: string; value: { items?: unknown[]; page?: unknown[] } };
+    expect(frame.id).toBe("inbox");
+    expect(JSON.stringify(frame.value).match(/x{1000}/g)!.length).toBeGreaterThanOrEqual(150);
+  }, 60_000);
+});
+
+describe("Host checks", () => {
+  it("accept the default port left out, as browsers send it", () => {
+    expect(allowedHosts(80)).toEqual(new Set(["127.0.0.1", "127.0.0.1:80", "localhost", "localhost:80", "[::1]", "[::1]:80"]));
+    expect(allowedHosts(3290).has("127.0.0.1")).toBe(false);
+  });
+});
+
 describe("configs", () => {
   const write = (body: unknown) => {
     const dir = mkdtempSync(join(tmpdir(), "comms-config-"));
@@ -221,6 +251,7 @@ describe("configs", () => {
     expect(() => loadServiceConfig(write({ mode: "local", dataDir: "/tmp/x", owner: "lee", web: { port: 1 }, convexUrl: "https://x.convex.cloud" }))).toThrow(/doesn't use "convexUrl"/);
     expect(() => loadServiceConfig(write({ mode: "local", dataDir: "/tmp/x", owner: "lee", web: { port: 1 }, adapters: ["t3"], t3: { baseUrl: "ws://127.0.0.1:1", authFile: "/x" } }))).toThrow(/environmentId/);
     expect(() => loadServiceConfig(write({ mode: "convex", connector: "/c.json", dataDir: "/tmp/x" }))).toThrow(/doesn't use "dataDir"/);
+    expect(() => loadServiceConfig(write({ mode: "local", dataDir: "/tmp/x", owner: "lee", web: { port: 0 } }))).toThrow(/1-65535/);
   });
 
   it("a local config given to the Convex connector is refused", () => {

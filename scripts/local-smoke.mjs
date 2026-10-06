@@ -13,6 +13,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { windowsEndpoint } from '../packages/windows-pipe/src/index.mjs';
 
 const exec = promisify(execFile);
 const version = process.argv[2];
@@ -21,7 +22,8 @@ const root = await mkdtemp(join(tmpdir(), 'comms-local-smoke-'));
 const release = join(root, 'release');
 await cp(resolve('dist', `agent-comms-${version}`), release, { recursive: true });
 const port = await new Promise((done) => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => done(p)); }); });
-const socket = process.platform === 'win32' ? `\\\\.\\pipe\\agent-comms-local-smoke-${process.pid}` : join(root, 'run', 'connector.sock');
+// Windows: the current user's pipe, as the service requires.
+const socket = process.platform === 'win32' ? windowsEndpoint(`local-smoke-${process.pid}`) : join(root, 'run', 'connector.sock');
 const config = join(root, 'service.json');
 await writeFile(config, JSON.stringify({ mode: 'local', environment: 'smoke', dataDir: join(root, 'data'), owner: 'lee', machine: 'smoke', socket, web: { port } }));
 const node = (script, args, env = {}) => exec(process.execPath, [join(release, script), ...args], { cwd: root, env: { ...process.env, ...env }, windowsHide: true, timeout: 30_000 });

@@ -26,13 +26,17 @@ between them. Switching mode means starting with an empty local store.
 
 ## 1. Build and install the release
 
-Until local mode is in a published release, build it from the branch or tag you were given:
+Until local mode is in a published release, build it from the branch or commit you were given,
+in a worktree of its own (the canonical checkout stays on main):
 
 ```sh
-cd ~/lim/code/agent-comms
-git fetch origin && git checkout "$COMMS_REF"
+COMMS_REF=origin/feat/local-sqlite-mode     # the branch or commit you were given
+COMMS_VERSION=0.2.0-local.1                 # a version name for this build; unique per build
+git -C ~/lim/code/agent-comms fetch origin
+git -C ~/lim/code/agent-comms worktree add --detach ~/lim/wt/agent-comms/local-build "$COMMS_REF"
+cd ~/lim/wt/agent-comms/local-build
 pnpm install --frozen-lockfile
-pnpm build:release "$COMMS_VERSION"     # prints dist/agent-comms-$COMMS_VERSION
+pnpm build:release "$COMMS_VERSION"         # prints dist/agent-comms-$COMMS_VERSION
 ```
 
 Install it as a versioned release with a `current` link. Keep config and data outside the
@@ -41,7 +45,7 @@ release so an upgrade only swaps the link:
 ```sh
 umask 077
 base="$HOME/lim/service/comms-local"
-mkdir -p "$base/releases" "$base/config" "$base/data"
+mkdir -p "$base/releases" "$base/config" "$base/data" "$base/run"
 cp -R "dist/agent-comms-$COMMS_VERSION" "$base/releases/"
 ln -sfn "releases/agent-comms-$COMMS_VERSION" "$base/current"
 node "$base/current/service.mjs" --help
@@ -62,6 +66,7 @@ Keep them together.
   "dataDir": "/Users/USER/lim/service/comms-local/data",
   "owner": "lee",
   "machine": "local",
+  "socket": "/Users/USER/lim/service/comms-local/run/connector.sock",
   "web": { "port": 3290 }
 }
 ```
@@ -72,7 +77,7 @@ Keep them together.
 | `owner` | The person who owns agents and receives alerts. Created on first start. |
 | `machine` | The name agents' homes refer to. Keep it stable: agents registered under one name aren't delivered to under another. |
 | `web.port` | The web view and the admin API, on 127.0.0.1 only. The admin commands find the service by this port. |
-| `socket` | Optional. Leave it out on a machine with no other comms connector; see [step 4](#4-choose-the-cli-socket). |
+| `socket` | This service's socket, which every client must use; see [step 4](#4-point-every-client-at-the-socket). |
 | `adapters`, `t3` | Optional. Deliver to T3 threads; see [step 5](#5-bind-the-t3-server). |
 
 A config with `convexUrl`, `secretFile` or `adminTokenFile` is refused: those belong to
@@ -107,33 +112,40 @@ changes nothing, when:
 Read the message, fix the cause, and start again. Never delete `comms.sqlite` or the credentials
 to get past a refusal: that discards every conversation and pending delivery.
 
-## 4. Choose the CLI socket
+## 4. Point every client at the socket
 
-The `comms` CLI, the Claude Code plugin and agents inside T3 all find the service through its
-socket.
+The `comms` CLI, the Claude Code plugin and agents inside T3 find the service through its socket.
+This guide uses an explicit private socket, `$base/run/connector.sock`, so local mode can't be
+confused with a shared comms connector on the same machine. Every client then needs
+`AGENT_COMMS_SOCKET` set to it: the CLI wrapper below, each Claude Code terminal (step 7) and
+the T3 server's environment (step 5). A client without it reaches the default socket, which is
+another service or nothing.
 
-- **Only comms on this machine:** leave `socket` out of the config. The service uses the
-  standard per-user path (macOS `~/.agent-comms/connector.sock`; Linux
-  `$XDG_RUNTIME_DIR/agent-comms/connector.sock`), which every client finds with no settings.
-- **A shared comms connector also runs here** (or several local services): give each service
-  its own `socket` in a private directory, and set `AGENT_COMMS_SOCKET` to it for every client:
-  the CLI wrapper, each Claude Code terminal, and the T3 server's environment. A client without
-  it reaches the default socket, which is the other service.
-
-Install a CLI wrapper that always names the socket. Call it `comms` only if it's the only comms
-on this machine:
+Install a CLI wrapper in `~/lim/bin` that always names the socket:
 
 ```sh
-cat > "$HOME/.local/bin/comms-local" <<EOF
+mkdir -p "$HOME/lim/bin"
+cat > "$HOME/lim/bin/comms-local" <<WRAPPER
 #!/bin/sh
 AGENT_COMMS_SOCKET="$base/run/connector.sock" exec node "$base/current/comms.mjs" "\$@"
-EOF
-chmod 700 "$HOME/.local/bin/comms-local"
-comms-local status
+WRAPPER
+chmod 700 "$HOME/lim/bin/comms-local"
+"$HOME/lim/bin/comms-local" status
 ```
 
-(Drop the `AGENT_COMMS_SOCKET=...` part when you use the default socket.) `comms status` answers
-`connector on <machine>`; agents appear once registered.
+`status` answers `connector on local`; agents appear once registered. Agents call the CLI as
+`comms`, so the `PATH` you give T3 and terminals should reach this wrapper under that name
+(for example a directory holding a `comms` link to it) and no other `comms`.
+
+**Simpler, on a machine with no other comms:** leave `socket` out of the config. The service then
+uses the standard per-user socket (macOS `~/.agent-comms/connector.sock`; Linux
+`$XDG_RUNTIME_DIR/agent-comms/connector.sock`) and clients need no `AGENT_COMMS_SOCKET`.
+
+**Windows:** the socket is a named pipe that belongs to the current user,
+`\\.\pipe\agent-comms-<user SID>-<suffix>` (the SID from PowerShell's
+`[Security.Principal.WindowsIdentity]::GetCurrent().User.Value`; the suffix lowercase letters,
+digits and dashes). The service refuses any other pipe. Leaving `socket` out uses the user's
+default pipe.
 
 ## 5. Bind the T3 server
 
@@ -169,9 +181,10 @@ The service delivers to T3 threads through the T3 server's API. Bind it to exact
 the token, so it can't bind to the wrong T3. Startup logs
 `T3 adapter: http://127.0.0.1:5230 (orchestration protocol 2)`.
 
-Agents in T3 threads use `comms` from their shell, so the T3 server's environment must have
-`comms` on `PATH` and, with an explicit socket, `AGENT_COMMS_SOCKET` set. A T3 server started
-before you set these needs a restart to pass them to new sessions.
+Agents in T3 threads use `comms` from their shell, so start the T3 server with
+`AGENT_COMMS_SOCKET="$base/run/connector.sock"` in its environment and the wrapper reachable as
+`comms` on its `PATH`. A T3 server started without these needs a restart to pass them to new
+sessions.
 
 ## 6. Register agents
 
@@ -181,7 +194,7 @@ With the service running, register each agent where it lives:
 service="node $base/current/service.mjs"
 $service register --config "$base/config/service.json" kit --harness t3 --locator "$THREAD_ID" --description "Comms manager"
 $service register --config "$base/config/service.json" scout --harness claude-code --locator scout
-comms-local status
+"$HOME/lim/bin/comms-local" status
 ```
 
 - T3 agents: `--locator` is the thread ID.
@@ -195,7 +208,7 @@ comms-local status
 Check: send a message to a T3 agent and wait for its answer.
 
 ```sh
-comms-local send --as scout @kit "Reply with the word READY." --wait 3m
+"$HOME/lim/bin/comms-local" send --as scout @kit "Reply with the word READY." --wait 3m
 ```
 
 `@kit answered` followed by the answer means delivery, the turn and collection all work.
@@ -203,8 +216,8 @@ comms-local send --as scout @kit "Reply with the word READY." --wait 3m
 ## 7. Set up a Claude Code terminal
 
 The plugin is in the release at `claude-plugin/`. It needs three things in the terminal's
-environment: `AGENT_COMMS_PARTICIPANT` (the registered name), function hooks turned on, and,
-with an explicit socket, `AGENT_COMMS_SOCKET`.
+environment: `AGENT_COMMS_PARTICIPANT` (the registered name), function hooks turned on, and
+`AGENT_COMMS_SOCKET` (this service's socket).
 
 Give each terminal agent its own Claude Code home so its settings and plugin don't touch your
 own `~/.claude`:
@@ -223,6 +236,7 @@ the folder it starts in and its parents), with `comms` on `PATH`:
 
 ```sh
 mkdir -p "$HOME/comms-terminals/$name" && cd "$HOME/comms-terminals/$name"
+export AGENT_COMMS_SOCKET="$base/run/connector.sock"
 CLAUDE_CONFIG_DIR="$home_dir" AGENT_COMMS_PARTICIPANT="$name" claude
 ```
 
@@ -300,8 +314,9 @@ a fixture, stop its service and T3 server and delete the fixture directory.
   Convex's concurrency); Convex's per-transaction read/write limits aren't enforced.
 - **Claude Code terminals:** macOS and Linux only. The plugin's function hooks are disabled on
   Windows.
-- **Windows:** the service, pipe transport and credential protection are exercised by CI on
-  Windows x64, but local mode hasn't been used on a Windows machine. There, `socket` must be a
-  named pipe (`\\.\pipe\NAME`) and `dataDir` should be under the user's profile.
+- **Windows:** untested. The pull request's Windows x64 CI runs the service tests and the
+  packaged smoke (pipe transport, private data directory, credentials); until those pass, and
+  until it's used on a Windows machine, don't rely on local mode there. The data directory must
+  be new, empty or already private to the user; the service makes a new or empty one private.
 - **`node:sqlite`** is still marked as under development in Node 24; the release is tested with
   24.18.0.

@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { type ConnectorConfig, defaultSocket, expand } from "@agent-comms/connector/config";
 import { NAME_PATTERN } from "@agent-comms/protocol";
+import { windowsEndpoint } from "../../windows-pipe/src/index.mjs";
 
 export interface LocalConfig {
   mode: "local";
@@ -37,10 +38,16 @@ const LOCAL_KEYS = new Set(["mode", "environment", "dataDir", "owner", "machine"
 // Fields of a Convex connector or web config: in a local config they mean it's the wrong file.
 const CONVEX_ONLY = ["convexUrl", "secretFile", "adminTokenFile"];
 
-/** Windows: a named pipe, kept as written (as the connector's own config does). Elsewhere: a path. */
+/**
+ * Windows: the current user's named pipe, kept as written (as the connector's own config
+ * does): `\\.\pipe\agent-comms-<user SID>-<suffix>`. Elsewhere: a socket path.
+ */
 function explicitSocket(socket: string, where: string): string {
   if (process.platform !== "win32") return expand(socket);
-  if (!/^\\\\[.?]\\pipe\\[^\\]+$/.test(socket)) throw new Error(`${where}: on Windows "socket" must be a named pipe (\\\\.\\pipe\\<name>)`);
+  const base = windowsEndpoint("connector").slice(0, -"connector".length);
+  if (!socket.startsWith(base) || !/^[a-z0-9-]{1,64}$/.test(socket.slice(base.length))) {
+    throw new Error(`${where}: on Windows "socket" must be this user's pipe, ${base}<suffix> (suffix: lowercase letters, digits, dashes)`);
+  }
   return socket;
 }
 

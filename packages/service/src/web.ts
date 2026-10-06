@@ -15,7 +15,6 @@ const MAX_CALL_BODY = 256 * 1024;
 const MAX_WATCH_BODY = 64 * 1024;
 const MAX_QUERIES = 64;
 const MAX_STREAMS = 16;
-const MAX_BUFFERED = 4 * 1024 * 1024;
 const HEARTBEAT_MS = 20_000;
 
 const TYPES: Record<string, string> = {
@@ -128,23 +127,36 @@ export function localWebServer(options: WebOptions): Server & { streams(): numbe
       for (const stop of stops) stop();
       res.end();
     };
-    const send = (line: unknown) => {
-      if (closed) return;
-      res.write(JSON.stringify(line) + "\n");
-      // A client that stops reading is dropped; it reconnects and starts from current values.
-      if (res.writableLength > MAX_BUFFERED) {
-        close();
-        res.destroy();
-      }
+    // A client that falls behind gets each query's latest value when it catches up: while the
+    // response is backed up, at most one frame per query waits (a newer value replaces it).
+    // A single frame may be large (an inbox page of long messages); it's never cut or dropped.
+    const waiting = new Map<string, string>();
+    let blocked = false;
+    const write = (frame: string) => {
+      if (!res.write(frame)) blocked = true;
     };
-    const heartbeat = setInterval(() => send({}), HEARTBEAT_MS);
+    const send = (key: string, line: unknown) => {
+      if (closed) return;
+      const frame = JSON.stringify(line) + "\n";
+      if (blocked) waiting.set(key, frame);
+      else write(frame);
+    };
+    res.on("drain", () => {
+      blocked = false;
+      for (const [key, frame] of waiting) {
+        waiting.delete(key);
+        write(frame);
+        if (blocked) break;
+      }
+    });
+    const heartbeat = setInterval(() => blocked || send("", {}), HEARTBEAT_MS);
     req.on("close", close);
     res.on("close", close);
     for (const q of queries) {
       try {
-        stops.push(options.backend.subscribe(q.info.name, q.args, (value: unknown) => send({ id: q.id, value }), (error: Error) => send({ id: q.id, error: describe(error) })));
+        stops.push(options.backend.subscribe(q.info.name, q.args, (value: unknown) => send(q.id, { id: q.id, value }), (error: Error) => send(q.id, { id: q.id, error: describe(error) })));
       } catch (error) {
-        send({ id: q.id, error: describe(error) });
+        send(q.id, { id: q.id, error: describe(error) });
       }
     }
   }
@@ -155,8 +167,13 @@ export function localWebServer(options: WebOptions): Server & { streams(): numbe
 /** Only this listener's own loopback names: a page from elsewhere (DNS rebinding included) can't reach the API. */
 function checkHost(req: IncomingMessage, server: Server): void {
   const port = (server.address() as { port: number } | null)?.port;
-  const allowed = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
+  const allowed = allowedHosts(port ?? -1);
   if (!allowed.has(req.headers.host ?? "")) throw new HttpError(403, "unexpected Host");
+}
+
+/** This listener's loopback Host values. Browsers leave the default port out of Host. */
+export function allowedHosts(port: number): Set<string> {
+  return new Set(["127.0.0.1", "localhost", "[::1]"].flatMap((n) => (port === 80 ? [n, `${n}:80`] : [`${n}:${port}`])));
 }
 
 function checkOrigin(req: IncomingMessage): void {

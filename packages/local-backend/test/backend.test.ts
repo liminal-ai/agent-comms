@@ -65,7 +65,25 @@ const mod = {
   usesSearch: query({ args: {}, handler: async (ctx) => (ctx.db.query("items") as unknown as { withSearchIndex(): void }).withSearchIndex() }),
   usesArith: query({ args: {}, handler: async (ctx) => ctx.db.query("items").filter((q) => (q as unknown as { add(a: number, b: number): boolean }).add(1, 2)).collect() }),
   secret: mutation({ args: { token: v.string() }, handler: async () => null }),
+  held: mutation({ args: { fail: v.boolean() }, handler: async (ctx, a) => {
+    await ctx.db.insert("logs", { text: "held" });
+    await gate.wait;
+    if (a.fail) throw new Error("held mutation failed");
+  } }),
+  tick: internalMutation({ args: { text: v.string() }, handler: async (ctx, a) => {
+    cronRuns.push(a.text);
+    if (a.text === "flaky" && cronRuns.filter((t) => t === "flaky").length === 1) throw new Error("first run fails");
+    await ctx.db.insert("logs", { text: a.text });
+  } }),
 };
+
+let gate = { wait: Promise.resolve(), open: () => {} };
+const holdGate = () => {
+  let open!: () => void;
+  const wait = new Promise<void>((r) => (open = r));
+  gate = { wait, open };
+};
+const cronRuns: string[] = [];
 
 function fresh(path = ":memory:") {
   return new LocalBackend(new Store(path, tablesOf(schema), { create: () => ({}) }), { m: mod });
@@ -213,6 +231,12 @@ describe("the store file", () => {
     await a.close();
     expect(() => new Store(path, tablesOf(schema), {})).toThrow(/mode is "convex"/);
 
+    const pf = join(dir(), "comms.sqlite");
+    const f = fresh(pf);
+    f.store.db.prepare("UPDATE meta SET value = '2' WHERE key = 'format'").run();
+    await f.close();
+    expect(() => new Store(pf, tablesOf(schema), {})).toThrow(/format is "2"; this build reads format 1/);
+
     const p2 = join(dir(), "comms.sqlite");
     const b = fresh(p2);
     await call(b, "mutation", "add", { group: "g", rank: 1 });
@@ -238,6 +262,66 @@ describe("the store file", () => {
     });
     expect(await b.call("query", "q:byRank", {})).toEqual([1, 2]);
     await b.close();
+  });
+});
+
+describe("transactions while a mutation is held open", () => {
+  for (const fail of [false, true]) {
+    it(`queries, writes and watchers wait for it, and see only its ${fail ? "rollback" : "commit"}`, async () => {
+      const b = fresh();
+      const seen: unknown[] = [];
+      b.subscribe("m:count", {}, (v) => seen.push(v), () => {});
+      await until(() => seen.length === 1);
+      holdGate();
+      const held = call(b, "mutation", "held", { fail }).catch((e: Error) => e.message);
+      let queried: unknown;
+      const query = call(b, "query", "count").then((v) => (queried = v));
+      const write = b.call("mutation", "m:log", { text: "second" }, { allowInternal: true });
+      await new Promise((r) => setTimeout(r, 50));
+      // Nothing ran past the open mutation, and its uncommitted write reached nobody.
+      expect(queried).toBeUndefined();
+      expect(seen).toEqual([0]);
+      gate.open();
+      expect(await held).toBe(fail ? "held mutation failed" : null);
+      await query;
+      await write;
+      expect(queried).toBe(fail ? 0 : 1);
+      await until(() => seen.at(-1) === (fail ? 1 : 2));
+      expect(seen).not.toContain(fail ? 2 : 3);
+      const texts = await b.run(async (ctx: any) => (await ctx.db.query("logs").collect()).map((d: { text: string }) => d.text));
+      expect(texts).toEqual(fail ? ["second"] : ["held", "second"]);
+    });
+  }
+});
+
+describe("crons", () => {
+  it("run at startup, then on their interval; a failed run is logged and the job and others go on", async () => {
+    cronRuns.length = 0;
+    const logs: string[] = [];
+    const b = new LocalBackend(new Store(":memory:", tablesOf(schema), { create: () => ({}) }), { m: mod }, { log: (l) => logs.push(l) });
+    const stop = b.startCrons({
+      crons: {
+        steady: { name: "m:tick", args: [{ text: "steady" }], schedule: { type: "interval", seconds: 0.1 } },
+        flaky: { name: "m:tick", args: [{ text: "flaky" }], schedule: { type: "interval", seconds: 0.1 } },
+      },
+    });
+    // Startup: both ran at once, before any interval elapsed.
+    await until(() => cronRuns.includes("steady") && cronRuns.includes("flaky"), 50);
+    await until(() => cronRuns.filter((t) => t === "flaky").length >= 3 && cronRuns.filter((t) => t === "steady").length >= 3);
+    stop();
+    expect(logs.some((l) => /cron flaky: failed: Error: first run fails/.test(l))).toBe(true);
+    const texts = await b.run(async (ctx: any) => (await ctx.db.query("logs").collect()).map((d: { text: string }) => d.text));
+    // The failed run's write was rolled back; later runs of the same job committed.
+    expect(texts.filter((t: string) => t === "flaky").length).toBe(cronRuns.filter((t) => t === "flaky").length - 1);
+    const runs = cronRuns.length;
+    await new Promise((r) => setTimeout(r, 250));
+    expect(cronRuns.length).toBe(runs);
+    await b.close();
+  });
+
+  it("refuse a schedule they can't run", () => {
+    const b = fresh();
+    expect(() => b.startCrons({ crons: { c: { name: "m:tick", args: [{}], schedule: { type: "cron", cron: "* * * * *" } } } })).toThrow(/doesn't support cron c: cron schedules/);
   });
 });
 
