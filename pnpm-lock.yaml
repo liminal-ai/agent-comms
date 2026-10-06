@@ -142,6 +142,9 @@ importers:
       '@agent-comms/comms-cli':
         specifier: workspace:*
         version: link:../comms-cli
+      '@agent-comms/grokbot':
+        specifier: workspace:*
+        version: link:../grokbot
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4

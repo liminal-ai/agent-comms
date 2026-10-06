@@ -66,6 +66,9 @@ const RESULT_MAX_AGE_MS = 24 * 60 * 60_000;
 /** Registration refused (not promoted, or homed elsewhere): Lee has to act, so retry slowly. */
 const REFUSED_RETRY_MS = 60_000;
 
+/** How often an answer the connector acknowledged is checked against the server until it's taken. */
+const CONFIRM_INTERVAL_MS = 2_000;
+
 export class Bridge {
   readonly store: Store;
   readonly stats = { registrations: 0, polls: 0, deliveries: 0, checks: 0, reports: 0 };
@@ -600,10 +603,9 @@ export class Bridge {
       if (answer.found === "yes") {
         await this.update(answer.deliveryId, (it) => {
           it.deliveredReported = true;
-          if (answer.turn === "completed" && it.outcome) {
-            it.outcomeReported = true;
-            if (it.state === "answered") it.state = "replied";
-          }
+          // Like an outcome report, this is the connector's acknowledgement, not the server's:
+          // an answered item stays `answered` until the server shows it was taken.
+          if (answer.turn === "completed" && it.outcome) it.outcomeReported = true;
           addEvent(it, this.now(), "check-answered", `${answer.turn}; delivery ${r.body.delivery.state}`);
         });
       }
@@ -635,9 +637,13 @@ export class Bridge {
         item = await this.update(id, (it) => {
           it.outcomeReported = true;
           if (r.kind === "ok") {
-            if (outcome.outcome === "replied" && it.state === "answered") {
-              it.state = "replied";
-              if (r.body.answerMessageId) it.answerMessageId = r.body.answerMessageId;
+            // A connector acknowledges an outcome locally, with no answer message id, even for a
+            // delivery the server no longer expects a turn for (made uncertain while Grok Bot was
+            // away). That's settled only once the server shows the answer was taken; see below.
+            if (r.body.answerMessageId) {
+              // An answer message id means the server itself took it (a server-side endpoint).
+              it.answerMessageId = r.body.answerMessageId;
+              if (outcome.outcome === "replied" && it.state === "answered") it.state = "replied";
             }
             addEvent(it, this.now(), "outcome-reported", `${outcome.outcome}${r.body.duplicate ? " (duplicate)" : ""}`);
           } else {
@@ -655,6 +661,34 @@ export class Bridge {
             ? `${id}: reported ${outcome.outcome}${r.body.answerMessageId ? ` (answer ${r.body.answerMessageId})` : ""}`
             : `${id}: outcome ${outcome.outcome} refused (${r.code}: ${r.message})${item?.state === "late-reply-queued" ? "; posting the answer with reply" : ""}`,
         );
+        if (!item || isSettled(item)) continue;
+      }
+
+      if (item.state === "answered" && item.outcomeReported && item.outcome?.outcome === "replied") {
+        if (this.now() - (item.confirmCheckedAt ?? 0) < CONFIRM_INTERVAL_MS) continue;
+        const answerText = item.outcome.answer;
+        const r = await this.report("message-status", { as: this.participant, messageId: item.messageId });
+        if (r.kind === "retry") return retry(r);
+        const mine = r.kind === "ok" ? r.body.recipients.find((x) => x.delivery?.id === id) : undefined;
+        const state = mine?.delivery?.state;
+        item = await this.update(id, (it) => {
+          if (it.state !== "answered") return false;
+          it.confirmCheckedAt = this.now();
+          if (r.kind === "drop") {
+            // Can't tell; ask again later rather than risk posting the answer twice.
+            it.lastError = `answer confirmation refused: ${r.code}: ${r.message}`;
+          } else if (state === "replied") {
+            it.state = "replied";
+            if (mine?.answer) it.answerMessageId = mine.answer.id;
+            addEvent(it, this.now(), "answer-confirmed", mine?.answer ? `answer ${mine.answer.id}` : "replied");
+          } else if (state === undefined || state === "uncertain" || state === "ambiguous" || state === "failed") {
+            // The server won't collect it from a turn: post it as a reply, which also completes it.
+            it.state = "late-reply-queued";
+            it.lateReply = { text: answerText, key: replyKeyFor(`fallback-${id}`) };
+            addEvent(it, this.now(), "answer-not-taken", `delivery ${state ?? "missing"}; posting with reply`);
+          }
+          // claimed/delivered: still in flight (collected now, or by the connector's recovery).
+        });
         if (!item || isSettled(item)) continue;
       }
 

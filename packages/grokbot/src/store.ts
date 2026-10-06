@@ -72,6 +72,8 @@ export interface InboxItem {
   /** The outcome being (or already) reported. */
   outcome?: OutcomeBody;
   outcomeReported?: boolean;
+  /** When the server was last asked whether a reported answer was taken (ms). */
+  confirmCheckedAt?: number;
   answer?: string;
   answeredAt?: string;
   answerMessageId?: string;

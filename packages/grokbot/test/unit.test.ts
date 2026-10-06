@@ -2,7 +2,7 @@
 // webhook, and the bridge's reporting logic against a scripted connector.
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join } from "node:path";
@@ -213,6 +213,35 @@ describe("lock", () => {
     await release2();
     await writeFile(path, `${process.ppid}\n`);
     await assert.rejects(acquireLock(path), LockHeld);
+  });
+});
+
+describe("lock, overlapping starts", () => {
+  it("lets exactly one of several simultaneous starts hold it", async () => {
+    const h = await home();
+    const path = join(h, "daemon.lock");
+    const lockModule = new URL("../src/lock.ts", import.meta.url).href;
+    // Each start takes the lock, holds it a moment, and says whether it got it.
+    const script = `const { acquireLock } = await import(${JSON.stringify(lockModule)});
+      try { const release = await acquireLock(${JSON.stringify(path)}); console.log("held"); await new Promise((r) => setTimeout(r, 700)); await release(); }
+      catch (e) { console.log("refused " + e.message); }`;
+    const runs = await Promise.all(
+      Array.from({ length: 6 }, () => new Promise<string>((resolve) => {
+        const child = spawn(process.execPath, ["--input-type=module", "-e", script], { stdio: ["ignore", "pipe", "inherit"] });
+        let out = "";
+        child.stdout.on("data", (d) => (out += d));
+        child.on("exit", () => resolve(out.trim()));
+      })),
+    );
+    assert.equal(runs.filter((r) => r === "held").length, 1, runs.join("\n"));
+  });
+
+  it("doesn't take over a lock that's still being created by an older version (empty and fresh)", async () => {
+    const h = await home();
+    const path = join(h, "daemon.lock");
+    await writeFile(path, "");
+    await assert.rejects(acquireLock(path), /being created by another start/);
+    assert.equal(await readFile(path, "utf8"), "");
   });
 });
 
