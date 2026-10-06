@@ -66,11 +66,12 @@ same parent tools, but MCP by itself is not the incoming wake mechanism.
 
 ## Commands
 
-Run from the repository after `pnpm install`. This first version runs from source;
-no hosted service, credentials, participant or integration is created by it.
+Run it from a release as `oaidot.mjs` (beside `connector.mjs`), or from the repository
+after `pnpm install` as `packages/oaidot/src/main.ts`. It creates no hosted service,
+credentials, participant or integration.
 
 ```sh
-node packages/oaidot/src/main.ts listen --participant dot --locator actual-parent-binding --config connector.json
+node oaidot.mjs listen --participant dot --locator actual-parent-binding --config connector.json
 ```
 
 The command waits for an event, writes one JSON offer, then exits. A native worker
