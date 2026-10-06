@@ -8,7 +8,11 @@
     "comms-connector": "./src/main.ts"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./config": "./src/config.ts",
+    "./start": "./src/start.ts",
+    "./convex": "./src/convex.ts",
+    "./server-api": "./src/server-api.ts"
   },
   "scripts": {
     "start": "node src/main.ts",

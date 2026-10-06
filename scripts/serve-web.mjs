@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { readFile, realpath } from 'node:fs/promises';
-import { resolve, extname, sep } from 'node:path';
+import { basename, resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function webServer(config, root) {
@@ -34,7 +34,8 @@ export function webServer(config, root) {
 
 // Resolve both sides with the same API: Windows module URLs can preserve a
 // different drive/path spelling than the filesystem's canonical realpath.
-if (process.argv[1] && await realpath(fileURLToPath(import.meta.url)) === await realpath(process.argv[1])) {
+// Bundled into service.mjs, this module's URL is the service's: only run as serve-web.mjs itself.
+if (process.argv[1] && basename(fileURLToPath(import.meta.url)) === 'serve-web.mjs' && await realpath(fileURLToPath(import.meta.url)) === await realpath(process.argv[1])) {
   const config = JSON.parse(await readFile(process.argv[2], 'utf8'));
   if (!config.environment || !config.convexUrl || !Number.isInteger(config.port)) throw new Error('web config requires environment, convexUrl and port');
   if (!['http:', 'https:'].includes(new URL(config.convexUrl).protocol)) throw new Error('Invalid public Convex URL');

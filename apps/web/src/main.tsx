@@ -1,7 +1,7 @@
-import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
+import { BackendProvider, startLocal } from "./lib/backend.tsx";
 import "./styles.css";
 
 async function start() {
@@ -11,15 +11,16 @@ async function start() {
     window.commsConfig = await response.json();
     document.title = `Comms — ${window.commsConfig!.environment}`;
   }
-  const url = window.commsConfig?.convexUrl ?? import.meta.env.VITE_CONVEX_URL ?? (import.meta.env.DEV ? "http://127.0.0.1:3240" : undefined);
-  if (!url) throw new Error("This deployment has no Convex URL");
-  const convex = new ConvexReactClient(url);
+  // Local mode: the local comms service serves this page and its data; there's no Convex URL.
+  if (window.commsConfig?.mode === "local") startLocal();
+  const url = window.commsConfig?.mode === "local" ? undefined : (window.commsConfig?.convexUrl ?? import.meta.env.VITE_CONVEX_URL ?? (import.meta.env.DEV ? "http://127.0.0.1:3240" : undefined));
+  if (window.commsConfig?.mode !== "local" && !url) throw new Error("This deployment has no Convex URL");
 
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <ConvexProvider client={convex}>
+      <BackendProvider {...(url ? { convexUrl: url } : {})}>
         <App />
-      </ConvexProvider>
+      </BackendProvider>
     </StrictMode>,
   );
 }

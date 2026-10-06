@@ -11,14 +11,18 @@ await mkdir(dest, { recursive: false });
 await build({
   entryPoints: {
     connector: 'packages/connector/src/main.ts', comms: 'packages/comms-cli/src/main.ts',
-    upgrade: 'scripts/upgrade.ts', setup: 'scripts/dev-setup.ts',
+    upgrade: 'scripts/upgrade.ts', setup: 'scripts/dev-setup.ts', service: 'packages/service/src/main.ts',
   }, outdir: dest, outExtension: { '.js': '.mjs' }, bundle: true, platform: 'node', format: 'esm', target: 'node24',
   banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
 });
 // Runtime companion files resolve beside the bundled entrypoint via import.meta.url.
-for (const name of ['bridge.ps1','PrivatePipe.cs','Bridge.cs','validate-secret.ps1','SecretFile.cs']) {
+for (const name of ['bridge.ps1','PrivatePipe.cs','Bridge.cs','validate-secret.ps1','SecretFile.cs','protect-secret.ps1']) {
   await cp(`packages/windows-pipe/src/${name}`, `${dest}/${name}`);
 }
+// The standalone Claude Code plugin (marketplace + plugin manifests and its hooks), loadable from the
+// release with --plugin-dir or `claude plugin marketplace add`; no source checkout needed.
+await cp('packages/claude-code-mod/.claude-plugin', `${dest}/claude-plugin/.claude-plugin`, { recursive: true });
+await cp('packages/claude-code-mod/hooks', `${dest}/claude-plugin/hooks`, { recursive: true });
 execFileSync('pnpm', ['--filter', '@agent-comms/web', 'build'], { stdio: 'inherit', shell: process.platform === 'win32' });
 await cp('apps/web/dist', `${dest}/web`, { recursive: true });
 for (const name of ['serve-web.mjs', 'run-convex.mjs']) await cp(`scripts/${name}`, `${dest}/${name}`);
