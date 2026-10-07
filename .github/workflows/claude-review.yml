@@ -37,11 +37,11 @@ jobs:
       - name: Check required secret
         id: check_secrets
         env:
-          ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          if [ -z "${ANTHROPIC}" ]; then
+          if [ -z "${CLAUDE_OAUTH}" ]; then
             echo "has_secret=false" >> "$GITHUB_OUTPUT"
-            echo "Missing ANTHROPIC_API_KEY; skipping review."
+            echo "Missing CLAUDE_CODE_OAUTH_TOKEN; skipping review."
           else
             echo "has_secret=true" >> "$GITHUB_OUTPUT"
           fi
@@ -58,7 +58,8 @@ jobs:
       - if: steps.check_secrets.outputs.has_secret == 'true'
         uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          classify_inline_comments: 'false'
           use_sticky_comment: true
           prompt: |
             REPO: ${{ github.repository }}  PR: #${{ github.event.pull_request.number }}
