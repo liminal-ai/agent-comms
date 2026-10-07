@@ -9,16 +9,15 @@ import type { FunctionInfo, WebBackend } from "./web.ts";
 
 type Kind = "query" | "mutation";
 
-/** Every public function of the web modules, with its kind. `web-functions.test.ts` checks it against `convex/*.ts`. */
+/** Exactly the functions the page calls (`apps/web/src`), checked by `web-proxy.test.ts`. Nothing else is reachable through the proxy: not `connector:*`, not `directory:registerMachine` or `directory:upgrade`. */
 export const WEB_FUNCTIONS: Record<string, Kind> = {
-  "alerts:list": "query", "alerts:config": "query", "alerts:setConfig": "mutation",
-  "conversations:createGroup": "mutation", "conversations:openDm": "mutation", "conversations:addMember": "mutation",
-  "conversations:removeMember": "mutation", "conversations:postAs": "mutation", "conversations:list": "query", "conversations:view": "query",
-  "directory:registerMachine": "mutation", "directory:promote": "mutation", "directory:rebind": "mutation", "directory:setState": "mutation",
-  "directory:list": "query", "directory:upgrade": "mutation", "directory:markAlertHistory": "mutation",
-  "inbox:list": "query", "inbox:unreadCount": "query", "inbox:markRead": "mutation",
+  "alerts:config": "query", "alerts:list": "query", "alerts:setConfig": "mutation",
+  "conversations:addMember": "mutation", "conversations:createGroup": "mutation", "conversations:list": "query",
+  "conversations:postAs": "mutation", "conversations:removeMember": "mutation", "conversations:view": "query",
+  "directory:list": "query", "directory:promote": "mutation", "directory:setState": "mutation",
+  "inbox:list": "query", "inbox:markRead": "mutation",
   "registry:list": "query", "registry:setProfile": "mutation",
-  "reminders:list": "query", "reminders:get": "query", "reminders:create": "mutation", "reminders:update": "mutation",
+  "reminders:create": "mutation", "reminders:get": "query", "reminders:list": "query", "reminders:update": "mutation",
 };
 
 export interface ConvexLike {
@@ -46,6 +45,21 @@ function quietLogger(log: (line: string) => void) {
   return { log: () => {}, logVerbose: () => {}, warn: quiet("warn"), error: quiet("error") };
 }
 
+/**
+ * What a caller may learn from a failed call. A ConvexError's `data` is our own server code's
+ * `{code, message}` and is passed through. Any other error (argument validation echoes the whole
+ * call, injected token included) is reduced to its kind.
+ */
+export function scrubbed(error: unknown): Error & { data?: unknown } {
+  const data = (error as { data?: unknown })?.data;
+  if (data !== undefined) return error as Error & { data?: unknown };
+  const message = error instanceof Error ? error.message : String(error);
+  // Our own requireAdmin text, which never carries arguments; the page and the re-subscribe logic key on it.
+  if (/^admin token rejected$/.test(message) || /Error: admin token rejected$/.test(message.split("\n")[0] ?? "")) return new Error("admin token rejected");
+  const kind = /ArgumentValidationError|Validator/.test(message) ? "the server refused the call's arguments" : /\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|fetch failed|WebSocket)\b/i.exec(message)?.[1] ?? "details withheld";
+  return new Error(`request failed (${kind})`);
+}
+
 export function convexWebBackend(options: ConvexBackendOptions): WebBackend & { close(): Promise<void> } {
   const log = options.log ?? (() => {});
   const client: ConvexLike = options.client ?? new ConvexClient(options.convexUrl, { unsavedChangesWarning: false, logger: quietLogger(log) });
@@ -68,7 +82,11 @@ export function convexWebBackend(options: ConvexBackendOptions): WebBackend & { 
     async call(kind: Kind, name: string, args: unknown): Promise<unknown> {
       if (WEB_FUNCTIONS[name] !== kind) throw new Error(`Could not find public function for '${name}'`);
       const full = await withToken(args);
-      return kind === "query" ? client.query(ref(name) as FunctionReference<"query">, full) : client.mutation(ref(name) as FunctionReference<"mutation">, full);
+      try {
+        return await (kind === "query" ? client.query(ref(name) as FunctionReference<"query">, full) : client.mutation(ref(name) as FunctionReference<"mutation">, full));
+      } catch (error) {
+        throw scrubbed(error);
+      }
     },
     subscribe(name: string, args: unknown, onValue: (value: unknown) => void, onError: (error: Error) => void): () => void {
       if (WEB_FUNCTIONS[name] !== "query") throw new Error(`Could not find public function for '${name}'`);
@@ -86,9 +104,9 @@ export function convexWebBackend(options: ConvexBackendOptions): WebBackend & { 
               void open(true);
               return;
             }
-            onError(error);
+            onError(scrubbed(error));
           });
-        }, onError);
+        }, (error) => onError(scrubbed(error)));
       void open(false);
       return () => {
         stopped = true;

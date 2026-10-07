@@ -1,9 +1,9 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { type ConvexLike, convexWebBackend, WEB_FUNCTIONS } from "../src/convex-backend.ts";
+import { type ConvexLike, convexWebBackend, scrubbed, WEB_FUNCTIONS } from "../src/convex-backend.ts";
 import { localWebServer, WEB_MODULES } from "../src/web.ts";
 
 const servers: ReturnType<typeof localWebServer>[] = [];
@@ -94,13 +94,59 @@ describe("the Convex proxy backend", () => {
     for (const name of Object.keys(WEB_FUNCTIONS)) expect(WEB_MODULES.has(name.split(":")[0]!)).toBe(true);
   });
 
-  it("matches the public functions of the web modules in convex/", () => {
-    const expected: Record<string, string> = {};
+  it("is exactly what the page calls, and every entry is a public function of a web module", () => {
+    const kinds: Record<string, string> = {};
     for (const module of WEB_MODULES) {
       const source = readFileSync(new URL(`../../../convex/${module}.ts`, import.meta.url), "utf8");
-      for (const m of source.matchAll(/export const (\w+) = (query|mutation)\(/g)) expected[`${module}:${m[1]}`] = m[2]!;
+      for (const m of source.matchAll(/export const (\w+) = (query|mutation)\(/g)) kinds[`${module}:${m[1]}`] = m[2]!;
     }
-    expect(WEB_FUNCTIONS).toEqual(expected);
+    const used = new Set<string>();
+    const dir = new URL("../../../apps/web/src/", import.meta.url);
+    const walk = (u: URL) => {
+      for (const entry of readdirSync(u, { withFileTypes: true })) {
+        if (entry.isDirectory()) walk(new URL(`${entry.name}/`, u));
+        else if (/\.tsx?$/.test(entry.name)) for (const m of readFileSync(new URL(entry.name, u), "utf8").matchAll(/\bapi\.(\w+)\.(\w+)/g)) used.add(`${m[1]}:${m[2]}`);
+      }
+    };
+    walk(dir);
+    expect(Object.keys(WEB_FUNCTIONS).sort()).toEqual([...used].sort());
+    for (const [name, kind] of Object.entries(WEB_FUNCTIONS)) expect(kinds[name], name).toBe(kind);
+    for (const name of ["directory:registerMachine", "directory:upgrade", "directory:rebind", "connector:work"]) expect(WEB_FUNCTIONS[name]).toBeUndefined();
+  });
+
+  it("never echoes a call's arguments in an error", async () => {
+    const token = "super-secret-admin-token";
+    const { client } = fakeClient();
+    client.mutation = async (_ref, args) => {
+      throw new Error(`ArgumentValidationError: Object contains extra field \`bogus\` that is not in the validator.\n\nObject: ${JSON.stringify(args)}`);
+    };
+    const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile(token), client });
+    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", log: () => {} }));
+    const r = await post(port, "/api/call", { kind: "mutation", name: "inbox:markRead", args: { bogus: 1 } });
+    const text = await r.text();
+    expect(r.status).toBe(400);
+    expect(text).not.toContain(token);
+    expect(JSON.parse(text)).toEqual({ error: { message: "request failed (the server refused the call's arguments)" } });
+    // Our own server errors keep their {code, message} data.
+    const own = Object.assign(new Error("ConvexError"), { data: { code: "conflict", message: "already a member" } });
+    expect(scrubbed(own).data).toEqual({ code: "conflict", message: "already a member" });
+    expect(scrubbed(new Error(`fetch failed: ${token}`)).message).toBe("request failed (fetch failed)");
+  });
+
+  it("with publicHosts, serves only those Host values", async () => {
+    const { client } = fakeClient();
+    const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("t"), client });
+    const publicHosts = ["lim-builder.tailb30114.ts.net:8461"];
+    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", publicHosts, log: () => {} }));
+    const dev = await listen(localWebServer({ backend, environment: "dev", mode: "proxy", publicHosts, devAllowLoopback: true, log: () => {} }));
+    const withHost = (p: number, host: string) =>
+      new Promise<number>((resolve, reject) => request({ host: "127.0.0.1", port: p, path: "/runtime-config.json", headers: { host } }, (res) => resolve(res.statusCode!)).on("error", reject).end());
+    expect(await withHost(port, "lim-builder.tailb30114.ts.net:8461")).toBe(200);
+    expect(await withHost(port, "LIM-BUILDER.tailb30114.ts.net:8461")).toBe(200);
+    expect(await withHost(port, "attacker.example:8461")).toBe(403);
+    expect(await withHost(port, `127.0.0.1:${port}`)).toBe(403); // loopback name refused in prod
+    expect(await withHost(dev, `127.0.0.1:${dev}`)).toBe(200); // and allowed in development
+    expect(await withHost(dev, "attacker.example")).toBe(403);
   });
 });
 

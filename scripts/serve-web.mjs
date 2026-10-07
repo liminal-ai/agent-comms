@@ -16,11 +16,13 @@ export function webListener(config, root, log = (line) => console.log(line)) {
   if (!config.adminTokenFile) return webServer(config, root);
   if (config.allowedClients !== undefined && (!Array.isArray(config.allowedClients) || !config.allowedClients.every((a) => typeof a === 'string'))) throw new Error('web config: allowedClients must be a list of IP addresses');
   if (config.devAllowLoopback !== undefined && typeof config.devAllowLoopback !== 'boolean') throw new Error('web config: devAllowLoopback must be true or false');
+  if (config.publicHosts !== undefined && (!Array.isArray(config.publicHosts) || !config.publicHosts.every((h) => typeof h === 'string' && h))) throw new Error('web config: publicHosts must be a list of host[:port] values');
   const backend = convexWebBackend({ convexUrl: config.convexUrl, adminTokenFile: config.adminTokenFile, log });
   const server = localWebServer({
     backend, environment: config.environment, mode: 'proxy', root, log,
     ...(config.allowedClients ? { allowedClients: config.allowedClients } : {}),
     ...(config.devAllowLoopback ? { devAllowLoopback: true } : {}),
+    ...(config.publicHosts ? { publicHosts: config.publicHosts } : {}),
   });
   const close = server.close.bind(server);
   server.close = (cb) => { void backend.close(); return close(cb); };

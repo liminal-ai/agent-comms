@@ -45,6 +45,8 @@ export interface WebOptions {
   allowedClients?: string[];
   /** Development only: with `allowedClients`, accept header-less requests from loopback. Off in prod. */
   devAllowLoopback?: boolean;
+  /** Proxy mode: the Host values the page is published under (e.g. `lim-builder.tailb30114.ts.net:8461`). Any other Host is refused, as in local mode; DNS rebinding can't reach the API. */
+  publicHosts?: string[];
   environment: string;
   /** The built web view; absent serves only the API. */
   root?: string;
@@ -72,6 +74,7 @@ export function localWebServer(options: WebOptions): Server & { streams(): numbe
     res.setHeader("Referrer-Policy", "no-referrer");
     try {
       if (mode === "local") checkHost(req, server);
+      else if (options.publicHosts) checkPublicHost(req, options.publicHosts, options.devAllowLoopback === true, server);
       if (clients) checkClient(req, clients, options.devAllowLoopback === true);
       const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
       if (pathname.startsWith("/api/")) {
@@ -216,6 +219,15 @@ function checkClient(req: IncomingMessage, clients: BlockList, devAllowLoopback:
   const value = raw.trim();
   const family = isIP(value);
   if (!family || !clients.check(value, family === 6 ? "ipv6" : "ipv4")) throw new HttpError(403, "client not allowed");
+}
+
+/** Proxy mode: only the published names (plus loopback in development). */
+function checkPublicHost(req: IncomingMessage, hosts: string[], devAllowLoopback: boolean, server: Server): void {
+  const host = (req.headers.host ?? "").toLowerCase();
+  if (hosts.some((h) => h.toLowerCase() === host)) return;
+  const port = (server.address() as { port: number } | null)?.port;
+  if (devAllowLoopback && allowedHosts(port ?? -1).has(host)) return;
+  throw new HttpError(403, "unexpected Host");
 }
 
 /** Only this listener's own loopback names: a page from elsewhere (DNS rebinding included) can't reach the API. */

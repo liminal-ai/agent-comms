@@ -8,6 +8,8 @@ export interface WebConfig {
   allowedClients?: string[];
   /** Development only: accept header-less loopback requests despite allowedClients. */
   devAllowLoopback?: boolean;
+  /** Proxy mode: the Host values the page is published under; any other Host gets 403. */
+  publicHosts?: string[];
 }
 /** Static page plus a token-free runtime-config.json. */
 export function webServer(config: WebConfig, root: string): Server;
