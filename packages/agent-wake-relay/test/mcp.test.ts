@@ -248,7 +248,8 @@ describe("subscriptions", () => {
       const a = await h.subscribe("user_1", sub(r.url, newSecret(), { ttlMs: 3_600_000 }));
       await h.subscribe("user_2", sub(r.url, newSecret(), { ttlMs: 60_000 }));
       const path = join(dir, "state.json");
-      assert.equal((await stat(path)).mode & 0o777, 0o600);
+      // POSIX modes only; Windows has none to check.
+      if (process.platform !== "win32") assert.equal((await stat(path)).mode & 0o777, 0o600);
       now += 120_000;
       const reloaded = new SubscriptionStore(path, () => now);
       await reloaded.load();
