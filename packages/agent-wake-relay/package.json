@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@agent-comms/protocol": "workspace:*",
-    "convex": "1.46.0"
+    "convex": "1.46.0",
+    "jose": "6.2.12"
   },
   "devDependencies": {
     "@types/node": "catalog:",

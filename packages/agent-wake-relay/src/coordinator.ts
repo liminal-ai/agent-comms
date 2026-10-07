@@ -47,6 +47,8 @@ export class Coordinator {
   private timer: unknown = null;
   private renudgeTimer: unknown = null;
   private inFlight = false;
+  /** The last failure logged, so a wake that keeps failing the same way is logged every 5 min, not every retry. */
+  private lastFailure: { message: string; at: number; repeats: number } | null = null;
 
   constructor(options: CoordinatorOptions) {
     this.o = { coalesceMs: 2_000, retryMs: 30_000, renudgeMs: 10 * 60_000, timers: realTimers, ...options };
@@ -104,9 +106,18 @@ export class Coordinator {
       await this.o.wake(ids);
       const now = this.o.timers.now();
       for (const id of ids) if (this.outstanding.has(id)) this.outstanding.set(id, now);
+      this.lastFailure = null;
       this.o.log(`@${this.o.participant}: woke for ${ids.length} delivery(s) ${ids.join(",")}`);
     } catch (error) {
-      this.o.log(`@${this.o.participant}: wake failed for ${ids.join(",")}: ${(error as Error).message}; retrying in ${Math.round(this.o.retryMs / 1000)}s`);
+      const message = (error as Error).message;
+      const now = this.o.timers.now();
+      const last = this.lastFailure;
+      if (last && last.message === message && now - last.at < 5 * 60_000) last.repeats++;
+      else {
+        const again = last?.message === message && last.repeats ? ` (failed the same way ${last.repeats} more time(s) since the last report)` : "";
+        this.o.log(`@${this.o.participant}: wake failed for ${ids.join(",")}: ${message}${again}; retrying every ${Math.round(this.o.retryMs / 1000)}s`);
+        this.lastFailure = { message, at: now, repeats: 0 };
+      }
       this.schedule(this.o.retryMs);
     } finally {
       this.inFlight = false;

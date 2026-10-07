@@ -86,6 +86,28 @@ describe("coordinator", () => {
     assert.deepEqual(wakes, [["a"]]);
   });
 
+  it("logs a wake that keeps failing the same way every 5 min, not every retry", async () => {
+    const timers = new FakeTimers();
+    const logs: string[] = [];
+    const c = new Coordinator({
+      participant: "dot",
+      timers,
+      log: (l) => logs.push(l),
+      renudgeMs: 0,
+      wake: async () => {
+        throw new Error("no subscriber");
+      },
+    });
+    c.update([d("a", "dot")]);
+    await timers.advance(2_000 + 4 * 30_000);
+    assert.equal(logs.filter((l) => l.includes("wake failed")).length, 1);
+    await timers.advance(3 * 60_000);
+    const failed = logs.filter((l) => l.includes("wake failed"));
+    assert.equal(failed.length, 2);
+    assert.match(failed[1]!, /failed the same way 9 more time\(s\)/);
+    c.close();
+  });
+
   it("wakes again for a delivery still outstanding after renudgeMs, and stops once it's gone", async () => {
     const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
     c.update([d("a")]);

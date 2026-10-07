@@ -4,6 +4,7 @@
 
 import { readFile } from "node:fs/promises";
 import type { WakeFn } from "./coordinator.ts";
+import type { EventHub } from "./mcp/events.ts";
 
 /** POST a small JSON event to a URL, e.g. a Grok Bot routine's "when a webhook fires" trigger. */
 export interface WebhookWaker {
@@ -16,9 +17,24 @@ export interface WebhookWaker {
   timeoutMs?: number;
 }
 
-export type WakerConfig = WebhookWaker;
+/**
+ * Send an MCP Events webhook event to every ChatGPT conversation subscribed to
+ * the agent's event, through the MCP server agent-wake-relay hosts (the `mcp`
+ * section of the config). For agents living in a ChatGPT conversation (Dot).
+ */
+export interface McpEventsWaker {
+  kind: "mcp-events";
+  /** The event's name. Default `comms.delivery.<participant>`. */
+  event?: string;
+}
 
-export const WAKER_KINDS = ["webhook"] as const;
+export type WakerConfig = WebhookWaker | McpEventsWaker;
+
+export const WAKER_KINDS = ["webhook", "mcp-events"] as const;
+
+export function eventName(participant: string, config: McpEventsWaker): string {
+  return config.event ?? `comms.delivery.${participant}`;
+}
 
 async function secret(path: string, what: string): Promise<string> {
   const value = (await readFile(path, "utf8")).trim();
@@ -47,9 +63,18 @@ export function webhookWaker(participant: string, config: WebhookWaker, request:
   };
 }
 
-export function makeWaker(participant: string, config: WakerConfig, request: typeof fetch = fetch): WakeFn {
+export interface WakerDeps {
+  request?: typeof fetch;
+  /** The MCP Events hub, when the config has an `mcp` section. */
+  events?: EventHub;
+}
+
+export function makeWaker(participant: string, config: WakerConfig, deps: WakerDeps = {}): WakeFn {
   switch (config.kind) {
     case "webhook":
-      return webhookWaker(participant, config, request);
+      return webhookWaker(participant, config, deps.request);
+    case "mcp-events":
+      if (!deps.events) throw new Error(`@${participant}: the mcp-events waker needs the config's mcp section`);
+      return deps.events.waker(participant);
   }
 }
