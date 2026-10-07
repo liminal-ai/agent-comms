@@ -82,14 +82,29 @@ export class SubscriptionStore {
     return [...this.subs.values()].filter((s) => s.expiresAt > now && (event === undefined || s.event === event));
   }
 
+  /** Adds or replaces a subscription. If the state file can't be written, the live map is left as it was. */
   async put(sub: Subscription): Promise<void> {
+    const previous = this.subs.get(sub.id);
     this.subs.set(sub.id, sub);
-    await this.save();
+    try {
+      await this.save();
+    } catch (error) {
+      if (previous) this.subs.set(sub.id, previous);
+      else this.subs.delete(sub.id);
+      throw error;
+    }
   }
 
   async delete(id: string): Promise<boolean> {
-    if (!this.subs.delete(id)) return false;
-    await this.save();
+    const previous = this.subs.get(id);
+    if (!previous) return false;
+    this.subs.delete(id);
+    try {
+      await this.save();
+    } catch (error) {
+      this.subs.set(id, previous);
+      throw error;
+    }
     return true;
   }
 

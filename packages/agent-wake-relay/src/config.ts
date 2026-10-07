@@ -88,7 +88,16 @@ function file(p: unknown, what: string): string {
   return path;
 }
 
-function duration(value: number | string | undefined, what: string, fallback: number): number {
+const MAX_TIMER_MS = 2_147_483_647;
+
+/** `maxMs` bounds durations that back a Node timer (which can't wait longer than ~24.8 days). */
+function duration(value: number | string | undefined, what: string, fallback: number, maxMs = Infinity): number {
+  const ms = durationValue(value, what, fallback);
+  if (ms > maxMs) throw new ConfigError(`${what}: at most ${Math.floor(maxMs / 86_400_000)} days`);
+  return ms;
+}
+
+function durationValue(value: number | string | undefined, what: string, fallback: number): number {
   if (value === undefined || value === "") return fallback;
   if (typeof value === "number" || /^\d+$/.test(value)) {
     const n = Number(value);
@@ -130,7 +139,7 @@ export function parseConfig(raw: unknown): WakeConfig {
         kind: "webhook",
         urlFile: file(h.urlFile, `${at}.waker.urlFile`),
         ...(h.bearerKeyFile ? { bearerKeyFile: file(h.bearerKeyFile, `${at}.waker.bearerKeyFile`) } : {}),
-        ...(h.timeoutMs !== undefined ? { timeoutMs: duration(h.timeoutMs, `${at}.waker.timeoutMs`, 10_000) } : {}),
+        ...(h.timeoutMs !== undefined ? { timeoutMs: duration(h.timeoutMs, `${at}.waker.timeoutMs`, 10_000, MAX_TIMER_MS) } : {}),
       };
     }
     return {
@@ -138,7 +147,7 @@ export function parseConfig(raw: unknown): WakeConfig {
       machine: t.machine,
       machineSecretFile: file(t.machineSecretFile, `${at}.machineSecretFile`),
       waker,
-      renudgeMs: duration(t.renudgeAfter, `${at}.renudgeAfter`, 10 * 60_000),
+      renudgeMs: duration(t.renudgeAfter, `${at}.renudgeAfter`, 10 * 60_000, MAX_TIMER_MS),
     };
   });
   const mcp = c.mcp === undefined ? undefined : parseMcp(c.mcp);

@@ -78,7 +78,8 @@ for (const t of config.targets) {
     anyApi.connector!.work!,
     { machine },
     (res: { deliveries: WorkDelivery[] }) => c.update(res.deliveries),
-    (error: Error) => log(`@${t.participant}: subscription error: ${error.message}`),
+    // The error can serialize the call's arguments, including the machine secret; log only its kind.
+    (error: Error) => log(`@${t.participant}: subscription error (${error.name || "Error"}; details withheld)`),
   );
 }
 log(`watching ${config.targets.map((t) => `@${t.participant}`).join(", ")}`);

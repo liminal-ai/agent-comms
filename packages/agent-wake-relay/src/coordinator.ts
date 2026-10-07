@@ -20,7 +20,10 @@ export interface Timers {
   clear(handle: unknown): void;
 }
 
-export const realTimers: Timers = {
+/** Node's largest timer delay (2^31-1 ms, ~24.8 days); longer waits fire immediately. */
+export const MAX_TIMER_MS = 2_147_483_647;
+
+const realTimers: Timers = {
   now: () => Date.now(),
   set: (fn, ms) => setTimeout(fn, ms),
   clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
@@ -84,7 +87,7 @@ export class Coordinator {
     this.timer = this.o.timers.set(() => {
       this.timer = null;
       void this.fire();
-    }, ms);
+    }, Math.min(ms, MAX_TIMER_MS));
   }
 
   /** Deliveries that were never woken for, or whose last wake is older than renudgeMs. */
@@ -132,9 +135,11 @@ export class Coordinator {
     const woken = [...this.outstanding.values()].filter((at) => at > 0);
     if (!woken.length) return;
     const next = Math.min(...woken) + this.o.renudgeMs - this.o.timers.now();
+    // Node fires a timer past its limit at once; wait in chunks and re-check what is actually due.
     this.renudgeTimer = this.o.timers.set(() => {
       this.renudgeTimer = null;
-      this.schedule(0);
-    }, Math.max(0, next));
+      if (this.due().length) this.schedule(0);
+      else this.scheduleRenudge();
+    }, Math.min(Math.max(0, next), MAX_TIMER_MS));
   }
 }

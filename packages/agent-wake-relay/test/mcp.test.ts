@@ -607,3 +607,14 @@ describe("mcp config", () => {
     assert.throws(() => parseConfig({ ...base, targets: [target, { ...target, participant: "dot2", waker: { kind: "mcp-events", event: "comms.delivery.dot" } }], mcp }), /used twice/);
   });
 });
+
+describe("subscription store", () => {
+  it("leaves the live map unchanged when the state file can't be written", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const store = new SubscriptionStore(join(dir, "missing-dir", "state.json"));
+    const sub = { id: "sub_x", principal: "u", url: "https://example.com/h", event: "comms.delivery.dot", arguments: "{}", secret: "whsec_x", createdAt: 0, verifiedAt: 0, expiresAt: Date.now() + 60_000 } as unknown as Parameters<typeof store.put>[0];
+    await assert.rejects(store.put(sub));
+    assert.equal(store.get("sub_x"), undefined, "a subscription that was never persisted must not be live");
+    assert.equal(store.active().length, 0);
+  });
+});

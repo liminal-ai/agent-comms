@@ -313,11 +313,15 @@ export class EventHub {
         failures.push(`${hostOf(current.url)} ${r.status ? `HTTP ${r.status}` : r.reason}`);
         current.failedSince ??= now;
         if (now - current.failedSince >= DROP_AFTER_FAILING_MS) {
-          await this.o.store.delete(current.id);
+          await this.o.store.delete(current.id).catch(() => {});
           this.o.log(`mcp: dropped subscription ${current.id}: deliveries have failed for a day (a refresh from ChatGPT restores it)`);
         }
       }
-      await this.o.store.save();
+      // Bookkeeping only. A callback that answered 2xx has the event; failing the wake here would
+      // make the coordinator retry with a fresh event id and start the same task again.
+      await this.o.store.save().catch((error: unknown) => {
+        this.o.log(`mcp: could not save delivery bookkeeping (${(error as NodeJS.ErrnoException)?.code ?? "error"}); the wake still counts`);
+      });
       if (results.some(({ r }) => r.ok)) {
         if (failures.length) this.o.log(`@${participant}: event ${event.eventId} not accepted by ${failures.join(", ")}`);
         return;

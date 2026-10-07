@@ -46,6 +46,7 @@ export function webhookWaker(participant: string, config: WebhookWaker, request:
   return async (deliveryIds) => {
     const headers: Record<string, string> = { "content-type": "application/json", "user-agent": "agent-comms-agent-wake-relay" };
     if (config.bearerKeyFile) headers.authorization = `Bearer ${await secret(config.bearerKeyFile, "bearer key")}`;
+    // A fetch failure's message can carry the URL, which is a secret here; report only the error code.
     const res = await request(await secret(config.urlFile, "webhook URL"), {
       method: "POST",
       headers,
@@ -56,6 +57,10 @@ export function webhookWaker(participant: string, config: WebhookWaker, request:
         note: "agent-comms: you have a delivery waiting. Check your comms inbox and answer it.",
       }),
       signal: AbortSignal.timeout(config.timeoutMs ?? 10_000),
+    }).catch((error: unknown) => {
+      const cause = (error as { cause?: NodeJS.ErrnoException })?.cause;
+      const code = cause?.code ?? (error as Error)?.name ?? "unknown";
+      throw new Error(`webhook request failed (${code})`);
     });
     // Drain the body; it can echo identifiers, so it isn't logged.
     await res.text().catch(() => "");

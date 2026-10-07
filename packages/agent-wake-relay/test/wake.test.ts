@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { ConfigError, parseConfig } from "../src/config.ts";
-import { Coordinator, type Timers, type WorkDelivery } from "../src/coordinator.ts";
+import { Coordinator, MAX_TIMER_MS, type Timers, type WorkDelivery } from "../src/coordinator.ts";
 import { webhookWaker } from "../src/wakers.ts";
 
 /** A clock the test advances by hand. */
@@ -118,6 +118,24 @@ describe("coordinator", () => {
     await timers.advance(30 * 60_000);
     assert.equal(wakes.length, 2);
   });
+  it("never asks a timer to wait past Node's limit, and still renudges at the right time", async () => {
+    const renudgeMs = 30 * 86_400_000; // 30 days: longer than a Node timer can wait
+    const { timers, wakes, c } = setup({ renudgeMs });
+    const asked: number[] = [];
+    const origSet = timers.set;
+    timers.set = (fn, ms) => {
+      asked.push(ms);
+      return origSet(fn, ms);
+    };
+    c.update([d("a")]);
+    await timers.advance(2_000);
+    assert.equal(wakes.length, 1);
+    assert.ok(asked.every((ms) => ms <= MAX_TIMER_MS), `a timer was asked for ${Math.max(...asked)} ms`);
+    await timers.advance(MAX_TIMER_MS + 1_000);
+    assert.equal(wakes.length, 1, "the capped timer firing early must not wake again");
+    await timers.advance(renudgeMs);
+    assert.equal(wakes.length, 2, "renudged once the real interval passed");
+  });
 });
 
 describe("webhook waker", () => {
@@ -151,6 +169,17 @@ describe("webhook waker", () => {
     } finally {
       server.close();
     }
+  });
+  it("reports a connection failure by code only, never the URL", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-"));
+    const url = "http://127.0.0.1:9/hook-with-secret-path";
+    await writeFile(join(dir, "url"), url);
+    const wake = webhookWaker("grok", { kind: "webhook", urlFile: join(dir, "url") });
+    await assert.rejects(wake(["a"]), (e: Error) => {
+      assert.ok(!e.message.includes("hook-with-secret-path"), `leaked the URL: ${e.message}`);
+      assert.match(e.message, /webhook request failed \(/);
+      return true;
+    });
   });
 });
 
