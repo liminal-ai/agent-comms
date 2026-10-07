@@ -367,7 +367,15 @@ export const runConnector = (options: ConnectorOptions) =>
     yield* runDispatcher({ leaseMs: options.leaseMs ?? 60_000, ...(options.fault ? { fault: options.fault } : {}), ...(options.tickMs ? { tickMs: options.tickMs } : {}), log }).pipe(
       // The dispatcher owns the one work subscription. Native listeners see
       // the same initial snapshot and changes, without an extra server query.
-      Effect.provideService(ServerApi, { ...api, work: api.work.pipe(Stream.tap((items) => Effect.sync(() => receives.update(items)))) }),
+      // Pull work (oaidot) goes to native listeners only: left in the dispatcher's list, an old
+      // oaidot claim would hold back newer push work for the same participant after a rebind.
+      Effect.provideService(ServerApi, {
+        ...api,
+        work: api.work.pipe(
+          Stream.tap((items) => Effect.sync(() => receives.update(items))),
+          Stream.map((items) => items.filter((item) => item.harness !== "oaidot")),
+        ),
+      }),
       Effect.provideService(Adapters, adapters),
       Effect.provideService(Poke, poke),
       Effect.forkScoped,

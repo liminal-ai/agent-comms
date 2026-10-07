@@ -8,7 +8,7 @@ import { api } from "../../../convex/_generated/api.js";
 import { createWindowsAgent } from "../../windows-pipe/src/agent.mjs";
 import { NativeReceives } from "../src/connector.ts";
 import type { ServerApiShape, WorkItem } from "../src/server-api.ts";
-import { ADMIN, machine, type Running, sleep, startConnector, until, world } from "./harness.ts";
+import { ADMIN, machine, Mod, type Running, sleep, startConnector, until, world } from "./harness.ts";
 
 let running: Running[] = [];
 let holders: NativeReceives[] = [];
@@ -519,5 +519,22 @@ describe("oaidot event-driven courier", () => {
     expect(observed.receives).toHaveLength(0);
     const newListener = await receive(w.socket, { locator: "new-native-thread" });
     expect(newListener.deliveries[0]?.message.text).toBe("For the newly bound thread");
+  });
+});
+
+describe("oaidot rebinding", () => {
+  it("an old oaidot claim doesn't hold back push work after a rebind to Claude Code", async () => {
+    const w = await nativeWorld();
+    await start(w.api, w.socket);
+    await Effect.runPromise(w.api.send({ as: "a", to: ["dot-agent"], text: "Offered, never acknowledged" }));
+    const offered = await receive(w.socket, { waitMs: 2_000 });
+    expect(offered.deliveries).toHaveLength(1);
+    // Moved to a Claude Code terminal on the same machine; the old offer stays claimed for its oaidot target.
+    await w.t.mutation(api.directory.rebind, { adminToken: ADMIN, name: "dot-agent", home: { machine: machine.id, harness: "claude-code", locator: "dot-agent" } });
+    const terminal = new Mod(w.socket, "dot-agent");
+    await terminal.register();
+    const sent = await Effect.runPromise(w.api.send({ as: "a", to: ["dot-agent"], text: "New push work" }));
+    const delivered = await terminal.nextDelivery();
+    expect(delivered.message.id).toBe(sent.message.id);
   });
 });
