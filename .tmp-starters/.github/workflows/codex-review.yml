@@ -8,11 +8,6 @@ on:
       - "docs/**"
       - "**/pnpm-lock.yaml"
       - ".repos/**"
-      - "vendor/**"
-      - "third_party/**"
-      - "**/dist/**"
-      - "**/_generated/**"
-      - "**/node_modules/**"
 
 concurrency:
   group: codex-review-${{ github.event.pull_request.number }}
@@ -33,33 +28,18 @@ jobs:
     outputs:
       final_message: ${{ steps.run_codex.outputs.final-message }}
     steps:
-      - name: Check required secret
-        id: check_secrets
-        env:
-          OPENAI: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          if [ -z "${OPENAI}" ]; then
-            echo "has_secret=false" >> "$GITHUB_OUTPUT"
-            echo "Missing OPENAI_API_KEY; skipping review."
-          else
-            echo "has_secret=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - uses: actions/checkout@v4
-        if: steps.check_secrets.outputs.has_secret == 'true'
+      - uses: actions/checkout@v5   # pin to a commit SHA before merging
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
           persist-credentials: false
 
       - name: Fetch base/head refs
-        if: steps.check_secrets.outputs.has_secret == 'true'
         env:
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: git fetch --no-tags origin "$PR_BASE_REF" "+refs/pull/$PR_NUMBER/head"
 
       - name: Wait for faster bots, then snapshot their comments (for dedupe)
-        if: steps.check_secrets.outputs.has_secret == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -71,7 +51,6 @@ jobs:
             > .ai-review/prior-comments.txt || true
 
       - name: Run Codex
-        if: steps.check_secrets.outputs.has_secret == 'true'
         id: run_codex
         uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675  # v1.13
         with:
@@ -82,19 +61,15 @@ jobs:
           prompt: |
             PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.
             Read .github/REVIEW_RULES.md and follow it. You are the Codex reviewer. Your lane is P0/P1 correctness bugs
-            and missing tests for changed behavior in a Convex-backed, cross-machine agent control plane.
+            and missing tests for changed behavior.
             Review ONLY: git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}
             Already flagged by other bots (do NOT repeat): see .ai-review/prior-comments.txt
-            Output Markdown: at most 5 items (P0 is never capped). Each item is one line that STARTS with its tag,
-            exactly \"[P0] title: path:line, failure scenario, fix\" or \"[P1] title: ...\".
+            Output Markdown: at most 5 items, each "**[P0|P1] title**: path:line, failure scenario, fix".
             If there is nothing at P0/P1 that isn't already flagged, output exactly: NO_FINDINGS
 
   post:
     needs: codex
-    if: >-
-      needs.codex.result == 'success' &&
-      needs.codex.outputs.final_message != '' &&
-      !startsWith(needs.codex.outputs.final_message, 'NO_FINDINGS')
+    if: needs.codex.outputs.final_message != '' && !startsWith(needs.codex.outputs.final_message, 'NO_FINDINGS')
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -114,4 +89,3 @@ jobs:
             const prior = comments.find(c => c.body && c.body.includes(marker));
             if (prior) await github.rest.issues.updateComment({ owner, repo, comment_id: prior.id, body });
             else await github.rest.issues.createComment({ owner, repo, issue_number, body });
-
