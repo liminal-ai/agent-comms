@@ -329,6 +329,28 @@ describe("event delivery", () => {
     }
   });
 
+  it("a retry of a split wake resends only the batches that didn't settle", async () => {
+    let calls = 0;
+    // First wake: batch 1 accepted, batch 2 fails transiently (all its attempts). Second wake: everything accepted.
+    const r = await receiver(chatgpt(() => (++calls <= 1 ? 200 : calls <= 4 ? 503 : 200)));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const ids = Array.from({ length: 6_000 }, (_, i) => `j97${String(i).padStart(5, "0")}${"x".repeat(40)}`);
+      const wake = h.waker("dot");
+      await assert.rejects(wake(ids), /no subscriber accepted/);
+      const firstRound = r.seen.length;
+      await wake(ids);
+      const events = r.seen.slice(1).map((e) => JSON.parse(e.body));
+      const idsOfBatch1 = events[0].eventId;
+      assert.equal(events.filter((e) => e.eventId === idsOfBatch1).length, 1, "the accepted batch was not sent again");
+      assert.equal(r.seen.length - firstRound, 1, "the retry sent exactly the failed batch");
+      assert.equal(new Set(events.slice(1).map((e) => e.eventId)).size, 1, "the failed batch kept its event id across the retry");
+    } finally {
+      r.close();
+    }
+  });
+
   it("splits a backlog too large for one event into several, each under 256 KiB", async () => {
     const r = await receiver(chatgpt());
     const { h } = await hub();
@@ -648,6 +670,17 @@ describe("mcp config", () => {
 });
 
 describe("subscription store", () => {
+  it("two concurrent puts that both fail to save leave nothing live", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const store = new SubscriptionStore(join(dir, "missing-dir", "state.json"));
+    const base = { principal: "u", url: "https://example.com/h", event: "comms.delivery.dot", arguments: "{}", createdAt: 0, verifiedAt: 0, expiresAt: Date.now() + 60_000 };
+    const a = store.put({ ...base, id: "sub_x", secret: "whsec_a" } as unknown as Parameters<typeof store.put>[0]);
+    const b = store.put({ ...base, id: "sub_x", secret: "whsec_b" } as unknown as Parameters<typeof store.put>[0]);
+    await assert.rejects(a);
+    await assert.rejects(b);
+    assert.equal(store.get("sub_x"), undefined, "neither failed subscription may stay live");
+  });
+
   it("a failed save doesn't undo a newer entry installed meanwhile", async () => {
     const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
     const store = new SubscriptionStore(join(dir, "state.json"));

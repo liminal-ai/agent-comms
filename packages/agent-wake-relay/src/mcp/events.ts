@@ -56,6 +56,8 @@ const MAX_PER_PRINCIPAL = 20;
 const TIMEOUT_MS = 10_000;
 const RETRY_DELAYS_MS = [1_000, 4_000];
 const MAX_BODY = 256 * 1024;
+/** How long a settled batch of a split wake is remembered; longer than the coordinator's 30 s retries, shorter than its 10 min renudge. */
+const SETTLED_TTL_MS = 5 * 60_000;
 
 interface Event {
   eventId: string;
@@ -303,6 +305,13 @@ export class EventHub {
       let accepted = 0;
       let terminal = 0;
       for (const { key, event, body } of batches) {
+        // A batch already accepted (or refused for good) during an earlier attempt at this wake isn't sent again.
+        const settled = this.settled.get(key);
+        if (settled && this.now() - settled.at < SETTLED_TTL_MS) {
+          if (settled.ok) accepted++;
+          else terminal++;
+          continue;
+        }
         const results = await Promise.all(subs.map((s) => this.deliver(s.id, event, body).then((r) => ({ s, r }))));
         const now = this.now();
         let ok = false;
@@ -325,10 +334,15 @@ export class EventHub {
             this.o.log(`mcp: dropped subscription ${current.id}: deliveries have failed for a day (a refresh from ChatGPT restores it)`);
           }
         }
-        if (ok || allTerminal) this.pending.delete(key);
+        if (ok || allTerminal) {
+          this.pending.delete(key);
+          this.settled.set(key, { ok, at: now });
+        }
         if (ok) accepted++;
         else if (allTerminal) terminal++;
       }
+      // Every batch settled: the next wake for this set is a new attempt.
+      if (accepted + terminal === batches.length) for (const { key } of batches) this.settled.delete(key);
       // Bookkeeping only. A callback that answered 2xx has the event; failing the wake here would
       // make the coordinator retry with a fresh event id and start the same task again.
       await this.o.store.save().catch((error: unknown) => {
@@ -345,6 +359,8 @@ export class EventHub {
 
   /** Event ids held for wakes the coordinator may retry, so a retry carries the same id and the receiver can dedupe it. Keyed by participant and delivery set. */
   private readonly pending = new Map<string, string>();
+  /** Batches of a split wake that already settled (accepted, or refused for good), so a retry of the whole wake only resends the rest. */
+  private readonly settled = new Map<string, { ok: boolean; at: number }>();
 
   private batches(participant: string, name: string, deliveryIds: string[]): { key: string; event: Event; body: string }[] {
     const make = (ids: string[]) => {

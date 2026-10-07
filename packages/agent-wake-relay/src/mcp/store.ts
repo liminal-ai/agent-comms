@@ -82,33 +82,42 @@ export class SubscriptionStore {
     return [...this.subs.values()].filter((s) => s.expiresAt > now && (event === undefined || s.event === event));
   }
 
-  /** Adds or replaces a subscription. If the state file can't be written, the live map is left as it was. */
-  async put(sub: Subscription): Promise<void> {
-    const previous = this.subs.get(sub.id);
-    this.subs.set(sub.id, sub);
-    try {
-      await this.save();
-    } catch (error) {
-      // Only undo this call's own change: a later put for the same id has already replaced it.
-      if (this.subs.get(sub.id) === sub) {
-        if (previous) this.subs.set(sub.id, previous);
-        else this.subs.delete(sub.id);
-      }
-      throw error;
-    }
+  /** Mutations run one at a time, each with its own save, so a rollback only ever sees the state it started from. */
+  private ops: Promise<unknown> = Promise.resolve();
+  private serialized<T>(op: () => Promise<T>): Promise<T> {
+    const next = this.ops.then(op, op);
+    this.ops = next.catch(() => {});
+    return next;
   }
 
-  async delete(id: string): Promise<boolean> {
-    const previous = this.subs.get(id);
-    if (!previous) return false;
-    this.subs.delete(id);
-    try {
-      await this.save();
-    } catch (error) {
-      if (!this.subs.has(id)) this.subs.set(id, previous);
-      throw error;
-    }
-    return true;
+  /** Adds or replaces a subscription. If the state file can't be written, the live map is left as it was. */
+  put(sub: Subscription): Promise<void> {
+    return this.serialized(async () => {
+      const previous = this.subs.get(sub.id);
+      this.subs.set(sub.id, sub);
+      try {
+        await this.save();
+      } catch (error) {
+        if (previous) this.subs.set(sub.id, previous);
+        else this.subs.delete(sub.id);
+        throw error;
+      }
+    });
+  }
+
+  delete(id: string): Promise<boolean> {
+    return this.serialized(async () => {
+      const previous = this.subs.get(id);
+      if (!previous) return false;
+      this.subs.delete(id);
+      try {
+        await this.save();
+      } catch (error) {
+        this.subs.set(id, previous);
+        throw error;
+      }
+      return true;
+    });
   }
 
   /** Drop expired subscriptions. Returns whether anything went. */
