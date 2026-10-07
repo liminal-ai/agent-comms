@@ -100,10 +100,10 @@ Precedence: defaults < `<home>/config.json` (or `--config` / `$GROKBOT_CONFIG`) 
 | `pollWaitMs` (≤ 25000) | `GROKBOT_POLL_WAIT_MS` | `25000` |
 | `sessionId` | `GROKBOT_SESSION_ID` | generated once, kept in `state.json` |
 | `cwd` | `GROKBOT_CWD` | `home` (reported at registration only) |
-| `wakeWebhook` (`url`, `includeText`, `timeoutMs`) | `GROKBOT_WAKE_WEBHOOK_URL`, `GROKBOT_WAKE_INCLUDE_TEXT` | off |
+| `wakeWebhook` (`url`, `includeText`, `timeoutMs`, `authorizationFile`) | `GROKBOT_WAKE_WEBHOOK_URL`, `GROKBOT_WAKE_INCLUDE_TEXT`, `GROKBOT_WAKE_AUTHORIZATION_FILE` | off |
 | `unregisterOnExit` | – | `false` |
 
-The wake webhook gets `{event: "delivery" | "timeout", participant, deliveryId, messageId, kind, expectsReply, from, conversation, receivedAt, deadlineAt, state, inboxFile}`. The message text is added only with `includeText: true`. It's best effort (5 s timeout, failures logged), because the inbox is the record. It sends no auth headers. Point it at something local.
+The wake webhook gets `{event: "delivery" | "timeout", participant, deliveryId, messageId, kind, expectsReply, from, conversation, receivedAt, deadlineAt, state, inboxFile}`. The message text is added only with `includeText: true`. It's best effort (5 s timeout, failures logged), because the inbox is the record. With `authorizationFile`, the file's contents (the whole header value, e.g. `Bearer …`; keep it mode 600) are sent as the `Authorization` header; the file is read at each wake, so it can be replaced without a restart. Without one, no auth header is sent.
 
 ## Limits
 

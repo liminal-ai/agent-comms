@@ -1,6 +1,7 @@
 // The bridge's configuration: defaults, then a JSON file, then environment
 // variables, then command-line flags. Nothing in it is secret: the connector
 // holds the machine credential, and the bridge only talks to the local socket.
+// A wake webhook that needs a credential names a file holding it.
 
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -27,7 +28,7 @@ export interface GrokbotConfigFile {
   /** A request not answered within this is reported `ambiguous`. Default 20m. */
   answerTimeout?: number | string;
   /** POSTs a small JSON event here when a delivery arrives or times out. Off by default. */
-  wakeWebhook?: { url: string; includeText?: boolean; timeoutMs?: number } | string;
+  wakeWebhook?: { url: string; includeText?: boolean; timeoutMs?: number; authorizationFile?: string } | string;
   /** Unregister the session when the daemon stops. Default false: a restart keeps its session. */
   unregisterOnExit?: boolean;
 }
@@ -45,7 +46,8 @@ export interface GrokbotConfig {
   cwd: string;
   pollWaitMs: number;
   answerTimeoutMs: number;
-  wakeWebhook?: { url: string; includeText: boolean; timeoutMs: number };
+  /** `authorizationFile` holds the whole Authorization header value (e.g. `Bearer …`); it's read at each wake. */
+  wakeWebhook?: { url: string; includeText: boolean; timeoutMs: number; authorizationFile?: string };
   unregisterOnExit: boolean;
   /** The config file that was read, if any. */
   configFile?: string;
@@ -67,6 +69,7 @@ export const ENV = {
   answerTimeout: "GROKBOT_ANSWER_TIMEOUT",
   wakeWebhookUrl: "GROKBOT_WAKE_WEBHOOK_URL",
   wakeIncludeText: "GROKBOT_WAKE_INCLUDE_TEXT",
+  wakeAuthorizationFile: "GROKBOT_WAKE_AUTHORIZATION_FILE",
 } as const;
 
 export interface ConfigOverrides {
@@ -136,10 +139,14 @@ export function loadConfig(env: Record<string, string | undefined>, overrides: C
     }
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new ConfigError("wakeWebhook: only http and https URLs");
     const includeEnv = env[ENV.wakeIncludeText];
+    const authFile = env[ENV.wakeAuthorizationFile] || hook?.authorizationFile;
+    const authorizationFile = authFile ? expandHome(authFile) : undefined;
+    if (authorizationFile && !existsSync(authorizationFile)) throw new ConfigError(`wakeWebhook: authorizationFile ${authorizationFile} doesn't exist`);
     wakeWebhook = {
       url: parsed.toString(),
       includeText: includeEnv !== undefined ? /^(1|true|yes)$/i.test(includeEnv) : hook?.includeText === true,
       timeoutMs: hook?.timeoutMs ?? 5_000,
+      ...(authorizationFile ? { authorizationFile } : {}),
     };
   }
 
