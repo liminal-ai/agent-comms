@@ -91,8 +91,10 @@ export class SubscriptionStore {
   }
 
   /** Adds or replaces a subscription. If the state file can't be written, the live map is left as it was. */
-  put(sub: Subscription): Promise<void> {
+  put(sub: Subscription, guard?: () => void): Promise<void> {
     return this.serialized(async () => {
+      // Runs inside the queue, so a limit it checks can't be raced by another insert.
+      guard?.();
       const previous = this.subs.get(sub.id);
       this.subs.set(sub.id, sub);
       try {

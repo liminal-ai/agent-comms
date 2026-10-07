@@ -329,6 +329,39 @@ describe("event delivery", () => {
     }
   });
 
+  it("a retry keeps its event id when a delivery arrived in between", async () => {
+    let status = 500;
+    const r = await receiver(chatgpt(() => status));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const wake = h.waker("dot");
+      await assert.rejects(wake(["a"]), /HTTP 500/);
+      status = 200;
+      await wake(["a", "b"]); // b arrived before the coordinator's retry
+      const ids = r.seen.slice(1).map((e) => JSON.parse(e.body));
+      assert.equal(new Set(ids.map((e) => e.eventId)).size, 1, "same event id: the receiver can dedupe a");
+      assert.deepEqual(ids.at(-1)!.data.deliveryIds, ["a", "b"]);
+      await wake(["a", "b", "c"]);
+      assert.notEqual(JSON.parse(r.seen.at(-1)!.body).eventId, ids[0]!.eventId, "accepted: the next wake is a new event");
+    } finally {
+      r.close();
+    }
+  });
+
+  it("the subscription limit holds under concurrent subscribes", async () => {
+    const r = await receiver(chatgpt());
+    const { h, store } = await hub();
+    try {
+      const results = await Promise.allSettled(Array.from({ length: 25 }, (_, i) => h.subscribe("user_1", sub(`${r.url}?n=${i}`, newSecret()))));
+      assert.equal(results.filter((x) => x.status === "fulfilled").length, 20);
+      assert.equal(store.active().filter((s) => s.principal === "user_1").length, 20);
+      for (const x of results) if (x.status === "rejected") assert.equal((x.reason as RpcError).code, -32013);
+    } finally {
+      r.close();
+    }
+  });
+
   it("a retry of a split wake resends only the batches that didn't settle", async () => {
     let calls = 0;
     // First wake: batch 1 accepted, batch 2 fails transiently (all its attempts). Second wake: everything accepted.

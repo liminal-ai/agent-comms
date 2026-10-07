@@ -56,8 +56,6 @@ const MAX_PER_PRINCIPAL = 20;
 const TIMEOUT_MS = 10_000;
 const RETRY_DELAYS_MS = [1_000, 4_000];
 const MAX_BODY = 256 * 1024;
-/** How long a settled batch of a split wake is remembered; longer than the coordinator's 30 s retries, shorter than its 10 min renudge. */
-const SETTLED_TTL_MS = 5 * 60_000;
 
 interface Event {
   eventId: string;
@@ -163,9 +161,9 @@ export class EventHub {
     const id = subscriptionId(principal, url, t.event, args);
     const now = this.now();
     const existing = this.o.store.get(id);
-    if (!existing && this.o.store.active().filter((s) => s.principal === principal).length >= MAX_PER_PRINCIPAL) {
-      throw new RpcError(RESOURCE_EXHAUSTED, "too many subscriptions", { limit: "subscriptions", max: MAX_PER_PRINCIPAL });
-    }
+    const underLimit = () => this.o.store.get(id) !== undefined || this.o.store.active().filter((s) => s.principal === principal).length < MAX_PER_PRINCIPAL;
+    // Checked here for a quick answer, and again inside the store's serialized insert, where it can't race.
+    if (!underLimit()) throw new RpcError(RESOURCE_EXHAUSTED, "too many subscriptions", { limit: "subscriptions", max: MAX_PER_PRINCIPAL });
     const verifiedAt = this.recentlyVerified(principal, url) ?? (await this.verify(principal, id, url, secret));
     const sub: Subscription = {
       id,
@@ -186,7 +184,9 @@ export class EventHub {
       sub.previousSecret = existing.previousSecret;
       sub.previousSecretUntil = existing.previousSecretUntil!;
     }
-    await this.o.store.put(sub);
+    await this.o.store.put(sub, () => {
+      if (!underLimit()) throw new RpcError(RESOURCE_EXHAUSTED, "too many subscriptions", { limit: "subscriptions", max: MAX_PER_PRINCIPAL });
+    });
     this.o.log(`mcp: ${existing ? "refreshed" : "new"} subscription ${id} to ${t.event} (callback host ${hostOf(url)}) until ${new Date(sub.expiresAt).toISOString()}`);
     return { id, refreshBefore: new Date(sub.expiresAt).toISOString(), cursor: null, truncated: false };
   }
@@ -307,7 +307,7 @@ export class EventHub {
       for (const { key, event, body } of batches) {
         // A batch already accepted (or refused for good) during an earlier attempt at this wake isn't sent again.
         const settled = this.settled.get(key);
-        if (settled && this.now() - settled.at < SETTLED_TTL_MS) {
+        if (settled) {
           if (settled.ok) accepted++;
           else terminal++;
           continue;
@@ -341,8 +341,8 @@ export class EventHub {
         if (ok) accepted++;
         else if (allTerminal) terminal++;
       }
-      // Every batch settled: the next wake for this set is a new attempt.
-      if (accepted + terminal === batches.length) for (const { key } of batches) this.settled.delete(key);
+      // Every batch settled (accepted, or refused for good): the next wake for this participant is a new attempt.
+      if (accepted + terminal === batches.length) this.forget(participant);
       // Bookkeeping only. A callback that answered 2xx has the event; failing the wake here would
       // make the coordinator retry with a fresh event id and start the same task again.
       await this.o.store.save().catch((error: unknown) => {
@@ -357,42 +357,58 @@ export class EventHub {
     };
   }
 
-  /** Event ids held for wakes the coordinator may retry, so a retry carries the same id and the receiver can dedupe it. Keyed by participant and delivery set. */
+  /**
+   * Retry identity. A wake the coordinator retries keeps its event id per participant and batch
+   * position until a subscriber accepts it, even if the outstanding set grew or shrank meanwhile,
+   * so the receiver can dedupe. Cleared when every batch of the wake has settled.
+   */
   private readonly pending = new Map<string, string>();
-  /** Batches of a split wake that already settled (accepted, or refused for good), so a retry of the whole wake only resends the rest. */
+  /** Batches of a split wake that already settled (accepted, or refused for good). Kept until the whole wake settles; a retry only resends the rest. */
   private readonly settled = new Map<string, { ok: boolean; at: number }>();
+  private static key = (participant: string, index: number) => `${participant}#${index}`;
 
   private batches(participant: string, name: string, deliveryIds: string[]): { key: string; event: Event; body: string }[] {
-    const make = (ids: string[]) => {
-      const key = `${participant}\u0000${[...ids].sort().join(",")}`;
+    const chunks: string[][] = [];
+    const split = (ids: string[]) => {
+      if (ids.length > 1 && this.size(participant, name, ids) > MAX_BODY) {
+        split(ids.slice(0, ids.length >> 1));
+        split(ids.slice(ids.length >> 1));
+      } else chunks.push(ids);
+    };
+    split([...deliveryIds].sort());
+    // A wake with more batches than the one being retried is a different shape; its ids start over.
+    if ([...this.pending.keys()].some((k) => k.startsWith(`${participant}#`) && Number(k.split("#")[1]) >= chunks.length)) this.forget(participant);
+    return chunks.map((ids, index) => {
+      const key = EventHub.key(participant, index);
       let eventId = this.pending.get(key);
       if (!eventId) {
         eventId = randomId("evt");
         this.pending.set(key, eventId);
       }
-      const n = ids.length;
-      const event: Event = {
-        eventId,
-        name,
-        timestamp: new Date(this.now()).toISOString(),
-        data: { participant, deliveryIds: ids, count: n, summary: `${n} comms ${n === 1 ? "delivery is" : "deliveries are"} waiting for @${participant}.` },
-        cursor: null,
-      };
-      return { key, event, body: JSON.stringify(event) };
+      const event = this.event(name, eventId, participant, ids);
+      const body = JSON.stringify(event);
+      if (Buffer.byteLength(body) > MAX_BODY) throw new TerminalWakeError("a single delivery id doesn't fit in a 256 KiB event");
+      return { key, event, body };
+    });
+  }
+
+  private size(participant: string, name: string, ids: string[]): number {
+    return Buffer.byteLength(JSON.stringify(this.event(name, "evt_00000000000000000000000000000000", participant, ids)));
+  }
+
+  private event(name: string, eventId: string, participant: string, deliveryIds: string[]): Event {
+    const n = deliveryIds.length;
+    return {
+      eventId,
+      name,
+      timestamp: new Date(this.now()).toISOString(),
+      data: { participant, deliveryIds, count: n, summary: `${n} comms ${n === 1 ? "delivery is" : "deliveries are"} waiting for @${participant}.` },
+      cursor: null,
     };
-    const out: { key: string; event: Event; body: string }[] = [];
-    const split = (ids: string[]) => {
-      const b = make(ids);
-      if (Buffer.byteLength(b.body) <= MAX_BODY || ids.length === 1) {
-        if (Buffer.byteLength(b.body) > MAX_BODY) throw new TerminalWakeError("a single delivery id doesn't fit in a 256 KiB event");
-        out.push(b);
-        return;
-      }
-      this.pending.delete(b.key);
-      split(ids.slice(0, ids.length >> 1));
-      split(ids.slice(ids.length >> 1));
-    };
-    split(deliveryIds);
-    return out;
+  }
+
+  private forget(participant: string): void {
+    for (const k of [...this.pending.keys()]) if (k.startsWith(`${participant}#`)) this.pending.delete(k);
+    for (const k of [...this.settled.keys()]) if (k.startsWith(`${participant}#`)) this.settled.delete(k);
   }
 }
