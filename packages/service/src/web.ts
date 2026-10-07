@@ -4,6 +4,7 @@
 // behind Host/Origin checks and the admin token as a bearer header.
 
 import { createHash, timingSafeEqual } from "node:crypto";
+import { BlockList, isIP } from "node:net";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, resolve, sep } from "node:path";
@@ -35,6 +36,15 @@ export interface WebOptions {
    */
   mode?: "local" | "proxy";
   adminToken?: string;
+  /**
+   * Proxy mode: the only client addresses served, as `tailscale serve` reports them in the single
+   * `X-Forwarded-For` value it sets (it overwrites the header with the real peer). With this set, a
+   * request whose header is missing, multi-valued, unparsable, or not listed gets 403, including
+   * loopback requests that bypassed serve, unless `devAllowLoopback` is on.
+   */
+  allowedClients?: string[];
+  /** Development only: with `allowedClients`, accept header-less requests from loopback. Off in prod. */
+  devAllowLoopback?: boolean;
   environment: string;
   /** The built web view; absent serves only the API. */
   root?: string;
@@ -53,6 +63,7 @@ export function localWebServer(options: WebOptions): Server & { streams(): numbe
   const mode = options.mode ?? "local";
   if (mode === "local" && !options.adminToken) throw new Error("local mode needs an admin token");
   const expected = options.adminToken ? digest(options.adminToken) : undefined;
+  const clients = options.allowedClients ? allowlist(options.allowedClients) : undefined;
   let streams = 0;
 
   const server = createServer(async (req, res) => {
@@ -61,6 +72,7 @@ export function localWebServer(options: WebOptions): Server & { streams(): numbe
     res.setHeader("Referrer-Policy", "no-referrer");
     try {
       if (mode === "local") checkHost(req, server);
+      if (clients) checkClient(req, clients, options.devAllowLoopback === true);
       const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
       if (pathname.startsWith("/api/")) {
         if (req.method !== "POST") throw new HttpError(405, "POST only");
@@ -176,6 +188,34 @@ export function localWebServer(options: WebOptions): Server & { streams(): numbe
   }
 
   return Object.assign(server, { streams: () => streams });
+}
+
+function allowlist(addresses: string[]): BlockList {
+  const list = new BlockList();
+  for (const a of addresses) {
+    const family = isIP(a);
+    if (!family) throw new Error(`allowedClients: "${a}" is not an IP address`);
+    list.addAddress(a, family === 6 ? "ipv6" : "ipv4");
+  }
+  return list;
+}
+
+/**
+ * The client as `tailscale serve` reports it: exactly one `X-Forwarded-For` value that is an IP on the
+ * list. Anything else is refused, with no guessing among several values. A request with no header came
+ * from somewhere other than serve (loopback), which only development may allow.
+ */
+function checkClient(req: IncomingMessage, clients: BlockList, devAllowLoopback: boolean): void {
+  const raw = req.headers["x-forwarded-for"];
+  if (raw === undefined) {
+    const peer = req.socket.remoteAddress ?? "";
+    if (devAllowLoopback && (peer === "127.0.0.1" || peer === "::1" || peer === "::ffff:127.0.0.1")) return;
+    throw new HttpError(403, "client not allowed");
+  }
+  if (Array.isArray(raw) || raw.includes(",")) throw new HttpError(403, "client not allowed");
+  const value = raw.trim();
+  const family = isIP(value);
+  if (!family || !clients.check(value, family === 6 ? "ipv6" : "ipv4")) throw new HttpError(403, "client not allowed");
 }
 
 /** Only this listener's own loopback names: a page from elsewhere (DNS rebinding included) can't reach the API. */

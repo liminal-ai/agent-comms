@@ -2,6 +2,8 @@
 // page gets no token and calls POST /api/call and /api/watch here, and this process adds the
 // admin token (read from the file at each call) before forwarding to Convex. Without one it
 // only serves the built page and a token-free runtime-config.json (the page then asks for a token).
+// `allowedClients` (proxy mode) limits who is served to the tailnet addresses tailscale serve reports
+// in X-Forwarded-For; `devAllowLoopback: true` lets header-less loopback requests through in development.
 import { createServer } from 'node:http';
 import { readFile, realpath } from 'node:fs/promises';
 import { basename, resolve, extname, sep } from 'node:path';
@@ -12,8 +14,14 @@ import { convexWebBackend } from '../packages/service/src/convex-backend.ts';
 /** The listener for a web config: proxy mode when it names an admin token file, static otherwise. */
 export function webListener(config, root, log = (line) => console.log(line)) {
   if (!config.adminTokenFile) return webServer(config, root);
+  if (config.allowedClients !== undefined && (!Array.isArray(config.allowedClients) || !config.allowedClients.every((a) => typeof a === 'string'))) throw new Error('web config: allowedClients must be a list of IP addresses');
+  if (config.devAllowLoopback !== undefined && typeof config.devAllowLoopback !== 'boolean') throw new Error('web config: devAllowLoopback must be true or false');
   const backend = convexWebBackend({ convexUrl: config.convexUrl, adminTokenFile: config.adminTokenFile });
-  const server = localWebServer({ backend, environment: config.environment, mode: 'proxy', root, log });
+  const server = localWebServer({
+    backend, environment: config.environment, mode: 'proxy', root, log,
+    ...(config.allowedClients ? { allowedClients: config.allowedClients } : {}),
+    ...(config.devAllowLoopback ? { devAllowLoopback: true } : {}),
+  });
   const close = server.close.bind(server);
   server.close = (cb) => { void backend.close(); return close(cb); };
   return server;
