@@ -273,6 +273,65 @@ describe("webhook", () => {
       server.close();
     }
   });
+
+  it("sends the Authorization header from its file, read at each wake", async () => {
+    const item = newItem(delivery(), { now: 0, answerTimeoutMs: 1000 });
+    const h = await home();
+    const authFile = join(h, "wake-auth");
+    await writeFile(authFile, "Bearer one\n");
+    await writeFile(join(h, "config.json"), JSON.stringify({ wakeWebhook: { url: "http://127.0.0.1:9/hook", authorizationFile: authFile } }));
+    const c = loadConfig({ GROKBOT_HOME: h });
+    assert.equal(c.wakeWebhook?.authorizationFile, authFile);
+    assert.throws(() => loadConfig({ GROKBOT_HOME: h, GROKBOT_WAKE_AUTHORIZATION_FILE: join(h, "missing") }), /doesn't exist/);
+    assert.throws(() => loadConfig({ GROKBOT_HOME: h, GROKBOT_WAKE_WEBHOOK_URL: "http://10.0.0.5/hook" }), /https URL/, "a credential over plain http off this machine is refused");
+    assert.doesNotThrow(() => loadConfig({ GROKBOT_HOME: h, GROKBOT_WAKE_WEBHOOK_URL: "https://example.com/hook" }));
+    assert.doesNotThrow(() => loadConfig({ GROKBOT_HOME: h, GROKBOT_WAKE_WEBHOOK_URL: "http://localhost:9/hook" }));
+
+    assert.throws(() => loadConfig({ GROKBOT_HOME: h, GROKBOT_WAKE_WEBHOOK_URL: "http://bad host/secret-path-typo" }), (e: Error) => !e.message.includes("secret-path-typo") && /doesn't parse/.test(e.message));
+
+    let redirectHits = 0;
+    const redirecting = createServer((req, res) => {
+      redirectHits++;
+      res.statusCode = 307;
+      res.setHeader("location", "/elsewhere");
+      res.end();
+    });
+    await new Promise<void>((r) => redirecting.listen(0, "127.0.0.1", r));
+    try {
+      const rport = (redirecting.address() as { port: number }).port;
+      await assert.rejects(webhookWake({ url: `http://127.0.0.1:${rport}/wake`, includeText: false, timeoutMs: 2000 })("delivery", item, "/x"));
+      assert.equal(redirectHits, 1, "the redirect target was never requested");
+    } finally {
+      redirecting.close();
+    }
+
+    await writeFile(authFile, "Bearer bad\r\nX-Injected: 1");
+    await assert.rejects(webhookWake({ url: "http://127.0.0.1:9/hook", includeText: false, timeoutMs: 2000, authorizationFile: authFile })("delivery", item, "/x"), (e: Error) => {
+      assert.ok(!e.message.includes("bad"), `leaked the header value: ${e.message}`);
+      return /invalid header value/.test(e.message);
+    });
+    await writeFile(authFile, "Bearer one\n");
+
+    const seen: (string | undefined)[] = [];
+    const server = createServer((req, res) => {
+      seen.push(req.headers.authorization);
+      req.resume();
+      req.on("end", () => res.end("ok"));
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as { port: number }).port;
+    try {
+      const wake = webhookWake({ url: `http://127.0.0.1:${port}/wake`, includeText: false, timeoutMs: 2000, authorizationFile: authFile });
+      await wake("delivery", item, "/x/d_1.json");
+      await writeFile(authFile, "Bearer two");
+      await wake("delivery", item, "/x/d_1.json");
+      assert.deepEqual(seen, ["Bearer one", "Bearer two"]);
+      await writeFile(authFile, "  \n");
+      await assert.rejects(wake("delivery", item, "/x/d_1.json"), /is empty/);
+    } finally {
+      server.close();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
