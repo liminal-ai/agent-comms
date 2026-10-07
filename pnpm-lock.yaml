@@ -256,6 +256,22 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
+  packages/wake:
+    dependencies:
+      '@agent-comms/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      convex:
+        specifier: 1.46.0
+        version: 1.46.0(react@19.3.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
 packages:
 
   '@edge-runtime/primitives@6.0.0':

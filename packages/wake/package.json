@@ -1,0 +1,23 @@
+{
+  "name": "@agent-comms/wake",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The wake-up-the-sandbox-agents service: runs on an always-on host and wakes sandboxed agents through their platform's own trigger when comms has a delivery for them.",
+  "bin": {
+    "wake": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test --test-timeout=60000 \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@agent-comms/protocol": "workspace:*",
+    "convex": "1.46.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
