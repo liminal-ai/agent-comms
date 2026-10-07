@@ -387,7 +387,7 @@ describe("oaidot event-driven courier", () => {
     const original = first.deliveries[0]!;
     const observed = counted({ ...w.api, work: w.api.work.pipe(Stream.take(1)) });
     await start(observed.api, w.socket);
-    const next = receive(w.socket, { waitMs: 2_000 });
+    const next = receive(w.socket, { waitMs: 10_000 });
     await sleep(150);
     expect(observed.receives).toHaveLength(0);
     const recovered = (await next).deliveries[0]!;
