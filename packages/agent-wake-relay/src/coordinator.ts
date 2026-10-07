@@ -14,6 +14,11 @@ export interface WorkDelivery {
 /** Wakes the agent. Rejects when the wake didn't land. */
 export type WakeFn = (deliveryIds: string[]) => Promise<void>;
 
+/** A wake the waker will never get through as-is (every callback answered 410/413, or the batch can't be sent). Not retried every 30 s; the renudge timer tries again later. */
+export class TerminalWakeError extends Error {
+  readonly terminal = true;
+}
+
 export interface Timers {
   now(): number;
   set(fn: () => void, ms: number): unknown;
@@ -77,9 +82,14 @@ export class Coordinator {
         fresh++;
         continue;
       }
+      // Not woken for yet (coalescing, or a wake in flight): the state the wake will cover is the latest one.
+      if (this.outstanding.get(d.id) === 0) {
+        this.stateAtWake.set(d.id, d.state);
+        continue;
+      }
       // Machines with a connector (grok-box) hand items over one at a time; a request that was still
       // `pending` at the last wake reaches the agent's inbox later, as `delivered`. Wake again then.
-      if (d.state === "delivered" && this.stateAtWake.get(d.id) !== "delivered" && this.outstanding.get(d.id)! > 0) {
+      if (d.state === "delivered" && this.stateAtWake.get(d.id) !== "delivered") {
         this.outstanding.set(d.id, 0);
         this.stateAtWake.set(d.id, d.state);
         fresh++;
@@ -131,6 +141,14 @@ export class Coordinator {
     } catch (error) {
       const message = (error as Error).message;
       const now = this.o.timers.now();
+      if ((error as TerminalWakeError).terminal) {
+        // Counts as this wake's attempt: no 30 s retry; the renudge (if on) gives it another go later.
+        for (const id of ids) if (this.outstanding.has(id)) this.outstanding.set(id, now);
+        this.o.log(`@${this.o.participant}: wake rejected for ${ids.join(",")}: ${message}; not retrying${this.o.renudgeMs > 0 ? `, renudging in ${Math.round(this.o.renudgeMs / 60_000)} min` : ""}`);
+        this.inFlight = false;
+        this.scheduleRenudge();
+        return;
+      }
       const last = this.lastFailure;
       if (last && last.message === message && now - last.at < 5 * 60_000) last.repeats++;
       else {

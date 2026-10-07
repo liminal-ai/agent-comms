@@ -292,18 +292,57 @@ describe("event delivery", () => {
     }
   });
 
-  it("doesn't retry a 410 or 413, and fails the wake when nobody accepted", async () => {
+  it("doesn't retry a 410 or 413, and fails the wake terminally when nobody accepted", async () => {
     for (const status of [410, 413]) {
       const r = await receiver(chatgpt(() => status));
       const { h, store } = await hub();
       try {
         await h.subscribe("user_1", sub(r.url, newSecret()));
-        await assert.rejects(h.waker("dot")(["d1"]), new RegExp(`HTTP ${status}`));
+        await assert.rejects(h.waker("dot")(["d1"]), (e: Error & { terminal?: boolean }) => e.terminal === true && new RegExp(`HTTP ${status}`).test(e.message));
         assert.equal(r.seen.length, 2, "verification, then one attempt");
         assert.ok(store.active()[0]!.failedSince, "the failure is remembered");
       } finally {
         r.close();
       }
+    }
+  });
+
+  it("a wake the coordinator retries carries the same event id until a subscriber accepts it", async () => {
+    let status = 500;
+    const r = await receiver(chatgpt(() => status));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const wake = h.waker("dot");
+      await assert.rejects(wake(["d1", "d2"]), /HTTP 500/);
+      await assert.rejects(wake(["d2", "d1"]), /HTTP 500/);
+      status = 200;
+      await wake(["d1", "d2"]);
+      const ids = r.seen.slice(1).map((e) => JSON.parse(e.body).eventId as string);
+      assert.ok(ids.length >= 7, "3 attempts, 3 attempts, 1 success");
+      assert.equal(new Set(ids).size, 1, "one event id across every attempt of every retry");
+      await wake(["d1", "d2"]);
+      const next = JSON.parse(r.seen.at(-1)!.body).eventId;
+      assert.notEqual(next, ids[0], "accepted: the next wake for the same set is a new event");
+    } finally {
+      r.close();
+    }
+  });
+
+  it("splits a backlog too large for one event into several, each under 256 KiB", async () => {
+    const r = await receiver(chatgpt());
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const ids = Array.from({ length: 6_000 }, (_, i) => `j97${String(i).padStart(5, "0")}${"x".repeat(40)}`); // ~300 KiB of ids
+      await h.waker("dot")(ids);
+      const events = r.seen.slice(1).map((e) => ({ size: Buffer.byteLength(e.body), body: JSON.parse(e.body) }));
+      assert.ok(events.length >= 2, `split into ${events.length} events`);
+      for (const e of events) assert.ok(e.size <= 256 * 1024);
+      assert.deepEqual(events.flatMap((e) => e.body.data.deliveryIds).sort(), [...ids].sort());
+      assert.equal(new Set(events.map((e) => e.body.eventId)).size, events.length, "each batch its own event id");
+    } finally {
+      r.close();
     }
   });
 
@@ -609,6 +648,22 @@ describe("mcp config", () => {
 });
 
 describe("subscription store", () => {
+  it("a failed save doesn't undo a newer entry installed meanwhile", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const store = new SubscriptionStore(join(dir, "state.json"));
+    const base = { principal: "u", url: "https://example.com/h", event: "comms.delivery.dot", arguments: "{}", createdAt: 0, verifiedAt: 0, expiresAt: Date.now() + 60_000 };
+    const first = { ...base, id: "sub_x", secret: "whsec_first" } as unknown as Parameters<typeof store.put>[0];
+    const second = { ...base, id: "sub_x", secret: "whsec_second" } as unknown as Parameters<typeof store.put>[0];
+    const realSave = store.save.bind(store);
+    let fail = true;
+    store.save = () => (fail ? ((fail = false), Promise.reject(new Error("ENOSPC"))) : realSave());
+    const a = store.put(first);
+    const b = store.put(second);
+    await assert.rejects(a);
+    await b;
+    assert.equal(store.get("sub_x")?.secret, "whsec_second", "the newer refresh survives the older one's rollback");
+  });
+
   it("leaves the live map unchanged when the state file can't be written", async () => {
     const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
     const store = new SubscriptionStore(join(dir, "missing-dir", "state.json"));

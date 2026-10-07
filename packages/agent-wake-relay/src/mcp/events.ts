@@ -6,7 +6,7 @@
 // answers them through its normal comms path.
 
 import { timingSafeEqual } from "node:crypto";
-import type { WakeFn } from "../coordinator.ts";
+import { TerminalWakeError, type WakeFn } from "../coordinator.ts";
 import type { Access } from "./auth.ts";
 import { canonicalJson, subscriptionId, type Subscription, type SubscriptionStore } from "./store.ts";
 import { BlockedUrlError, failureReason, parseSecret, randomId, sign, urlProblem, type FailureReason, type Post, type UrlPolicy } from "./webhook.ts";
@@ -56,6 +56,14 @@ const MAX_PER_PRINCIPAL = 20;
 const TIMEOUT_MS = 10_000;
 const RETRY_DELAYS_MS = [1_000, 4_000];
 const MAX_BODY = 256 * 1024;
+
+interface Event {
+  eventId: string;
+  name: string;
+  timestamp: string;
+  data: { participant: string; deliveryIds: string[]; count: number; summary: string };
+  cursor: null;
+}
 
 const payloadSchema = {
   type: "object",
@@ -289,44 +297,86 @@ export class EventHub {
         subs = allowed;
       }
       if (!subs.length) throw new Error(`no subscriber to ${t.event}; connect the plugin in ChatGPT and subscribe to it`);
-      const n = deliveryIds.length;
-      const event = {
-        eventId: randomId("evt"),
-        name: t.event,
-        timestamp: new Date(this.now()).toISOString(),
-        data: { participant, deliveryIds, count: n, summary: `${n} comms ${n === 1 ? "delivery is" : "deliveries are"} waiting for @${participant}.` },
-        cursor: null,
-      };
-      const body = JSON.stringify(event);
-      if (Buffer.byteLength(body) > MAX_BODY) throw new Error("event is larger than 256 KiB");
-      const results = await Promise.all(subs.map((s) => this.deliver(s.id, event, body).then((r) => ({ s, r }))));
-      const now = this.now();
+      // One event per batch that fits in 256 KiB; a backlog too big for one event is still woken for.
+      const batches = this.batches(participant, t.event, deliveryIds);
       const failures: string[] = [];
-      for (const { s, r } of results) {
-        const current = this.o.store.get(s.id);
-        if (!current) continue;
-        if (r.ok) {
-          delete current.failedSince;
-          current.lastDeliveryAt = now;
-          continue;
+      let accepted = 0;
+      let terminal = 0;
+      for (const { key, event, body } of batches) {
+        const results = await Promise.all(subs.map((s) => this.deliver(s.id, event, body).then((r) => ({ s, r }))));
+        const now = this.now();
+        let ok = false;
+        let allTerminal = true;
+        for (const { s, r } of results) {
+          const current = this.o.store.get(s.id);
+          if (!current) continue;
+          if (r.ok) {
+            ok = true;
+            delete current.failedSince;
+            current.lastDeliveryAt = now;
+            continue;
+          }
+          // 410 (gone) and 413 (too large) are final for this event: it must not be posted again.
+          if (!(r.status === 410 || r.status === 413 || r.reason === "gone")) allTerminal = false;
+          failures.push(`${hostOf(current.url)} ${r.status ? `HTTP ${r.status}` : r.reason}`);
+          current.failedSince ??= now;
+          if (now - current.failedSince >= DROP_AFTER_FAILING_MS) {
+            await this.o.store.delete(current.id).catch(() => {});
+            this.o.log(`mcp: dropped subscription ${current.id}: deliveries have failed for a day (a refresh from ChatGPT restores it)`);
+          }
         }
-        failures.push(`${hostOf(current.url)} ${r.status ? `HTTP ${r.status}` : r.reason}`);
-        current.failedSince ??= now;
-        if (now - current.failedSince >= DROP_AFTER_FAILING_MS) {
-          await this.o.store.delete(current.id).catch(() => {});
-          this.o.log(`mcp: dropped subscription ${current.id}: deliveries have failed for a day (a refresh from ChatGPT restores it)`);
-        }
+        if (ok || allTerminal) this.pending.delete(key);
+        if (ok) accepted++;
+        else if (allTerminal) terminal++;
       }
       // Bookkeeping only. A callback that answered 2xx has the event; failing the wake here would
       // make the coordinator retry with a fresh event id and start the same task again.
       await this.o.store.save().catch((error: unknown) => {
         this.o.log(`mcp: could not save delivery bookkeeping (${(error as NodeJS.ErrnoException)?.code ?? "error"}); the wake still counts`);
       });
-      if (results.some(({ r }) => r.ok)) {
-        if (failures.length) this.o.log(`@${participant}: event ${event.eventId} not accepted by ${failures.join(", ")}`);
+      if (accepted === batches.length) {
+        if (failures.length) this.o.log(`@${participant}: ${batches.length === 1 ? `event ${batches[0]!.event.eventId}` : `${batches.length} events`} not accepted by ${failures.join(", ")}`);
         return;
       }
+      if (accepted === 0 && terminal === batches.length) throw new TerminalWakeError(`every subscriber refused the event for good (${failures.join(", ")})`);
       throw new Error(`no subscriber accepted the event (${failures.join(", ") || "subscriptions went away"})`);
     };
+  }
+
+  /** Event ids held for wakes the coordinator may retry, so a retry carries the same id and the receiver can dedupe it. Keyed by participant and delivery set. */
+  private readonly pending = new Map<string, string>();
+
+  private batches(participant: string, name: string, deliveryIds: string[]): { key: string; event: Event; body: string }[] {
+    const make = (ids: string[]) => {
+      const key = `${participant}\u0000${[...ids].sort().join(",")}`;
+      let eventId = this.pending.get(key);
+      if (!eventId) {
+        eventId = randomId("evt");
+        this.pending.set(key, eventId);
+      }
+      const n = ids.length;
+      const event: Event = {
+        eventId,
+        name,
+        timestamp: new Date(this.now()).toISOString(),
+        data: { participant, deliveryIds: ids, count: n, summary: `${n} comms ${n === 1 ? "delivery is" : "deliveries are"} waiting for @${participant}.` },
+        cursor: null,
+      };
+      return { key, event, body: JSON.stringify(event) };
+    };
+    const out: { key: string; event: Event; body: string }[] = [];
+    const split = (ids: string[]) => {
+      const b = make(ids);
+      if (Buffer.byteLength(b.body) <= MAX_BODY || ids.length === 1) {
+        if (Buffer.byteLength(b.body) > MAX_BODY) throw new TerminalWakeError("a single delivery id doesn't fit in a 256 KiB event");
+        out.push(b);
+        return;
+      }
+      this.pending.delete(b.key);
+      split(ids.slice(0, ids.length >> 1));
+      split(ids.slice(ids.length >> 1));
+    };
+    split(deliveryIds);
+    return out;
   }
 }

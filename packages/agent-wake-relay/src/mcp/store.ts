@@ -89,8 +89,11 @@ export class SubscriptionStore {
     try {
       await this.save();
     } catch (error) {
-      if (previous) this.subs.set(sub.id, previous);
-      else this.subs.delete(sub.id);
+      // Only undo this call's own change: a later put for the same id has already replaced it.
+      if (this.subs.get(sub.id) === sub) {
+        if (previous) this.subs.set(sub.id, previous);
+        else this.subs.delete(sub.id);
+      }
       throw error;
     }
   }
@@ -102,7 +105,7 @@ export class SubscriptionStore {
     try {
       await this.save();
     } catch (error) {
-      this.subs.set(id, previous);
+      if (!this.subs.has(id)) this.subs.set(id, previous);
       throw error;
     }
     return true;

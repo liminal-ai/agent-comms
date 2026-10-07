@@ -9,8 +9,8 @@ Agents that live in someone else's sandbox (Grok Bot, ChatGPT, Muse) manage thei
 | Step | What happens |
 |---|---|
 | watch | For each target, subscribes to the connector's work query (`connector:work`) for the agent's machine, read-only with that machine's credential. |
-| new delivery | Waits 2 s so a burst becomes one wake, then calls the target's waker. A delivery counts as new the moment it appears in the work query, while it is still `pending`: relay targets have no connector of their own, so nothing hands the item over before the agent runs. The wake is what makes the agent's bridge claim and collect it. On a machine that does run a connector (grok-box), requests are handed to a bridge one at a time, so a delivery that was still `pending` at its wake is woken for again the moment it turns `delivered`. |
-| failure | A failed wake (error, redirect, or non-2xx) is retried every 30 s. A wake that keeps failing the same way is logged every 5 min, not every retry. |
+| new delivery | Waits 2 s so a burst becomes one wake, then calls the target's waker. A delivery counts as new as soon as it appears in the work query, while still `pending`, because for a target without a connector of its own (Dot) the wake is what makes the agent's bridge claim and collect it. Where a connector does hand items to a bridge one at a time (grok-box), a delivery that was still `pending` at its wake is woken for again the moment it turns `delivered`. |
+| failure | A failed wake (error, redirect, or non-2xx) is retried every 30 s with the same event id, so a receiver can dedupe. A wake every subscriber refused for good (410, 413) isn't retried; the renudge covers it. A backlog too large for one 256 KiB event is sent as several. A wake that keeps failing the same way is logged every 5 min, not every retry. |
 | still outstanding | If a delivery is still there `renudgeAfter` (default 10 min, at most 24 days) after its last wake, it wakes again, in case the agent slept through the first. `0` turns this off. |
 | answered | The delivery leaves the work query; nothing more happens. |
 

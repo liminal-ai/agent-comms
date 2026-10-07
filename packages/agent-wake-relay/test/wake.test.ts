@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { ConfigError, parseConfig } from "../src/config.ts";
-import { Coordinator, MAX_TIMER_MS, type Timers, type WorkDelivery } from "../src/coordinator.ts";
+import { Coordinator, MAX_TIMER_MS, TerminalWakeError, type Timers, type WorkDelivery } from "../src/coordinator.ts";
 import { webhookWaker } from "../src/wakers.ts";
 
 /** A clock the test advances by hand. */
@@ -36,24 +36,30 @@ class FakeTimers implements Timers {
 
 const d = (id: string, recipient = "grok"): WorkDelivery => ({ id, recipient, state: "delivered", createdAt: 0 });
 
-function setup(opts: { fail?: number; renudgeMs?: number } = {}) {
+function setup(opts: { fail?: number; renudgeMs?: number; terminal?: number } = {}) {
   const timers = new FakeTimers();
   const wakes: string[][] = [];
+  const logs: string[] = [];
   let failures = opts.fail ?? 0;
+  let terminal = opts.terminal ?? 0;
   const c = new Coordinator({
     participant: "grok",
     timers,
-    log: () => {},
+    log: (l) => logs.push(l),
     renudgeMs: opts.renudgeMs ?? 0,
     wake: async (ids) => {
       if (failures > 0) {
         failures--;
         throw new Error("HTTP 500");
       }
+      if (terminal > 0) {
+        terminal--;
+        throw new TerminalWakeError("HTTP 410");
+      }
       wakes.push(ids);
     },
   });
-  return { timers, wakes, c };
+  return { timers, wakes, logs, c };
 }
 
 describe("coordinator", () => {
@@ -136,6 +142,30 @@ describe("coordinator", () => {
     c.update([d("b")]);
     await timers.advance(60_000);
     assert.equal(wakes.length, 2);
+  });
+
+  it("a transition seen before the wake goes out is covered by that wake, not by a second one", async () => {
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+    c.update([{ ...d("b"), state: "pending" }]);
+    await timers.advance(500);
+    c.update([d("b")]); // handed over during the coalesce window
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["b"]]);
+    c.update([d("b")]);
+    await timers.advance(60_000);
+    assert.equal(wakes.length, 1, "already delivered when woken; nothing new happened");
+  });
+
+  it("a terminal wake failure isn't retried every 30 s; the renudge tries again later", async () => {
+    const { timers, wakes, logs, c } = setup({ terminal: 1, renudgeMs: 10 * 60_000 });
+    c.update([d("a")]);
+    await timers.advance(2_000);
+    assert.equal(wakes.length, 0);
+    assert.match(logs.at(-1)!, /wake rejected .*not retrying, renudging in 10 min/);
+    await timers.advance(5 * 60_000);
+    assert.equal(wakes.length, 0, "no 30 s retries");
+    await timers.advance(5 * 60_000 + 1);
+    assert.deepEqual(wakes, [["a"]], "renudged after 10 min");
   });
 
   it("never asks a timer to wait past Node's limit, and still renudges at the right time", async () => {
