@@ -45,7 +45,10 @@ export interface CoordinatorOptions {
 export class Coordinator {
   private readonly o: Required<Omit<CoordinatorOptions, "timers">> & { timers: Timers };
   /** Outstanding deliveries for the participant → when they were last woken for (0 = not yet). */
+  /** Delivery id -> when it was last woken for (0 = never). */
   private readonly outstanding = new Map<string, number>();
+  /** Delivery id -> the state seen at its last wake, so a later handoff to `delivered` wakes again. */
+  private readonly stateAtWake = new Map<string, string>();
   private first = true;
   private timer: unknown = null;
   private renudgeTimer: unknown = null;
@@ -61,12 +64,26 @@ export class Coordinator {
   update(deliveries: WorkDelivery[]): void {
     const mine = deliveries.filter((d) => d.recipient === this.o.participant);
     const ids = new Set(mine.map((d) => d.id));
-    for (const id of [...this.outstanding.keys()]) if (!ids.has(id)) this.outstanding.delete(id);
+    for (const id of [...this.outstanding.keys()]) {
+      if (ids.has(id)) continue;
+      this.outstanding.delete(id);
+      this.stateAtWake.delete(id);
+    }
     let fresh = 0;
     for (const d of mine) {
-      if (this.outstanding.has(d.id)) continue;
-      this.outstanding.set(d.id, 0);
-      fresh++;
+      if (!this.outstanding.has(d.id)) {
+        this.outstanding.set(d.id, 0);
+        this.stateAtWake.set(d.id, d.state);
+        fresh++;
+        continue;
+      }
+      // Machines with a connector (grok-box) hand items over one at a time; a request that was still
+      // `pending` at the last wake reaches the agent's inbox later, as `delivered`. Wake again then.
+      if (d.state === "delivered" && this.stateAtWake.get(d.id) !== "delivered" && this.outstanding.get(d.id)! > 0) {
+        this.outstanding.set(d.id, 0);
+        this.stateAtWake.set(d.id, d.state);
+        fresh++;
+      }
     }
     if (this.first) {
       this.first = false;

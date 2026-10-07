@@ -57,6 +57,8 @@ export function webhookWaker(participant: string, config: WebhookWaker, request:
         note: "agent-comms: you have a delivery waiting. Check your comms inbox and answer it.",
       }),
       signal: AbortSignal.timeout(config.timeoutMs ?? 10_000),
+      // A redirect would send the wake (and bearer key) somewhere else and still count as a wake.
+      redirect: "error",
     }).catch((error: unknown) => {
       const cause = (error as { cause?: NodeJS.ErrnoException })?.cause;
       const code = cause?.code ?? (error as Error)?.name ?? "unknown";

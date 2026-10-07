@@ -118,6 +118,26 @@ describe("coordinator", () => {
     await timers.advance(30 * 60_000);
     assert.equal(wakes.length, 2);
   });
+  it("wakes again when a delivery woken while pending is later handed over as delivered", async () => {
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+    const pending = (id: string): WorkDelivery => ({ ...d(id), state: "pending" });
+    c.update([d("a"), pending("b")]);
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a", "b"]]);
+    // The bridge is answering "a"; "b" stays pending. Nothing new to wake for.
+    c.update([d("a"), pending("b")]);
+    await timers.advance(60_000);
+    assert.equal(wakes.length, 1);
+    // "a" is answered, the connector hands "b" over: it reaches the inbox now.
+    c.update([d("b")]);
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a", "b"], ["b"]], "the handoff to delivered is a fresh wake");
+    // Staying delivered doesn't wake again before the renudge.
+    c.update([d("b")]);
+    await timers.advance(60_000);
+    assert.equal(wakes.length, 2);
+  });
+
   it("never asks a timer to wait past Node's limit, and still renudges at the right time", async () => {
     const renudgeMs = 30 * 86_400_000; // 30 days: longer than a Node timer can wait
     const { timers, wakes, c } = setup({ renudgeMs });
@@ -170,6 +190,29 @@ describe("webhook waker", () => {
       server.close();
     }
   });
+  it("refuses to follow a redirect", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-"));
+    let hits = 0;
+    const server = createServer((req, res) => {
+      hits++;
+      if (req.url === "/hook") {
+        res.statusCode = 307;
+        res.setHeader("location", "/elsewhere");
+        return res.end();
+      }
+      res.end("{}");
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as { port: number }).port;
+    try {
+      await writeFile(join(dir, "url"), `http://127.0.0.1:${port}/hook`);
+      await assert.rejects(webhookWaker("grok", { kind: "webhook", urlFile: join(dir, "url") })(["a"]), /webhook request failed/);
+      assert.equal(hits, 1, "the redirect target was never requested");
+    } finally {
+      server.close();
+    }
+  });
+
   it("reports a connection failure by code only, never the URL", async () => {
     const dir = await mkdtemp(join(tmpdir(), "wake-"));
     const url = "http://127.0.0.1:9/hook-with-secret-path";
