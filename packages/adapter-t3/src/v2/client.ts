@@ -151,7 +151,7 @@ export function makeT3ClientV2(options: V2ClientOptions): V2Client {
         attachments: [] as [],
         createdBy: "user" as const,
         creationSource: "mcp" as const,
-        dispatchMode: { type: "start_immediately" as const },
+        dispatchMode: m.steer ? { type: "steer_active" as const, targetRunId: m.steer } : { type: "start_immediately" as const },
       };
       const exit = await Effect.runPromiseExit(
         (rpc(s)[DISPATCH_COMMAND]!(command) as Effect.Effect<unknown, unknown, never>).pipe(Effect.timeout("30 seconds")),

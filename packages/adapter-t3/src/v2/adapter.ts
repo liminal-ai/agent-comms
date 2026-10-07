@@ -7,9 +7,11 @@
 //   result; a command T3 refused fails "previously rejected" for good. So a dispatch
 //   error is retried once with the same id, unless the thread already has our message:
 //   refused is rejected, anything else is lost and the restart check decides.
-// - We dispatch with `start_immediately` after waiting for the thread to be idle, as a
-//   courtesy only and for at most `idleWaitMs`: on a busy thread T3 queues our message as
-//   its own run.
+// - A busy thread gets our message steered into its active run (`steer_active`): a queued
+//   run of its own could sit behind other input indefinitely. A steered message doesn't
+//   start a run, so its answer can't be collected: the rendering asks for `comms reply`,
+//   and the outcome is `ambiguous` unless that reply has already completed it. An idle
+//   thread gets its own run (`start_immediately`) and the answer is collected as before.
 // - Our run is the run whose `userMessageId` is our message. Ambiguous: another user
 //   message in our run (someone steered into it), or a steer restarted it. Only the
 //   fact is reported, never that message's text.
@@ -26,6 +28,13 @@ import { type Check, type Gate, type HandOff, messageIdFor, noticeIdFor, type Ou
 import { answerOf, encodeCursor, find, isBusy, RunTracker, TURN_OVER, V2Rejected, type V2Client, type V2StreamItem, type V2Thread } from "./model.ts";
 
 export const commandIdFor = (deliveryId: string) => `comms-cmd-${deliveryId}`;
+
+/** For a message steered into a running turn: that turn's final message isn't collected. */
+export function steeredAnswer(r: { messageId: string; sender: string; me: string }): string[] {
+  return [
+    `An answer is expected. This arrived while you were working, inside your current turn, so your final message is not sent back. Answer @${r.sender} with \`comms reply --as ${r.me} ${r.messageId} "<your answer>"\`, now or once you have it.`,
+  ];
+}
 const noticeCommandIdFor = (deliveryId: string) => `comms-notice-cmd-${deliveryId}`;
 
 export interface T3AdapterV2Options {
@@ -189,7 +198,12 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
   /** What happened in our run, from a snapshot; undefined while the run isn't over. */
   function outcomeOf(thread: V2Thread, messageId: string, settled: boolean): Outcome | undefined {
     const { run, steeredInto, entered } = find(thread, messageId);
-    if (!run) return { _tag: "uncertain", detail: steeredInto ? "our message is in a run it didn't start" : "our run isn't in the thread" };
+    if (!run && steeredInto) {
+      // Steered into someone else's run: its final message isn't ours to collect.
+      if (!TURN_OVER.includes(steeredInto.status) || (steeredInto.status === "waiting" && !settled)) return undefined;
+      return { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] };
+    }
+    if (!run) return { _tag: "uncertain", detail: "our run isn't in the thread" };
     if (run.status === "rolled_back") return { _tag: "uncertain", detail: "the run was rolled back; its outcome no longer stands" };
     if (!TURN_OVER.includes(run.status) || (run.status === "waiting" && !settled)) return undefined;
     if (entered.length > 0) return { _tag: "ambiguous", entered };
@@ -213,11 +227,12 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
     if (!thread) return { _tag: "unknown", detail: `T3 thread ${target.locator} not found` };
     const { present, run, steeredInto } = find(thread, messageId);
     if (!present) return { _tag: "absent" };
-    if (!run) return steeredInto ? { _tag: "unknown", detail: "our message is in a run it didn't start" } : { _tag: "later", detail: "our message isn't in a run yet" };
-    const outcome = outcomeOf(thread, messageId, run.status !== "waiting");
-    if (!outcome) return { _tag: "running", turnId: run.id };
+    const ran = run ?? steeredInto;
+    if (!ran) return { _tag: "later", detail: "our message isn't in a run yet" };
+    const outcome = outcomeOf(thread, messageId, ran.status !== "waiting");
+    if (!outcome) return { _tag: "running", turnId: ran.id };
     if (outcome._tag === "uncertain") return { _tag: "unknown", detail: outcome.detail };
-    return { _tag: "completed", turnId: run.id, outcome };
+    return { _tag: "completed", turnId: ran.id, outcome };
   }
 
   /** Waits (by polling snapshots) for the thread to go idle. Used for notices. */
@@ -247,10 +262,8 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         if (gate?.signal.aborted) return { _tag: "aborted", detail: "cancelled before sending" };
         const tracker = new RunTracker(messageId);
         const f = await follow(threadId, tracker);
-        // Courtesy wait until idle, at most `idleWaitMs` (docs/09 3): on a thread that stays busy
-        // T3 queues our message as its own run, so waiting longer only churns the claim. A
-        // cancelled handoff stops waiting.
-        await f.wait(() => (gate?.signal.aborted || (f.loaded && !tracker.busy) || downTooLong(f) ? true : undefined), idleWaitMs);
+        // The snapshot says whether the thread is busy: no waiting for idle (a busy thread is steered into).
+        await f.wait(() => (gate?.signal.aborted || f.loaded || downTooLong(f) ? true : undefined), idleWaitMs);
         if (!f.loaded) {
           f.stop();
           return { _tag: "aborted", detail: "T3's thread stream gave no snapshot; not sending" };
@@ -265,11 +278,18 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
           f.stop();
           return { _tag: "aborted", detail: "claim not held, or cancelled, before sending" };
         }
+        const steer = tracker.activeRunId;
         const sent = await send(
           threadId,
-          { commandId: commandIdFor(delivery.id), messageId, text: renderDelivery(delivery, { harnessLabelsSource: false }) },
+          {
+            commandId: commandIdFor(delivery.id),
+            messageId,
+            text: renderDelivery(delivery, { harnessLabelsSource: false, ...(steer ? { answerInstructions: steeredAnswer } : {}) }),
+            ...(steer ? { steer } : {}),
+          },
           async () => !gate || (!gate.signal.aborted && (await gate.confirm(cursor)) && !gate.signal.aborted),
         );
+        if (sent._tag === "sent" && steer) tracker.adopt(steer);
         if (sent._tag !== "sent") {
           f.stop();
           return sent;
@@ -277,7 +297,8 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         if (!(await f.wait(() => tracker.runId, acceptTimeoutMs))) {
           // The stream may be behind: T3 committed our message and its run together.
           const now = await client.getThread(threadId).catch(() => null);
-          if (now && find(now, messageId).run) tracker.load(now);
+          const found = now ? find(now, messageId) : undefined;
+          if (now && (found?.run || found?.steeredInto)) tracker.load(now);
           else {
             f.stop();
             return { _tag: "lost", detail: `no run for message ${messageId} after ${acceptTimeoutMs} ms` };
@@ -286,7 +307,7 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         // An answer's delivery is never followed: stop its subscription now (3.3).
         if (delivery.message.kind === "request") following.set(delivery.id, f);
         else f.stop();
-        return { _tag: "accepted", turnId: tracker.runId!, cursor };
+        return { _tag: "accepted", turnId: (tracker.runId ?? tracker.steeredRunId)!, cursor };
       } catch (error) {
         return { _tag: "lost", detail: message(error) };
       }
