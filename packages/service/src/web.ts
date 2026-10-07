@@ -7,7 +7,11 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, resolve, sep } from "node:path";
-import type { LocalBackend } from "@agent-comms/local-backend";
+import type { FunctionInfo, LocalBackend } from "@agent-comms/local-backend";
+
+/** What the web API needs from a backend: the local SQLite one, or a proxy to a Convex deployment. */
+export type WebBackend = Pick<LocalBackend, "info" | "call" | "subscribe">;
+export type { FunctionInfo };
 
 /** Modules whose public functions the web view and admin commands may call. */
 export const WEB_MODULES = new Set(["alerts", "conversations", "directory", "inbox", "registry", "reminders"]);
@@ -23,8 +27,14 @@ const TYPES: Record<string, string> = {
 };
 
 export interface WebOptions {
-  backend: LocalBackend;
-  adminToken: string;
+  backend: WebBackend;
+  /**
+   * `local`: the page sends this token as a bearer header and only loopback Hosts are served.
+   * `proxy`: no page token and any Host; the backend holds the real admin token and the network
+   * (a tailnet-only listener, a firewall) decides who may reach the page. The token never reaches a browser.
+   */
+  mode?: "local" | "proxy";
+  adminToken?: string;
   environment: string;
   /** The built web view; absent serves only the API. */
   root?: string;
@@ -40,7 +50,9 @@ class HttpError extends Error {
 }
 
 export function localWebServer(options: WebOptions): Server & { streams(): number } {
-  const expected = digest(options.adminToken);
+  const mode = options.mode ?? "local";
+  if (mode === "local" && !options.adminToken) throw new Error("local mode needs an admin token");
+  const expected = options.adminToken ? digest(options.adminToken) : undefined;
   let streams = 0;
 
   const server = createServer(async (req, res) => {
@@ -48,21 +60,23 @@ export function localWebServer(options: WebOptions): Server & { streams(): numbe
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Referrer-Policy", "no-referrer");
     try {
-      checkHost(req, server);
+      if (mode === "local") checkHost(req, server);
       const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
       if (pathname.startsWith("/api/")) {
         if (req.method !== "POST") throw new HttpError(405, "POST only");
         checkOrigin(req);
         if (!/^application\/json\b/.test(req.headers["content-type"] ?? "")) throw new HttpError(415, "send application/json");
-        const auth = /^Bearer (.+)$/.exec(req.headers.authorization ?? "")?.[1];
-        if (!auth || !timingSafeEqual(digest(auth), expected)) throw new HttpError(401, "admin token rejected");
+        if (expected) {
+          const auth = /^Bearer (.+)$/.exec(req.headers.authorization ?? "")?.[1];
+          if (!auth || !timingSafeEqual(digest(auth), expected)) throw new HttpError(401, "admin token rejected");
+        }
         if (pathname === "/api/call") return await call(req, res);
         if (pathname === "/api/watch") return await watch(req, res);
         throw new HttpError(404, "no such endpoint");
       }
       if (req.method !== "GET" && req.method !== "HEAD") throw new HttpError(405, "GET only");
-      if (pathname === "/runtime-config.json") return json(res, 200, { environment: options.environment, mode: "local" });
-      if (pathname === "/healthz") return json(res, 200, { environment: options.environment, mode: "local", status: "ok" });
+      if (pathname === "/runtime-config.json") return json(res, 200, { environment: options.environment, mode });
+      if (pathname === "/healthz") return json(res, 200, { environment: options.environment, mode, status: "ok" });
       if (!options.root) throw new HttpError(404, "not found");
       const root = resolve(options.root);
       const path = resolve(root, "." + decodeURIComponent(pathname === "/" ? "/index.html" : pathname));
@@ -176,11 +190,21 @@ export function allowedHosts(port: number): Set<string> {
   return new Set(["127.0.0.1", "localhost", "[::1]"].flatMap((n) => (port === 80 ? [n, `${n}:80`] : [`${n}:${port}`])));
 }
 
+/** The page's own origin only. Behind a TLS proxy (tailscale serve) the browser's Origin is https while the hop here is http, so the scheme isn't compared. */
 function checkOrigin(req: IncomingMessage): void {
   const origin = req.headers.origin;
-  if (origin !== undefined && origin !== `http://${req.headers.host}`) throw new HttpError(403, "cross-origin requests are refused");
+  if (origin !== undefined && originHost(origin) !== req.headers.host) throw new HttpError(403, "cross-origin requests are refused");
   if (req.headers["sec-fetch-site"] && !["same-origin", "none"].includes(req.headers["sec-fetch-site"] as string)) {
     throw new HttpError(403, "cross-site requests are refused");
+  }
+}
+
+function originHost(origin: string): string | undefined {
+  try {
+    const u = new URL(origin);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.host : undefined;
+  } catch {
+    return undefined;
   }
 }
 

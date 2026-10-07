@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { expand, loadConfig, verifyT3Binding } from "@agent-comms/connector/config";
 import { startConvexConnector } from "@agent-comms/connector/convex";
-import { webServer } from "../../../scripts/serve-web.mjs";
+import { webListener } from "../../../scripts/serve-web.mjs";
 import { type LocalConfig, loadServiceConfig } from "./config.ts";
 import { ADMIN_TOKEN_FILE, credential } from "./data.ts";
 import { startLocal } from "./local.ts";
@@ -68,14 +68,14 @@ async function run() {
     if (connectorConfig.adapters?.includes("t3") && connectorConfig.t3) await verifyT3Binding(connectorConfig.t3);
     for (const w of connectorConfig.warnings) log(`warning: ${w}`);
     const connector = await startConvexConnector(connectorConfig, log);
-    let web: ReturnType<typeof webServer> | undefined;
+    let web: ReturnType<typeof webListener> | undefined;
     if (config.web) {
       const webConfig = JSON.parse(readFileSync(config.web, "utf8")) as { environment?: string; convexUrl?: string; port?: number; adminTokenFile?: string };
       if (!webConfig.environment || !webConfig.convexUrl || !Number.isInteger(webConfig.port)) throw new Error("web config requires environment, convexUrl and port");
       if (!["http:", "https:"].includes(new URL(webConfig.convexUrl).protocol)) throw new Error("Invalid public Convex URL");
       const root = webRoot();
       if (!root) throw new Error("no built web view beside this service");
-      web = webServer(webConfig as { environment: string; convexUrl: string; adminTokenFile?: string }, root);
+      web = webListener(webConfig as { environment: string; convexUrl: string; adminTokenFile?: string }, root, log);
       web.listen(webConfig.port, "127.0.0.1", () => log(`Comms ${webConfig.environment} web: 127.0.0.1:${webConfig.port}`));
     }
     onStop(async () => {

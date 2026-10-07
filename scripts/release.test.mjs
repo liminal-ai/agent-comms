@@ -6,7 +6,8 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { webServer } from './serve-web.mjs';
+import { build } from 'esbuild';
+import { webListener, webServer } from './serve-web.mjs';
 import { verifyT3Binding } from '../packages/connector/src/config.ts';
 
 for (const lowerDrive of (process.platform === 'win32' ? [false, true] : [false])) {
@@ -16,7 +17,8 @@ test('web service starts through the deployed current directory link' + (lowerDr
   try {
     const release = join(dir, 'release');
     await mkdir(join(release, 'web'), { recursive: true });
-    await copyFile(new URL('./serve-web.mjs', import.meta.url), join(release, 'serve-web.mjs'));
+    // Released as a bundle (it imports the service's web API and convex); build it the same way.
+    await build({ entryPoints: { 'serve-web': new URL('./serve-web.mjs', import.meta.url).pathname }, outdir: release, outExtension: { '.js': '.mjs' }, bundle: true, platform: 'node', format: 'esm', target: 'node24', logLevel: 'silent', banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" } });
     await writeFile(join(release, 'web/index.html'), 'released web');
     // Windows directory junctions exercise the same realpath launch without symlink privileges.
     await symlink(release, join(dir, 'current'), process.platform === 'win32' ? 'junction' : 'dir');
@@ -78,6 +80,14 @@ test('one web build serves each environment config at runtime, without leaking o
       assert.equal((await fetch(url + '/missing.js')).status, 404);
       assert.equal((await fetch(url, { method: 'POST' })).status, 405);
     }
+    // With an admin token file the listener runs in proxy mode and the token never reaches the page.
+    const tokenFile = join(dir, 'admin-token');
+    await writeFile(tokenFile, 'released-admin-token');
+    const proxy = webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile }, dir, () => {}); servers.push(proxy);
+    await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
+    const config = await (await fetch(`http://127.0.0.1:${proxy.address().port}/runtime-config.json`)).text();
+    assert.deepEqual(JSON.parse(config), { environment: 'prod', mode: 'proxy' });
+    assert.doesNotMatch(config, /released-admin-token/);
   } finally {
     await Promise.all(servers.map(s => new Promise(resolve => { s.closeAllConnections(); s.close(resolve); })));
     await rm(dir, { recursive: true });

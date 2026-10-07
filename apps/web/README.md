@@ -11,7 +11,11 @@ Then conversations and groups (create, add and remove members), each conversatio
 
 The logic (presence, profile and reminder forms, labels) is in `src/lib/view.ts`, tested with `pnpm test` (`test/view.test.ts`); the Convex functions it calls are listed in `packages/protocol/README.md`.
 
-Live Convex subscriptions throughout. Auth is the development admin token (`COMMS_ADMIN_TOKEN` on the deployment), entered once and kept in the browser's localStorage. Presence: green idle (with how long), amber busy, hollow offline, dotted red when the agent's machine hasn't been heard from in 90 s (never shown as idle).
+Live subscriptions throughout. Three ways the page reaches the data, picked once at startup from `runtime-config.json`:
+
+- **proxy** (the released `serve-web.mjs` with `adminTokenFile` in its web config; this is how lim-builder serves prod and staging): the page sends no token. It calls `POST /api/call` and one streaming `POST /api/watch` on its own origin, and the web service adds the admin token, read from the file at each call, before forwarding to Convex. The admin token never reaches a browser; who may load the page is decided by the network (a tailnet-only listener, a firewall), not by a secret in the page.
+- **local** (the local comms service): the same API, with a per-session token from a `#token=` link.
+- **convex** (dev and the plain static build): the page talks to Convex directly with the development admin token (`COMMS_ADMIN_TOKEN` on the deployment), entered once and kept in localStorage. Presence: green idle (with how long), amber busy, hollow offline, dotted red when the agent's machine hasn't been heard from in 90 s (never shown as idle).
 
 ```sh
 # dev, on lim-builder (127.0.0.1:3790), token pre-filled from a file so it's never typed:

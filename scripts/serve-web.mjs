@@ -1,7 +1,23 @@
+// The released web listener. With `adminTokenFile` in its config it runs in proxy mode: the
+// page gets no token and calls POST /api/call and /api/watch here, and this process adds the
+// admin token (read from the file at each call) before forwarding to Convex. Without one it
+// only serves the built page and a token-free runtime-config.json (the page then asks for a token).
 import { createServer } from 'node:http';
 import { readFile, realpath } from 'node:fs/promises';
 import { basename, resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { localWebServer } from '../packages/service/src/web.ts';
+import { convexWebBackend } from '../packages/service/src/convex-backend.ts';
+
+/** The listener for a web config: proxy mode when it names an admin token file, static otherwise. */
+export function webListener(config, root, log = (line) => console.log(line)) {
+  if (!config.adminTokenFile) return webServer(config, root);
+  const backend = convexWebBackend({ convexUrl: config.convexUrl, adminTokenFile: config.adminTokenFile });
+  const server = localWebServer({ backend, environment: config.environment, mode: 'proxy', root, log });
+  const close = server.close.bind(server);
+  server.close = (cb) => { void backend.close(); return close(cb); };
+  return server;
+}
 
 export function webServer(config, root) {
   const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json' };
@@ -13,8 +29,8 @@ export function webServer(config, root) {
       const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
       let body;
       if (pathname === '/runtime-config.json') {
-        const adminToken = config.adminTokenFile ? (await readFile(config.adminTokenFile, 'utf8')).trim() : undefined;
-        body = JSON.stringify({ environment: config.environment, convexUrl: config.convexUrl, ...(adminToken ? { adminToken } : {}) });
+        // Never the admin token: a config with adminTokenFile is served by webListener's proxy mode instead.
+        body = JSON.stringify({ environment: config.environment, convexUrl: config.convexUrl });
         res.setHeader('Content-Type', 'application/json');
       } else if (pathname === '/healthz') {
         body = JSON.stringify({ environment: config.environment, status: 'ok' });
@@ -40,5 +56,5 @@ if (process.argv[1] && basename(fileURLToPath(import.meta.url)) === 'serve-web.m
   if (!config.environment || !config.convexUrl || !Number.isInteger(config.port)) throw new Error('web config requires environment, convexUrl and port');
   if (!['http:', 'https:'].includes(new URL(config.convexUrl).protocol)) throw new Error('Invalid public Convex URL');
   const root = fileURLToPath(new URL('./web', import.meta.url));
-  webServer(config, root).listen(config.port, '127.0.0.1', () => console.log(`Comms ${config.environment} web: 127.0.0.1:${config.port}`));
+  webListener(config, root).listen(config.port, '127.0.0.1', () => console.log(`Comms ${config.environment} web: 127.0.0.1:${config.port}${config.adminTokenFile ? ' (proxy mode)' : ''}`));
 }
