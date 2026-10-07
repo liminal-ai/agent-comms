@@ -10,12 +10,14 @@ import { tokens, useMutation, useQuery } from "./lib/backend.tsx";
 import { alertsView, conversationReadKey, defaultPostingAs, inboxBadge, ownerChoices, parsePromotion, titleWithUnread } from "./lib/view.ts";
 
 const AS_KEY = "agent-comms.as";
+/** Proxy mode: the served page holds no token, so an error never asks for one. */
+const proxied = () => window.commsConfig?.mode === "proxy";
 
 export function App() {
   const [token, setToken] = useState(() => tokens.get() || window.commsConfig?.adminToken || __DEV_ADMIN_TOKEN__);
   if (!token) return <TokenGate onToken={(t) => (tokens.set(t), setToken(t))} />;
   return (
-    <Boundary onReset={() => (tokens.forget(), setToken(""))}>
+    <Boundary onReset={() => (tokens.forget(), setToken(tokens.get()))}>
       <Main token={token} />
     </Boundary>
   );
@@ -44,8 +46,8 @@ class Boundary extends Component<{ children: ReactNode; onReset: () => void }, {
     if (!this.state.error) return this.props.children;
     return (
       <div className="gate">
-        <p className="error">{this.state.error.message.includes("admin token") ? "That admin token was rejected." : this.state.error.message}</p>
-        <button onClick={() => (this.setState({ error: null }), this.props.onReset())}>Enter the token again</button>
+        <p className="error">{this.state.error.message.includes("admin token") && !proxied() ? "That admin token was rejected." : this.state.error.message}</p>
+        <button onClick={() => (this.setState({ error: null }), this.props.onReset())}>{proxied() ? "Try again" : "Enter the token again"}</button>
       </div>
     );
   }

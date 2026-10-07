@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { webListener, webServer } from './serve-web.mjs';
 import { verifyT3Binding } from '../packages/connector/src/config.ts';
@@ -18,19 +19,26 @@ test('web service starts through the deployed current directory link' + (lowerDr
     const release = join(dir, 'release');
     await mkdir(join(release, 'web'), { recursive: true });
     // Released as a bundle (it imports the service's web API and convex); build it the same way.
-    await build({ entryPoints: { 'serve-web': new URL('./serve-web.mjs', import.meta.url).pathname }, outdir: release, outExtension: { '.js': '.mjs' }, bundle: true, platform: 'node', format: 'esm', target: 'node24', logLevel: 'silent', banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" } });
+    await build({ entryPoints: { 'serve-web': fileURLToPath(new URL('./serve-web.mjs', import.meta.url)) }, outdir: release, outExtension: { '.js': '.mjs' }, bundle: true, platform: 'node', format: 'esm', target: 'node24', logLevel: 'silent', banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" } });
     await writeFile(join(release, 'web/index.html'), 'released web');
     // Windows directory junctions exercise the same realpath launch without symlink privileges.
     await symlink(release, join(dir, 'current'), process.platform === 'win32' ? 'junction' : 'dir');
+    // Proxy mode, as deployed: the bundle must hold the token and keep it out of the page's config.
+    const tokenFile = join(dir, 'admin-token');
+    await writeFile(tokenFile, 'bundled-admin-token');
     const config = join(dir, 'config.json');
-    await writeFile(config, JSON.stringify({ environment: 'staging', convexUrl: 'https://staging.example.test', port: 0 }));
+    await writeFile(config, JSON.stringify({ environment: 'staging', convexUrl: 'https://staging.example.test', port: 0, adminTokenFile: tokenFile }));
     const entry = join(dir, 'current/serve-web.mjs');
     child = spawn(process.execPath, [lowerDrive ? entry[0].toLowerCase() + entry.slice(1) : entry, config], { stdio: ['ignore', 'pipe', 'pipe'] });
     const result = await Promise.race([
       once(child.stdout, 'data').then(([data]) => data.toString()),
       once(child, 'exit').then(([code]) => { throw new Error(`web exited before listening: ${code}`); }),
     ]);
-    assert.match(result, /Comms staging web: 127.0.0.1:/);
+    assert.match(result, /Comms staging web: 127.0.0.1:(\d+) \(proxy mode\)/);
+    const port = /127.0.0.1:(\d+)/.exec(result)[1];
+    const served = await (await fetch(`http://127.0.0.1:${port}/runtime-config.json`)).text();
+    assert.deepEqual(JSON.parse(served), { environment: 'staging', mode: 'proxy' });
+    assert.doesNotMatch(served, /bundled-admin-token/);
   } finally {
     if (child && child.exitCode === null) { const stopped = once(child, 'exit'); child.kill(); await stopped; }
     await rm(dir, { recursive: true });

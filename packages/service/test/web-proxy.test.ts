@@ -13,12 +13,12 @@ afterEach(() => {
 
 function fakeClient() {
   const calls: { kind: string; name: unknown; args: Record<string, unknown> }[] = [];
-  const subs: { args: Record<string, unknown>; push: (v: unknown) => void; stopped: boolean }[] = [];
+  const subs: { args: Record<string, unknown>; push: (v: unknown) => void; stopped: boolean; onError?: (e: Error) => void }[] = [];
   const client: ConvexLike = {
     query: async (ref, args) => (calls.push({ kind: "query", name: ref, args }), { ok: true }),
     mutation: async (ref, args) => (calls.push({ kind: "mutation", name: ref, args }), { done: true }),
-    onUpdate: (_ref, args, onValue) => {
-      const sub = { args, push: onValue, stopped: false };
+    onUpdate: (_ref, args, onValue, onError) => {
+      const sub = { args, push: onValue, stopped: false, onError };
       subs.push(sub);
       queueMicrotask(() => onValue({ n: 1 }));
       return () => (sub.stopped = true);
@@ -60,6 +60,27 @@ describe("the Convex proxy backend", () => {
     expect(seen).toEqual([{ n: 1 }]);
     stop();
     expect(subs[0]!.stopped).toBe(true);
+  });
+
+  it("re-subscribes a live query with the file's current token after a rotation refuses the old one", async () => {
+    const { client, subs } = fakeClient();
+    const file = tokenFile("before");
+    const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: file, client });
+    const errors: string[] = [];
+    backend.subscribe("conversations:list", {}, () => {}, (e) => errors.push(e.message));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(subs[0]!.args.adminToken).toBe("before");
+    writeFileSync(file, "after");
+    subs[0]!.onError!(new Error("admin token rejected"));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(subs[0]!.stopped).toBe(true);
+    expect(subs[1]!.args.adminToken).toBe("after");
+    expect(errors).toEqual([]);
+    // Refused again with the current token: a real error, reported once, no loop.
+    subs[1]!.onError!(new Error("admin token rejected"));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(errors).toEqual(["admin token rejected"]);
+    expect(subs.length).toBe(2);
   });
 
   it("exposes only the web modules' public functions", async () => {

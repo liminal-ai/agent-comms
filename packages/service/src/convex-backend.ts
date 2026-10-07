@@ -33,10 +33,22 @@ export interface ConvexBackendOptions {
   /** Read at each call, so the token can be rotated without a restart. */
   adminTokenFile: string;
   client?: ConvexLike;
+  log?: (line: string) => void;
+}
+
+/** The Convex client's own logging prints server errors, which can echo a call's arguments, the admin token among them. Only the error code gets through. */
+function quietLogger(log: (line: string) => void) {
+  const quiet = (level: string) => (...args: unknown[]) => {
+    const text = args.map(String).join(" ");
+    const code = /"code":"([a-z_]+)"/.exec(text)?.[1];
+    log(`convex ${level}: ${code ? `refused (${code})` : "details withheld"}`);
+  };
+  return { log: () => {}, logVerbose: () => {}, warn: quiet("warn"), error: quiet("error") };
 }
 
 export function convexWebBackend(options: ConvexBackendOptions): WebBackend & { close(): Promise<void> } {
-  const client: ConvexLike = options.client ?? new ConvexClient(options.convexUrl, { unsavedChangesWarning: false });
+  const log = options.log ?? (() => {});
+  const client: ConvexLike = options.client ?? new ConvexClient(options.convexUrl, { unsavedChangesWarning: false, logger: quietLogger(log) });
   const token = async () => {
     const t = (await readFile(options.adminTokenFile, "utf8")).trim();
     if (!t) throw new Error("admin token file is empty");
@@ -62,10 +74,22 @@ export function convexWebBackend(options: ConvexBackendOptions): WebBackend & { 
       if (WEB_FUNCTIONS[name] !== "query") throw new Error(`Could not find public function for '${name}'`);
       let stop: (() => void) | undefined;
       let stopped = false;
-      withToken(args).then((full) => {
-        if (stopped) return;
-        stop = client.onUpdate(ref(name) as FunctionReference<"query">, full, onValue, onError);
-      }, onError);
+      // A subscription carries the token it started with. If the token is rotated while a page is
+      // open, the query is refused once; re-subscribe with the file's current token, then give up.
+      const open = (retried: boolean) =>
+        withToken(args).then((full) => {
+          if (stopped) return;
+          stop = client.onUpdate(ref(name) as FunctionReference<"query">, full, onValue, (error) => {
+            if (!retried && /admin token rejected/.test(error.message)) {
+              stop?.();
+              stop = undefined;
+              void open(true);
+              return;
+            }
+            onError(error);
+          });
+        }, onError);
+      void open(false);
       return () => {
         stopped = true;
         stop?.();

@@ -16,7 +16,7 @@ export function webListener(config, root, log = (line) => console.log(line)) {
   if (!config.adminTokenFile) return webServer(config, root);
   if (config.allowedClients !== undefined && (!Array.isArray(config.allowedClients) || !config.allowedClients.every((a) => typeof a === 'string'))) throw new Error('web config: allowedClients must be a list of IP addresses');
   if (config.devAllowLoopback !== undefined && typeof config.devAllowLoopback !== 'boolean') throw new Error('web config: devAllowLoopback must be true or false');
-  const backend = convexWebBackend({ convexUrl: config.convexUrl, adminTokenFile: config.adminTokenFile });
+  const backend = convexWebBackend({ convexUrl: config.convexUrl, adminTokenFile: config.adminTokenFile, log });
   const server = localWebServer({
     backend, environment: config.environment, mode: 'proxy', root, log,
     ...(config.allowedClients ? { allowedClients: config.allowedClients } : {}),
@@ -64,5 +64,6 @@ if (process.argv[1] && basename(fileURLToPath(import.meta.url)) === 'serve-web.m
   if (!config.environment || !config.convexUrl || !Number.isInteger(config.port)) throw new Error('web config requires environment, convexUrl and port');
   if (!['http:', 'https:'].includes(new URL(config.convexUrl).protocol)) throw new Error('Invalid public Convex URL');
   const root = fileURLToPath(new URL('./web', import.meta.url));
-  webListener(config, root).listen(config.port, '127.0.0.1', () => console.log(`Comms ${config.environment} web: 127.0.0.1:${config.port}${config.adminTokenFile ? ' (proxy mode)' : ''}`));
+  const server = webListener(config, root);
+  server.listen(config.port, '127.0.0.1', () => console.log(`Comms ${config.environment} web: 127.0.0.1:${server.address().port}${config.adminTokenFile ? ' (proxy mode)' : ''}`));
 }
