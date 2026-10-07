@@ -27,6 +27,5 @@ Path scope and exclusions:
 - Skip docs and generated/vendored artifacts: `**/*.md`, `docs/**`, `**/pnpm-lock.yaml`, `.repos/**`, `vendor/**`, `third_party/**`, `**/dist/**`, `**/_generated/**`, `**/node_modules/**`
 
 Setup notes (for maintainers):
-- Claude runs via the Claude Code GitHub App using an OAuth token: set `CLAUDE_CODE_OAUTH_TOKEN` as a secret. Do not set `ANTHROPIC_API_KEY` (it takes precedence and bills the API).
 - Codex review runs via the ChatGPT Codex GitHub connector (`chatgpt-codex-connector[bot]`); no `OPENAI_API_KEY` is needed here.
 
