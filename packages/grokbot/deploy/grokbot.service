@@ -1,0 +1,25 @@
+# systemd --user unit for the Grok Bot bridge. Install beside the connector's unit:
+#   cp deploy/grokbot.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now grokbot
+# Paths are examples: point them at the installed Node 24 and the bundled
+# grokbot.mjs (pnpm --filter @agent-comms/grokbot build), or a checkout's src/main.ts.
+[Unit]
+Description=agent-comms: Grok Bot bridge (registers @grok on this machine's connector)
+After=agent-comms-connector.service
+Wants=agent-comms-connector.service
+
+[Service]
+Type=simple
+Environment=PATH=%h/.local/opt/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
+Environment=XDG_RUNTIME_DIR=%t
+Environment=AGENT_COMMS_SOCKET=%t/agent-comms/connector.sock
+Environment=GROKBOT_HOME=%h/.grok-comms
+UnsetEnvironment=SSH_AUTH_SOCK GIT_SSH_COMMAND
+ExecStart=%h/.local/opt/node-v24.18.0-linux-x64/bin/node %h/.local/share/agent-comms/grokbot.mjs run
+# Exit 0 means a newer session superseded this one: don't fight it.
+Restart=on-failure
+RestartSec=5
+MemoryMax=256M
+
+[Install]
+WantedBy=default.target

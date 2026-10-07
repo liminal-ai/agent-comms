@@ -1,0 +1,28 @@
+{
+  "name": "@agent-comms/grokbot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Grok Bot bridge: presents Grok Bot as a Claude Code home on its machine's connector, keeps a durable inbox of deliveries, and reports answers given with the grokbot CLI.",
+  "bin": {
+    "grokbot": "./src/main.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts run",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node24 --outfile=dist/grokbot.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test --test-timeout=60000 \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@agent-comms/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@agent-comms/connector-stub": "workspace:*",
+    "@types/node": "catalog:",
+    "esbuild": "0.27.0",
+    "typescript": "catalog:"
+  }
+}

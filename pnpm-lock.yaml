@@ -142,6 +142,9 @@ importers:
       '@agent-comms/comms-cli':
         specifier: workspace:*
         version: link:../comms-cli
+      '@agent-comms/grokbot':
+        specifier: workspace:*
+        version: link:../grokbot
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4
@@ -158,6 +161,25 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
+  packages/grokbot:
+    dependencies:
+      '@agent-comms/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@agent-comms/connector-stub':
+        specifier: workspace:*
+        version: link:../connector-stub
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      esbuild:
+        specifier: 0.27.0
+        version: 0.27.0
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

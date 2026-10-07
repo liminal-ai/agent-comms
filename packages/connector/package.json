@@ -29,6 +29,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "@agent-comms/comms-cli": "workspace:*"
+    "@agent-comms/comms-cli": "workspace:*",
+    "@agent-comms/grokbot": "workspace:*"
   }
 }
