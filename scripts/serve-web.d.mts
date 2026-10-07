@@ -13,5 +13,5 @@ export interface WebConfig {
 }
 /** Static page plus a token-free runtime-config.json. */
 export function webServer(config: WebConfig, root: string): Server;
-/** Proxy mode when `adminTokenFile` is set (the page calls /api/call and /api/watch here), static otherwise. */
+/** Proxy mode when `adminTokenFile` is set (the page calls /api/call and /api/watch here); it refuses to start without `allowedClients` and `publicHosts` unless `devAllowLoopback`. Static otherwise. */
 export function webListener(config: WebConfig, root: string, log?: (line: string) => void): Server;

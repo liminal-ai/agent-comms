@@ -17,6 +17,10 @@ export function webListener(config, root, log = (line) => console.log(line)) {
   if (config.allowedClients !== undefined && (!Array.isArray(config.allowedClients) || !config.allowedClients.every((a) => typeof a === 'string'))) throw new Error('web config: allowedClients must be a list of IP addresses');
   if (config.devAllowLoopback !== undefined && typeof config.devAllowLoopback !== 'boolean') throw new Error('web config: devAllowLoopback must be true or false');
   if (config.publicHosts !== undefined && (!Array.isArray(config.publicHosts) || !config.publicHosts.every((h) => typeof h === 'string' && h))) throw new Error('web config: publicHosts must be a list of host[:port] values');
+  // A proxy that admits any client would hand the page's admin power to the whole network. Deployments must say who.
+  if (!config.devAllowLoopback && (!config.allowedClients?.length || !config.publicHosts?.length)) {
+    throw new Error('web config: proxy mode (adminTokenFile) needs allowedClients and publicHosts; devAllowLoopback: true is for development only');
+  }
   const backend = convexWebBackend({ convexUrl: config.convexUrl, adminTokenFile: config.adminTokenFile, log });
   const server = localWebServer({
     backend, environment: config.environment, mode: 'proxy', root, log,

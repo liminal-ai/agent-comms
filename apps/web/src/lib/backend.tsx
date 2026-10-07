@@ -31,6 +31,11 @@ export function startProxy(): void {
 }
 
 const PROXY_PLACEHOLDER = "(held by the server)";
+
+/** After an error boundary reset: drop every failed live query so the remount subscribes afresh instead of re-reading a cached error. */
+export function resetFailed(): void {
+  local?.resetFailed();
+}
 export const tokens = {
   get: () => (mode === "proxy" ? PROXY_PLACEHOLDER : (mode === "local" ? sessionStorage : localStorage).getItem(TOKEN_KEY) ?? ""),
   set: (t: string) => mode !== "proxy" && (mode === "local" ? sessionStorage : localStorage).setItem(TOKEN_KEY, t),
@@ -132,6 +137,17 @@ class LocalClient {
     };
     this.entries.set(key, e);
     return e;
+  }
+
+  resetFailed(): void {
+    let changed = false;
+    for (const [key, e] of this.entries) {
+      if (e.state?.error) {
+        this.entries.delete(key);
+        changed = true;
+      }
+    }
+    if (changed) this.reopen();
   }
 
   /** The watched set changed: one new stream carries all of it. */

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm, mkdir, copyFile, symlink } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { request } from 'node:http';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +11,13 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { webListener, webServer } from './serve-web.mjs';
 import { verifyT3Binding } from '../packages/connector/src/config.ts';
+
+// fetch() won't send a chosen Host header; a raw request can, as a request through tailscale serve would arrive.
+const getAs = (port, headers) => new Promise((resolve, reject) => {
+  request({ host: '127.0.0.1', port, path: '/runtime-config.json', headers }, (res) => {
+    let body = ''; res.on('data', (c) => (body += c)); res.on('end', () => resolve({ status: res.statusCode, body }));
+  }).on('error', reject).end();
+});
 
 for (const lowerDrive of (process.platform === 'win32' ? [false, true] : [false])) {
 test('web service starts through the deployed current directory link' + (lowerDrive ? ' with lower-case drive spelling' : ''), { timeout: 10_000 }, async () => {
@@ -27,7 +35,7 @@ test('web service starts through the deployed current directory link' + (lowerDr
     const tokenFile = join(dir, 'admin-token');
     await writeFile(tokenFile, 'bundled-admin-token');
     const config = join(dir, 'config.json');
-    await writeFile(config, JSON.stringify({ environment: 'staging', convexUrl: 'https://staging.example.test', port: 0, adminTokenFile: tokenFile }));
+    await writeFile(config, JSON.stringify({ environment: 'staging', convexUrl: 'https://staging.example.test', port: 0, adminTokenFile: tokenFile, allowedClients: ['100.100.0.1'], publicHosts: ['comms.example.test:8464'] }));
     const entry = join(dir, 'current/serve-web.mjs');
     child = spawn(process.execPath, [lowerDrive ? entry[0].toLowerCase() + entry.slice(1) : entry, config], { stdio: ['ignore', 'pipe', 'pipe'] });
     const result = await Promise.race([
@@ -36,7 +44,7 @@ test('web service starts through the deployed current directory link' + (lowerDr
     ]);
     assert.match(result, /Comms staging web: 127.0.0.1:(\d+) \(proxy mode\)/);
     const port = /127.0.0.1:(\d+)/.exec(result)[1];
-    const served = await (await fetch(`http://127.0.0.1:${port}/runtime-config.json`)).text();
+    const served = (await getAs(port, { host: 'comms.example.test:8464', 'x-forwarded-for': '100.100.0.1' })).body;
     assert.deepEqual(JSON.parse(served), { environment: 'staging', mode: 'proxy' });
     assert.doesNotMatch(served, /bundled-admin-token/);
   } finally {
@@ -91,9 +99,14 @@ test('one web build serves each environment config at runtime, without leaking o
     // With an admin token file the listener runs in proxy mode and the token never reaches the page.
     const tokenFile = join(dir, 'admin-token');
     await writeFile(tokenFile, 'released-admin-token');
-    const proxy = webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile }, dir, () => {}); servers.push(proxy);
+    assert.throws(() => webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile }, dir, () => {}), /needs allowedClients and publicHosts/);
+    const proxy = webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile, allowedClients: ['100.100.0.1'], publicHosts: ['comms.example.test:8461'] }, dir, () => {}); servers.push(proxy);
     await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
-    const config = await (await fetch(`http://127.0.0.1:${proxy.address().port}/runtime-config.json`)).text();
+    const pport = proxy.address().port;
+    const config = (await getAs(pport, { host: 'comms.example.test:8461', 'x-forwarded-for': '100.100.0.1' })).body;
+    assert.equal((await getAs(pport, { host: 'attacker.example:8461', 'x-forwarded-for': '100.100.0.1' })).status, 403, 'foreign Host');
+    assert.equal((await getAs(pport, { host: 'comms.example.test:8461', 'x-forwarded-for': '100.100.0.9' })).status, 403, 'unlisted client');
+    assert.equal((await getAs(pport, { host: 'comms.example.test:8461' })).status, 403, 'no forwarded client');
     assert.deepEqual(JSON.parse(config), { environment: 'prod', mode: 'proxy' });
     assert.doesNotMatch(config, /released-admin-token/);
   } finally {

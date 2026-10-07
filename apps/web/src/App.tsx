@@ -6,7 +6,7 @@
 import { Component, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Alerts, Inbox, Registry, Reminders } from "./Capabilities.tsx";
-import { tokens, useMutation, useQuery } from "./lib/backend.tsx";
+import { resetFailed, tokens, useMutation, useQuery } from "./lib/backend.tsx";
 import { alertsView, conversationReadKey, defaultPostingAs, inboxBadge, ownerChoices, parsePromotion, titleWithUnread } from "./lib/view.ts";
 
 const AS_KEY = "agent-comms.as";
@@ -17,7 +17,7 @@ export function App() {
   const [token, setToken] = useState(() => tokens.get() || window.commsConfig?.adminToken || __DEV_ADMIN_TOKEN__);
   if (!token) return <TokenGate onToken={(t) => (tokens.set(t), setToken(t))} />;
   return (
-    <Boundary onReset={() => (tokens.forget(), setToken(tokens.get()))}>
+    <Boundary onReset={() => (resetFailed(), tokens.forget(), setToken(tokens.get()))}>
       <Main token={token} />
     </Boundary>
   );

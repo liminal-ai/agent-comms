@@ -195,39 +195,39 @@ describe("the web API in proxy mode", () => {
   it("with allowedClients, serves only the single X-Forwarded-For address tailscale serve sets", async () => {
     const { client } = fakeClient();
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("t"), client });
-    const allowedClients = ["100.119.218.24", "fd7a:115c:a1e0::6c38:da19"];
+    const allowedClients = ["100.100.0.1", "fd7a:115c:a1e0::1"];
     const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients, log: () => {} }));
     const get = (xff?: string | string[]) => {
       const headers: Record<string, string> = {};
       if (typeof xff === "string") headers["x-forwarded-for"] = xff;
       return fetch(`http://127.0.0.1:${port}/runtime-config.json`, { headers: xff === undefined ? {} : Array.isArray(xff) ? [["x-forwarded-for", xff[0]!], ["x-forwarded-for", xff[1]!]] : headers }).then((r) => r.status);
     };
-    expect(await get("100.119.218.24")).toBe(200);
-    expect(await get("FD7A:115C:A1E0::6C38:DA19")).toBe(200);
-    expect(await get("100.76.79.5")).toBe(403); // grok-box
-    expect(await get("100.97.89.116")).toBe(403); // muse
+    expect(await get("100.100.0.1")).toBe(200);
+    expect(await get("FD7A:115C:A1E0::1")).toBe(200);
+    expect(await get("100.100.0.2")).toBe(403); // a sandbox host
+    expect(await get("100.100.0.3")).toBe(403); // another sandbox host
     expect(await get()).toBe(403); // no header: didn't come through serve
-    expect(await get("100.119.218.24, 100.76.79.5")).toBe(403); // several values: no guessing
-    expect(await get(["100.119.218.24", "100.76.79.5"])).toBe(403); // repeated header
+    expect(await get("100.100.0.1, 100.100.0.2")).toBe(403); // several values: no guessing
+    expect(await get(["100.100.0.1", "100.100.0.2"])).toBe(403); // repeated header
     expect(await get("lim-builder")).toBe(403); // not an IP
     expect(await get("")).toBe(403);
-    const api = await post(port, "/api/call", { kind: "query", name: "directory:list", args: {} }, { "x-forwarded-for": "100.76.79.5" });
+    const api = await post(port, "/api/call", { kind: "query", name: "directory:list", args: {} }, { "x-forwarded-for": "100.100.0.2" });
     expect(api.status).toBe(403);
     expect(await api.json()).toEqual({ error: { message: "client not allowed" } });
-    expect((await post(port, "/api/call", { kind: "query", name: "directory:list", args: {} }, { "x-forwarded-for": "100.119.218.24" })).status).toBe(200);
+    expect((await post(port, "/api/call", { kind: "query", name: "directory:list", args: {} }, { "x-forwarded-for": "100.100.0.1" })).status).toBe(200);
   });
 
   it("devAllowLoopback lets header-less loopback requests through, and only when set", async () => {
     const { client } = fakeClient();
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("t"), client });
-    const allowedClients = ["100.119.218.24"];
+    const allowedClients = ["100.100.0.1"];
     const prod = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients, log: () => {} }));
     const prodOff = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients, devAllowLoopback: false, log: () => {} }));
     const dev = await listen(localWebServer({ backend, environment: "dev", mode: "proxy", allowedClients, devAllowLoopback: true, log: () => {} }));
     expect((await fetch(`http://127.0.0.1:${prod}/healthz`)).status).toBe(403);
     expect((await fetch(`http://127.0.0.1:${prodOff}/healthz`)).status).toBe(403);
     expect((await fetch(`http://127.0.0.1:${dev}/healthz`)).status).toBe(200);
-    expect((await fetch(`http://127.0.0.1:${dev}/healthz`, { headers: { "x-forwarded-for": "100.76.79.5" } })).status).toBe(403); // a forwarded excluded client is still refused in dev
+    expect((await fetch(`http://127.0.0.1:${dev}/healthz`, { headers: { "x-forwarded-for": "100.100.0.2" } })).status).toBe(403); // a forwarded excluded client is still refused in dev
   });
 
   it("refuses an allowedClients entry that isn't an IP", () => {
