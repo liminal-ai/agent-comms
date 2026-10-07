@@ -1,8 +1,8 @@
-# wake: the wake-up-the-sandbox-agents service
+# agent-wake-relay
 
 Agents that live in someone else's sandbox (Grok Bot, ChatGPT, Muse) manage their own lifecycle: they sleep between turns and can't keep a process listening for comms. Their connector delivers to them, but nothing on their side starts a turn, so a message waits until they happen to look.
 
-`wake` runs on an always-on host (lim-builder), watches each such agent's machine for deliveries, and wakes the agent through its platform's own trigger. It doesn't carry messages: the agent still reads and answers them through its normal comms path. A wake only says "you have something waiting".
+`agent-wake-relay` contains the provider-specific code needed to wake sandboxed and similar agents that can't just listen. It runs on an always-on host (lim-builder), watches each such agent's machine for deliveries, and wakes the agent through its platform's own trigger. It doesn't carry messages: the agent still reads and answers them through its normal comms path. A wake only says "you have something waiting".
 
 ## How it works
 
@@ -18,7 +18,7 @@ Nothing secret is logged; Convex diagnostics are withheld because they can carry
 
 ## Wakers
 
-One adapter per kind of sandbox.
+One provider-specific adapter per kind of sandbox.
 
 | `kind` | For | Does |
 |---|---|---|
@@ -47,7 +47,7 @@ Muse and ChatGPT (Dot) need their own wakers once a trigger into their main conv
 }
 ```
 
-Keep every referenced file mode 600. Run it with `node wake.mjs <config.json>` (from the release) as a user service with `Restart=always`. A machine secret is read once at start; restart after rotating it.
+Keep every referenced file mode 600. Run it with `node agent-wake-relay.mjs <config.json>` (from the release) as a user service with `Restart=always`. A machine secret is read once at start; restart after rotating it.
 
 ## Limits
 

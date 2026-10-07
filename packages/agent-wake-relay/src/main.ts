@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// The wake-up-the-sandbox-agents service. Agents in sandboxes (Grok Bot,
-// ChatGPT, Muse...) manage their own lifecycle and can't keep a process
-// listening for comms, so this runs on an always-on host, watches each agent's
-// machine for new deliveries, and wakes the agent through its platform's own
-// trigger. Usage: wake <config.json>
+// agent-wake-relay: wakes sandboxed and similar agents (Grok Bot, ChatGPT,
+// Muse...) that manage their own lifecycle and can't keep a listener running.
+// It runs on an always-on host, watches each agent's machine for new
+// deliveries, and wakes the agent with provider-specific code. Usage:
+// agent-wake-relay <config.json>
 
 import { readFileSync } from "node:fs";
 import { ConvexClient } from "convex/browser";
@@ -14,7 +14,7 @@ import { makeWaker } from "./wakers.ts";
 
 const path = process.argv[2];
 if (!path || path === "--help" || path === "-h") {
-  process.stdout.write("usage: wake <config.json>\nWakes sandboxed agents when comms has a delivery for them. See packages/wake/README.md.\n");
+  process.stdout.write("usage: agent-wake-relay <config.json>\nWakes sandboxed agents when comms has a delivery for them. See packages/agent-wake-relay/README.md.\n");
   process.exit(path ? 0 : 2);
 }
 

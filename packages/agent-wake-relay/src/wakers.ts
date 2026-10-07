@@ -28,7 +28,7 @@ async function secret(path: string, what: string): Promise<string> {
 
 export function webhookWaker(participant: string, config: WebhookWaker, request: typeof fetch = fetch): WakeFn {
   return async (deliveryIds) => {
-    const headers: Record<string, string> = { "content-type": "application/json", "user-agent": "agent-comms-wake" };
+    const headers: Record<string, string> = { "content-type": "application/json", "user-agent": "agent-comms-agent-wake-relay" };
     if (config.bearerKeyFile) headers.authorization = `Bearer ${await secret(config.bearerKeyFile, "bearer key")}`;
     const res = await request(await secret(config.urlFile, "webhook URL"), {
       method: "POST",

@@ -1,4 +1,4 @@
-// The wake service's configuration: one JSON file listing the agents to wake.
+// agent-wake-relay's configuration: one JSON file listing the agents to wake.
 // It names files for every secret (machine secrets, webhook URLs and keys) and
 // holds none itself.
 

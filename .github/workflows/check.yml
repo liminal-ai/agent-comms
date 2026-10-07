@@ -45,7 +45,7 @@ jobs:
       - if: steps.scope.outputs.mode != 'docs'
         run: node dist/agent-comms-0.0.0-ci/grokbot.mjs --help
       - if: steps.scope.outputs.mode != 'docs'
-        run: node dist/agent-comms-0.0.0-ci/wake.mjs --help
+        run: node dist/agent-comms-0.0.0-ci/agent-wake-relay.mjs --help
       - name: Exercise local mode from the release
         if: steps.scope.outputs.mode != 'docs'
         run: node scripts/local-smoke.mjs 0.0.0-ci

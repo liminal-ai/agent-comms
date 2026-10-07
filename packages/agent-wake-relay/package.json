@@ -1,11 +1,11 @@
 {
-  "name": "@agent-comms/wake",
+  "name": "@agent-comms/agent-wake-relay",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The wake-up-the-sandbox-agents service: runs on an always-on host and wakes sandboxed agents through their platform's own trigger when comms has a delivery for them.",
+  "description": "agent-wake-relay: provider-specific code that wakes sandboxed and similar agents, which can't keep a listener running, when comms has a delivery for them. Runs on an always-on host.",
   "bin": {
-    "wake": "./src/main.ts"
+    "agent-wake-relay": "./src/main.ts"
   },
   "scripts": {
     "start": "node src/main.ts",
