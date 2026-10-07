@@ -56,6 +56,8 @@ export function scrubbed(error: unknown): Error & { data?: unknown } {
   const message = error instanceof Error ? error.message : String(error);
   // Our own requireAdmin text, which never carries arguments; the page and the re-subscribe logic key on it.
   if (/^admin token rejected$/.test(message) || /Error: admin token rejected$/.test(message.split("\n")[0] ?? "")) return new Error("admin token rejected");
+  const code = (error as NodeJS.ErrnoException)?.code;
+  if (code === "ENOENT" || code === "EACCES" || code === "EISDIR" || /admin token file is empty/.test(message)) return new Error("request failed (the admin token is not available on the server)");
   const kind = /ArgumentValidationError|Validator/.test(message) ? "the server refused the call's arguments" : /\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|fetch failed|WebSocket)\b/i.exec(message)?.[1] ?? "details withheld";
   return new Error(`request failed (${kind})`);
 }
@@ -81,8 +83,9 @@ export function convexWebBackend(options: ConvexBackendOptions): WebBackend & { 
     },
     async call(kind: Kind, name: string, args: unknown): Promise<unknown> {
       if (WEB_FUNCTIONS[name] !== kind) throw new Error(`Could not find public function for '${name}'`);
-      const full = await withToken(args);
       try {
+        // Token loading is inside the guard too: a filesystem error names the token file's path.
+        const full = await withToken(args);
         return await (kind === "query" ? client.query(ref(name) as FunctionReference<"query">, full) : client.mutation(ref(name) as FunctionReference<"mutation">, full));
       } catch (error) {
         throw scrubbed(error);

@@ -133,6 +133,21 @@ describe("the Convex proxy backend", () => {
     expect(scrubbed(new Error(`fetch failed: ${token}`)).message).toBe("request failed (fetch failed)");
   });
 
+  it("a missing or empty token file is reported without its path", async () => {
+    const { client } = fakeClient();
+    const path = join(mkdtempSync(join(tmpdir(), "comms-proxy-")), "secret-dir", "admin-token");
+    const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: path, client });
+    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", log: () => {} }));
+    const r = await post(port, "/api/call", { kind: "query", name: "directory:list", args: {} });
+    const text = await r.text();
+    expect(text).not.toContain("secret-dir");
+    expect(JSON.parse(text)).toEqual({ error: { message: "request failed (the admin token is not available on the server)" } });
+    const watch = await post(port, "/api/watch", { queries: [{ id: "q", name: "directory:list", args: {} }] });
+    const first = new TextDecoder().decode((await watch.body!.getReader().read()).value);
+    expect(first).not.toContain("secret-dir");
+    expect(JSON.parse(first.split("\n")[0]!)).toEqual({ id: "q", error: { message: "request failed (the admin token is not available on the server)" } });
+  });
+
   it("with publicHosts, serves only those Host values", async () => {
     const { client } = fakeClient();
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("t"), client });
