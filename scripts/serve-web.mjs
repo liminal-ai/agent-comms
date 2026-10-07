@@ -5,7 +5,7 @@
 // `allowedClients` (proxy mode) limits who is served to the tailnet addresses tailscale serve reports
 // in X-Forwarded-For; `devAllowLoopback: true` lets header-less loopback requests through in development.
 import { createServer } from 'node:http';
-import { readFile, realpath } from 'node:fs/promises';
+import { chmod, readFile, realpath, rm } from 'node:fs/promises';
 import { basename, resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localWebServer } from '../packages/service/src/web.ts';
@@ -18,9 +18,11 @@ export function webListener(config, root, log = (line) => console.log(line)) {
   if (config.devAllowLoopback !== undefined && typeof config.devAllowLoopback !== 'boolean') throw new Error('web config: devAllowLoopback must be true or false');
   if (config.publicHosts !== undefined && (!Array.isArray(config.publicHosts) || !config.publicHosts.every((h) => typeof h === 'string' && h))) throw new Error('web config: publicHosts must be a list of host[:port] values');
   // A proxy that admits any client would hand the page's admin power to the whole network. Deployments must say who.
-  if (!config.devAllowLoopback && (!config.allowedClients?.length || !config.publicHosts?.length)) {
-    throw new Error('web config: proxy mode (adminTokenFile) needs allowedClients and publicHosts; devAllowLoopback: true is for development only');
+  // devAllowLoopback only adds a loopback exception for development; it never lifts these.
+  if (!config.allowedClients?.length || !config.publicHosts?.length) {
+    throw new Error('web config: proxy mode (adminTokenFile) needs allowedClients and publicHosts');
   }
+  if (config.socket !== undefined && (typeof config.socket !== 'string' || !config.socket.startsWith('/'))) throw new Error('web config: socket must be an absolute path');
   const backend = convexWebBackend({ convexUrl: config.convexUrl, adminTokenFile: config.adminTokenFile, log });
   const server = localWebServer({
     backend, environment: config.environment, mode: 'proxy', root, log,
@@ -67,9 +69,19 @@ export function webServer(config, root) {
 // Bundled into service.mjs, this module's URL is the service's: only run as serve-web.mjs itself.
 if (process.argv[1] && basename(fileURLToPath(import.meta.url)) === 'serve-web.mjs' && await realpath(fileURLToPath(import.meta.url)) === await realpath(process.argv[1])) {
   const config = JSON.parse(await readFile(process.argv[2], 'utf8'));
-  if (!config.environment || !config.convexUrl || !Number.isInteger(config.port)) throw new Error('web config requires environment, convexUrl and port');
+  if (!config.environment || !config.convexUrl || (!config.socket && !Number.isInteger(config.port))) throw new Error('web config requires environment, convexUrl and port (or socket)');
   if (!['http:', 'https:'].includes(new URL(config.convexUrl).protocol)) throw new Error('Invalid public Convex URL');
   const root = fileURLToPath(new URL('./web', import.meta.url));
   const server = webListener(config, root);
-  server.listen(config.port, '127.0.0.1', () => console.log(`Comms ${config.environment} web: 127.0.0.1:${server.address().port}${config.adminTokenFile ? ' (proxy mode)' : ''}`));
+  if (config.socket) {
+    // A unix socket only the service's user (and root, which tailscaled is) can open: the proxy hop
+    // can't be forged by another local account, so X-Forwarded-For can be trusted.
+    await rm(config.socket, { force: true });
+    server.listen(config.socket, async () => {
+      await chmod(config.socket, 0o600);
+      console.log(`Comms ${config.environment} web: unix:${config.socket} (proxy mode)`);
+    });
+  } else {
+    server.listen(config.port, '127.0.0.1', () => console.log(`Comms ${config.environment} web: 127.0.0.1:${server.address().port}${config.adminTokenFile ? ' (proxy mode)' : ''}`));
+  }
 }

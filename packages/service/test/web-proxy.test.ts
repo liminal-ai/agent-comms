@@ -83,6 +83,26 @@ describe("the Convex proxy backend", () => {
     expect(subs.length).toBe(2);
   });
 
+  it("a subscription that fails to start reports a scrubbed error instead of an unhandled rejection", async () => {
+    const { client } = fakeClient();
+    client.onUpdate = () => {
+      throw new Error("Field name $bogus starts with a '$', which is reserved. Args: " + JSON.stringify({ adminToken: "leak-me" }));
+    };
+    const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("leak-me"), client });
+    const errors: string[] = [];
+    const unhandled: unknown[] = [];
+    const onUnhandled = (e: unknown) => unhandled.push(e);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      backend.subscribe("directory:list", { $bogus: 1 }, () => {}, (e) => errors.push(e.message));
+      await new Promise((r) => setTimeout(r, 20));
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+    expect(unhandled).toEqual([]);
+    expect(errors).toEqual(["request failed (details withheld)"]);
+  });
+
   it("exposes only the web modules' public functions", async () => {
     const { client } = fakeClient();
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("t"), client });

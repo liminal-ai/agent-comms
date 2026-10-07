@@ -10,8 +10,10 @@ export interface WebConfig {
   devAllowLoopback?: boolean;
   /** Proxy mode: the Host values the page is published under; any other Host gets 403. */
   publicHosts?: string[];
+  /** Listen on this unix socket (mode 600) instead of 127.0.0.1:port, so only this user and root can reach the proxy hop. */
+  socket?: string;
 }
 /** Static page plus a token-free runtime-config.json. */
 export function webServer(config: WebConfig, root: string): Server;
-/** Proxy mode when `adminTokenFile` is set (the page calls /api/call and /api/watch here); it refuses to start without `allowedClients` and `publicHosts` unless `devAllowLoopback`. Static otherwise. */
+/** Proxy mode when `adminTokenFile` is set (the page calls /api/call and /api/watch here); it refuses to start without `allowedClients` and `publicHosts`. Static otherwise. */
 export function webListener(config: WebConfig, root: string, log?: (line: string) => void): Server;

@@ -65,20 +65,22 @@ Web example:
 
 The web service reads this file at startup and serves `/runtime-config.json`; the same static build can run in either environment. The URL must be reachable from the user's browser, including phones. A loopback URL only works on the server itself. No production fallback URL is baked into the build. The page title identifies the environment.
 
-Without `adminTokenFile` in `web.json`, the web service serves the page statically and users enter the comms admin token in the UI. With `adminTokenFile`, the service runs in **proxy mode**: the page gets no token; it calls `/api/call` and `/api/watch` on the service, which adds the token (read from the file at each call, so it rotates without a restart) and forwards to Convex. Only the functions the page uses are reachable. Two more keys decide who is served; proxy mode refuses to start without both (only `devAllowLoopback: true`, for development, lifts that):
+Without `adminTokenFile` in `web.json`, the web service serves the page statically and users enter the comms admin token in the UI. With `adminTokenFile`, the service runs in **proxy mode**: the page gets no token; it calls `/api/call` and `/api/watch` on the service, which adds the token (read from the file at each call, so it rotates without a restart) and forwards to Convex. Only the functions the page uses are reachable. Two more keys decide who is served; proxy mode refuses to start without both:
 
 - `allowedClients`: the tailnet addresses (v4 and v6) of the devices allowed to use the page, matched against the single `X-Forwarded-For` value `tailscale serve` sets. Anything else, and any request without that header, gets 403. This is device-level: anyone on a listed device has the page's full admin power.
 - `publicHosts`: the `host:port` names the page is published under; any other Host gets 403.
-- `devAllowLoopback: true` lets header-less loopback requests through for development. Never set it in a deployment.
+- `devAllowLoopback: true` adds one exception for development, header-less requests from loopback; the two keys above are still required. Never set it in a deployment.
+- `socket`: listen on this unix socket (created mode 600) instead of `127.0.0.1:port`, and point `tailscale serve` at `unix:<path>`. Only the service's user and root (tailscaled) can open it, so no other local account can forge the forwarded client address. Use it in deployments.
 
 ```json
 { "environment": "prod", "port": 3790, "convexUrl": "https://<deployment>.convex.cloud",
   "adminTokenFile": "/path/to/admin-token",
   "allowedClients": ["100.x.y.z", "fd7a:115c:a1e0::..."],
-  "publicHosts": ["<host>.ts.net:8461"] }
+  "publicHosts": ["<host>.ts.net:8461"],
+  "socket": "/run/user/<uid>/agent-comms/web-prod.sock" }
 ```
 
-The listener binds 127.0.0.1 only; publish it with `tailscale serve`. Errors reach the page scrubbed (our own `{code, message}`, or a bare kind), never the call's arguments.
+The listener binds a unix socket (or 127.0.0.1 only); publish it with `tailscale serve --https=<port> unix:<path>`. Errors reach the page scrubbed (our own `{code, message}`, or a bare kind), never the call's arguments.
 
 ```sh
 node current/connector.mjs --config config/connector.json

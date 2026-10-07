@@ -109,7 +109,7 @@ export function convexWebBackend(options: ConvexBackendOptions): WebBackend & { 
             }
             onError(scrubbed(error));
           });
-        }, (error) => onError(scrubbed(error)));
+        }).catch((error: unknown) => onError(scrubbed(error))); // token loading and a synchronous onUpdate throw alike
       void open(false);
       return () => {
         stopped = true;

@@ -45,6 +45,26 @@ test('web service starts through the deployed current directory link' + (lowerDr
     assert.match(result, /Comms staging web: 127.0.0.1:(\d+) \(proxy mode\)/);
     const port = /127.0.0.1:(\d+)/.exec(result)[1];
     const served = (await getAs(port, { host: 'comms.example.test:8464', 'x-forwarded-for': '100.100.0.1' })).body;
+    if (process.platform !== 'win32') {
+      // Deployed shape: a mode-600 unix socket for the serve hop.
+      const sock = join(dir, 'web.sock');
+      const sockConfig = join(dir, 'config-sock.json');
+      await writeFile(sockConfig, JSON.stringify({ environment: 'staging', convexUrl: 'https://staging.example.test', socket: sock, adminTokenFile: tokenFile, allowedClients: ['100.100.0.1'], publicHosts: ['comms.example.test:8464'] }));
+      const sockChild = spawn(process.execPath, [entry, sockConfig], { stdio: ['ignore', 'pipe', 'pipe'] });
+      try {
+        const line = await once(sockChild.stdout, 'data').then(([data]) => data.toString());
+        assert.match(line, /unix:/);
+        const { stat } = await import('node:fs/promises');
+        assert.equal((await stat(sock)).mode & 0o777, 0o600);
+        const viaSock = await new Promise((resolve, reject) => {
+          request({ socketPath: sock, path: '/runtime-config.json', headers: { host: 'comms.example.test:8464', 'x-forwarded-for': '100.100.0.1' } }, (res) => { let b = ''; res.on('data', (c) => (b += c)); res.on('end', () => resolve({ status: res.statusCode, body: b })); }).on('error', reject).end();
+        });
+        assert.equal(viaSock.status, 200);
+        assert.deepEqual(JSON.parse(viaSock.body), { environment: 'staging', mode: 'proxy' });
+      } finally {
+        const stopped = once(sockChild, 'exit'); sockChild.kill(); await stopped;
+      }
+    }
     assert.deepEqual(JSON.parse(served), { environment: 'staging', mode: 'proxy' });
     assert.doesNotMatch(served, /bundled-admin-token/);
   } finally {
@@ -100,6 +120,7 @@ test('one web build serves each environment config at runtime, without leaking o
     const tokenFile = join(dir, 'admin-token');
     await writeFile(tokenFile, 'released-admin-token');
     assert.throws(() => webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile }, dir, () => {}), /needs allowedClients and publicHosts/);
+    assert.throws(() => webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile, devAllowLoopback: true }, dir, () => {}), /needs allowedClients and publicHosts/, 'the dev flag never lifts the requirement');
     const proxy = webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile, allowedClients: ['100.100.0.1'], publicHosts: ['comms.example.test:8461'] }, dir, () => {}); servers.push(proxy);
     await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
     const pport = proxy.address().port;
