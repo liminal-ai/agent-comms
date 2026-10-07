@@ -27,6 +27,9 @@ export type RunStatus =
   | "cancelled"
   | "rolled_back";
 
+/** A run a message can be steered into. */
+export const STEERABLE: readonly RunStatus[] = ["starting", "running"];
+
 /** A run that keeps the thread busy (a dispatch would queue behind it). */
 export const BLOCKING: readonly RunStatus[] = ["preparing", "queued", "starting", "running", "waiting"];
 /** The agent's turn is over: `waiting` is completed-but-checkpointing (RunExecutionService). */
@@ -99,11 +102,12 @@ export interface V2Client {
   /** The whole thread (HTTP full snapshot), or null if it doesn't exist. */
   getThread(threadId: string): Promise<V2Thread | null>;
   /**
-   * `message.dispatch` with `start_immediately`. `commandId` is T3's idempotency key: the
-   * same id again returns the first result and runs nothing twice. Throws V2Rejected if
-   * T3 recorded the command as rejected; any other error may or may not have been accepted.
+   * `message.dispatch`: into the active run (`steer`, `steer_active`), or as a run of its own
+   * (`start_immediately`). `commandId` is T3's idempotency key: the same id again returns the
+   * first result and runs nothing twice. Throws V2Rejected if T3 recorded the command as
+   * rejected; any other error may or may not have been accepted.
    */
-  dispatch(threadId: string, message: { commandId: string; messageId: string; text: string }): Promise<{ sequence: number }>;
+  dispatch(threadId: string, message: { commandId: string; messageId: string; text: string; steer?: string }): Promise<{ sequence: number }>;
   /** The thread's stream: a snapshot (or a replay after `afterSequence`), `synchronized`, then live events. */
   subscribe(threadId: string, options: { afterSequence?: number }, onItem: (item: V2StreamItem | { kind: "closed" }) => void): Promise<() => void>;
   close(): Promise<void>;
@@ -147,6 +151,10 @@ export class RunTracker {
   lastSequence = 0;
   /** Runs keeping the thread busy, by id. */
   private readonly blocking = new Set<string>();
+  /** Runs a message can be steered into (starting, running or waiting on its turn). */
+  private readonly active = new Map<string, number>();
+  /** When our message was steered into a run it didn't start: that run. */
+  steeredRunId: string | undefined;
 
   constructor(messageId: string) {
     this.messageId = messageId;
@@ -156,7 +164,16 @@ export class RunTracker {
   load(thread: V2Thread): void {
     this.lastSequence = Math.max(this.lastSequence, thread.snapshotSequence);
     this.blocking.clear();
+    this.active.clear();
+    const steered = find(thread, this.messageId).steeredInto;
+    if (steered) this.steeredRunId = steered.id;
     for (const r of thread.runs) this.run(r);
+  }
+
+  /** Follow the run our message was steered into, as if it were ours. */
+  adopt(runId: string): void {
+    this.steeredRunId = runId;
+    this.runId = runId;
   }
 
   feed(event: V2Event): void {
@@ -167,7 +184,9 @@ export class RunTracker {
   private run(r: V2Run): void {
     if (BLOCKING.includes(r.status)) this.blocking.add(r.id);
     else this.blocking.delete(r.id);
-    if (r.userMessageId === this.messageId) {
+    if (STEERABLE.includes(r.status)) this.active.set(r.id, this.active.get(r.id) ?? this.active.size);
+    else this.active.delete(r.id);
+    if (r.userMessageId === this.messageId || r.id === this.steeredRunId) {
       this.runId = r.id;
       if (r.status === "waiting" && this.status !== "waiting") this.waitingSince = Date.now();
       this.status = r.status;
@@ -176,6 +195,10 @@ export class RunTracker {
 
   get busy(): boolean {
     return this.blocking.size > 0;
+  }
+  /** The run a message would be steered into now, if any. */
+  get activeRunId(): string | undefined {
+    return [...this.active.keys()].at(-1);
   }
   /** Our run is over and won't change: final, not just `waiting`. */
   get final(): boolean {

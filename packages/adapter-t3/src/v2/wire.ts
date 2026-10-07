@@ -49,7 +49,10 @@ export const DispatchCommandRpc = Rpc.make(DISPATCH_COMMAND, {
     attachments: Schema.Tuple([]),
     createdBy: Schema.Literal("user"),
     creationSource: Schema.Literal("mcp"),
-    dispatchMode: Schema.Struct({ type: Schema.Literal("start_immediately") }),
+    dispatchMode: Schema.Union([
+      Schema.Struct({ type: Schema.Literal("start_immediately") }),
+      Schema.Struct({ type: Schema.Literal("steer_active"), targetRunId: Schema.String }),
+    ]),
   }),
   success: Schema.Unknown,
   error: Schema.Unknown,

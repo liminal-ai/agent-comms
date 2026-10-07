@@ -43,7 +43,7 @@ class FakeV2 implements V2Client {
   unreachable = 0;
   failResubscribes = 0;
   eventsGone = false;
-  dispatched: { commandId: string; messageId: string; text: string }[] = [];
+  dispatched: { commandId: string; messageId: string; text: string; steer?: string }[] = [];
 
   readonly id: string;
   constructor(id = "th1") {
@@ -99,7 +99,7 @@ class FakeV2 implements V2Client {
   async getThread(id: string) {
     return id === this.id ? structuredClone(this.thread) : null;
   }
-  async dispatch(id: string, m: { commandId: string; messageId: string; text: string }) {
+  async dispatch(id: string, m: { commandId: string; messageId: string; text: string; steer?: string }) {
     if (this.unreachable > 0) {
       this.unreachable -= 1;
       throw new Error("ECONNREFUSED");
@@ -113,7 +113,15 @@ class FakeV2 implements V2Client {
     }
     assert.equal(id, this.id);
     this.dispatched.push(m);
-    this.newRun(m.messageId);
+    if (m.steer) {
+      const target = this.thread.runs.find((r) => r.id === m.steer);
+      if (!target || !["starting", "running"].includes(target.status)) {
+        this.receipts.set(m.commandId, { rejected: "target run is not active" });
+        throw new Error("target run is not active");
+      }
+      this.thread.messages.push({ id: m.messageId, role: "user", runId: target.id });
+      this.emit({ type: "message", message: { id: m.messageId, role: "user", runId: target.id } });
+    } else this.newRun(m.messageId);
     const result = { sequence: this.seq };
     this.receipts.set(m.commandId, result);
     if (this.dropResponse > 0) {
@@ -261,20 +269,29 @@ describe("T3 V2 adapter: live", () => {
     assert.deepEqual(await outcome, { _tag: "replied", answer: "4" });
   });
 
-  it("waits for a busy thread as a courtesy, then runs as its own run", async () => {
+  it("steers into a busy thread's running turn at once, asking for comms reply; the turn's answer isn't collected", async () => {
     const { t3, adapter } = setup();
     t3.human("lee-typed");
-    const handOff = adapter.handOff(target, delivery());
-    await tick(80);
-    assert.deepEqual(t3.userMessages(), ["lee-typed"], "didn't send while busy");
+    const h = await adapter.handOff(target, delivery());
+    const leeRun = t3.runOf("lee-typed")!.id;
+    assert.deepEqual(h, { _tag: "accepted", turnId: leeRun, cursor: (h as { cursor: string }).cursor });
+    assert.equal(t3.runOf(messageIdFor("d_1")), undefined, "no run of its own: nothing to queue");
+    const sent = t3.dispatched.at(-1)!;
+    assert.equal(sent.steer, leeRun);
+    assert.match(sent.text, /comms reply --as tee m_d_1/);
+    assert.doesNotMatch(sent.text, /Reply normally/);
+    const outcome = adapter.awaitOutcome(target, delivery(), leeRun);
     t3.assistant("done with Lee's thing");
     t3.finish();
-    const h = await handOff;
-    assert.equal((h as { turnId: string }).turnId, "run:thread:th1:ordinal:2");
-    const outcome = adapter.awaitOutcome(target, delivery(), "run:thread:th1:ordinal:2");
-    t3.assistant("4");
-    t3.finish();
-    assert.deepEqual(await outcome, { _tag: "replied", answer: "4" });
+    assert.deepEqual(await outcome, { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
+  });
+
+  it("an idle thread still gets a run of its own, and its answer is collected", async () => {
+    const { t3, adapter } = setup();
+    const h = (await adapter.handOff(target, delivery())) as { turnId: string };
+    assert.equal(t3.dispatched.at(-1)!.steer, undefined);
+    assert.equal(t3.runOf(messageIdFor("d_1"))!.id, h.turnId);
+    assert.doesNotMatch(t3.dispatched.at(-1)!.text, /inside your current turn/);
   });
 
   it("losing the idle race queues our message as its own run: accepted, not ambiguous", async () => {
@@ -438,13 +455,12 @@ describe("T3 V2 adapter: gate", () => {
     assert.deepEqual(t3.userMessages(), []);
   });
 
-  it("an aborted handoff (claim lost during the courtesy wait) sends nothing", async () => {
+  it("an aborted handoff (claim lost before sending) sends nothing", async () => {
     const { t3, adapter } = setup();
     t3.human("lee");
     const ac = new AbortController();
-    const h = adapter.handOff(target, delivery(), { confirm: async () => true, signal: ac.signal });
-    await tick(60);
     ac.abort();
+    const h = adapter.handOff(target, delivery(), { confirm: async () => true, signal: ac.signal });
     assert.equal((await h)._tag, "aborted");
     t3.finish();
     await tick(60);
@@ -458,13 +474,20 @@ describe("T3 V2 adapter: restart check (from one snapshot)", () => {
     assert.deepEqual(await adapter.check(target, delivery(), undefined), { _tag: "absent" });
   });
 
-  it("running while its run runs, then completed with the outcome, in a new process", async () => {
+  it("a steered delivery: running while the turn it's in runs, then ambiguous, in a new process", async () => {
     const { t3, adapter } = setup();
     t3.human("lee");
-    const h = adapter.handOff(target, delivery());
-    await tick(40);
+    const { turnId } = (await adapter.handOff(target, delivery())) as { turnId: string };
+    const after = makeT3AdapterV2({ client: t3, ...options });
+    assert.deepEqual(await after.check(target, delivery(), turnId), { _tag: "running", turnId });
     t3.finish();
-    const { turnId } = (await h) as { turnId: string };
+    await tick(60);
+    assert.deepEqual(await after.check(target, delivery(), turnId), { _tag: "completed", turnId, outcome: { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] } });
+  });
+
+  it("running while its run runs, then completed with the outcome, in a new process", async () => {
+    const { t3, adapter } = setup();
+    const { turnId } = (await adapter.handOff(target, delivery())) as { turnId: string };
     const after = makeT3AdapterV2({ client: t3, ...options });
     assert.deepEqual(await after.check(target, delivery(), turnId), { _tag: "running", turnId });
     t3.assistant("4");
@@ -651,15 +674,15 @@ describe("docs/09: V2 adapter fixes", () => {
     assert.deepEqual(await outcome, { _tag: "replied", answer: "4" });
   });
 
-  it("3: the courtesy wait for idle is capped; then our message is sent and queued as its own run", async () => {
+  it("3: a thread that stays busy doesn't hold the delivery: it's steered in at once, never queued", async () => {
     const t3 = new FakeV2();
     t3.human("lee-long"); // Lee's run never ends during the test
     const adapter = makeT3AdapterV2({ client: t3, ...options, idleWaitMs: 300 });
     const started = Date.now();
-    const h = await Promise.race([adapter.handOff(target, delivery()), tick(2_000).then(() => ({ _tag: "still-waiting" }))]);
+    const h = await adapter.handOff(target, delivery());
     assert.equal(h._tag, "accepted", JSON.stringify(h));
-    assert.ok(Date.now() - started >= 300, "waited the courtesy period first");
-    assert.equal(t3.runOf(messageIdFor("d_1"))!.status, "queued");
+    assert.ok(Date.now() - started < 300, "no waiting for idle");
+    assert.equal(t3.runOf(messageIdFor("d_1")), undefined);
     assert.equal(t3.dispatched.length, 1);
   });
 });
