@@ -329,21 +329,47 @@ describe("event delivery", () => {
     }
   });
 
-  it("a retry keeps its event id when a delivery arrived in between", async () => {
-    let status = 500;
-    const r = await receiver(chatgpt(() => status));
+  it("a retry resends the pending event unchanged and puts a newcomer in a new event, whichever way it sorts", async () => {
+    for (const newcomer of ["0-before", "z-after"]) {
+      let status = 500;
+      const r = await receiver(chatgpt(() => status));
+      const { h } = await hub();
+      try {
+        await h.subscribe("user_1", sub(r.url, newSecret()));
+        const wake = h.waker("dot");
+        await assert.rejects(wake(["m"]), /HTTP 500/);
+        status = 200;
+        await wake([newcomer, "m"]);
+        const events = r.seen.slice(1).map((e) => JSON.parse(e.body));
+        const first = events[0]!.eventId;
+        const retried = events.filter((e) => e.eventId === first);
+        assert.ok(retried.length >= 4, "the first event was retried under its own id");
+        for (const e of retried) assert.deepEqual(e.data.deliveryIds, ["m"], "its body never changes");
+        const fresh = events.filter((e) => e.eventId !== first);
+        assert.equal(fresh.length, 1, `${newcomer}: one new event for the newcomer`);
+        assert.deepEqual(fresh[0]!.data.deliveryIds, [newcomer]);
+        await wake([newcomer, "m"]);
+        assert.ok(!events.some((e) => e.eventId === JSON.parse(r.seen.at(-1)!.body).eventId), "all accepted: the next wake starts over with new ids");
+      } finally {
+        r.close();
+      }
+    }
+  });
+
+  it("a wake with one event accepted and one refused for good is terminal, and nothing is resent", async () => {
+    let n = 0;
+    const r = await receiver(chatgpt(() => (++n === 1 ? 200 : 410)));
     const { h } = await hub();
     try {
       await h.subscribe("user_1", sub(r.url, newSecret()));
+      const ids = Array.from({ length: 6_000 }, (_, i) => `j97${String(i).padStart(5, "0")}${"x".repeat(40)}`);
       const wake = h.waker("dot");
-      await assert.rejects(wake(["a"]), /HTTP 500/);
-      status = 200;
-      await wake(["a", "b"]); // b arrived before the coordinator's retry
-      const ids = r.seen.slice(1).map((e) => JSON.parse(e.body));
-      assert.equal(new Set(ids.map((e) => e.eventId)).size, 1, "same event id: the receiver can dedupe a");
-      assert.deepEqual(ids.at(-1)!.data.deliveryIds, ["a", "b"]);
-      await wake(["a", "b", "c"]);
-      assert.notEqual(JSON.parse(r.seen.at(-1)!.body).eventId, ids[0]!.eventId, "accepted: the next wake is a new event");
+      await assert.rejects(wake(ids), (e: Error & { terminal?: boolean }) => e.terminal === true && /refused for good/.test(e.message));
+      const sent = r.seen.length;
+      await assert.rejects(wake(ids), /refused for good/); // a later (renudge) wake starts over with fresh ids; the receiver still says 410
+      assert.ok(r.seen.length > sent);
+      const before = new Set(r.seen.slice(1, sent).map((e) => JSON.parse(e.body).eventId));
+      for (const e of r.seen.slice(sent)) assert.ok(!before.has(JSON.parse(e.body).eventId), "fresh ids after a settled wake");
     } finally {
       r.close();
     }
@@ -613,6 +639,14 @@ describe("authorization", () => {
       assert.deepEqual(result.supportedVersions, [PROTOCOL_VERSION]);
       assert.deepEqual(result.capabilities, { tools: {}, events: {} });
       assert.equal(result._meta["io.modelcontextprotocol/serverInfo"].name, "agent-wake-relay");
+    });
+
+    it("answers a malformed request target with 400 and keeps serving", async () => {
+      const { request } = await import("node:http");
+      const port = (server!.address() as { port: number }).port;
+      const status = await new Promise<number>((resolve, reject) => request({ host: "127.0.0.1", port, path: "//[", method: "GET" }, (res) => resolve(res.statusCode!)).on("error", reject).end());
+      assert.equal(status, 400);
+      assert.equal((await fetch(`http://127.0.0.1:${port}/.well-known/oauth-protected-resource`)).status, 200, "still serving");
     });
 
     it("lists the events and the profile tool, and calls it", async () => {

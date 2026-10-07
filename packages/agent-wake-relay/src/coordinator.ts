@@ -58,6 +58,9 @@ export class Coordinator {
   private timer: unknown = null;
   private renudgeTimer: unknown = null;
   private inFlight = false;
+  /** For the wake in flight: each id's state when it started, and the ids that reached `delivered` since. */
+  private inFlightStates: Map<string, string> | null = null;
+  private readonly transitioned = new Set<string>();
   /** The last failure logged, so a wake that keeps failing the same way is logged every 5 min, not every retry. */
   private lastFailure: { message: string; at: number; repeats: number } | null = null;
 
@@ -82,9 +85,13 @@ export class Coordinator {
         fresh++;
         continue;
       }
-      // Not woken for yet (coalescing, or a wake in flight): the state the wake will cover is the latest one.
+      // Not woken for yet (coalescing): the state the wake will cover is the latest one. During an
+      // in-flight wake, a handoff to `delivered` happened after the event was built: note it, so the
+      // wake that follows carries it rather than the current one appearing to.
       if (this.outstanding.get(d.id) === 0) {
-        this.stateAtWake.set(d.id, d.state);
+        const started = this.inFlightStates?.get(d.id);
+        if (started !== undefined && started !== "delivered" && d.state === "delivered") this.transitioned.add(d.id);
+        else this.stateAtWake.set(d.id, d.state);
         continue;
       }
       // Machines with a connector (grok-box) hand items over one at a time; a request that was still
@@ -132,12 +139,23 @@ export class Coordinator {
     const ids = this.due();
     if (!ids.length) return;
     this.inFlight = true;
+    this.inFlightStates = new Map(ids.map((id) => [id, this.stateAtWake.get(id) ?? ""]));
     try {
       await this.o.wake(ids);
       const now = this.o.timers.now();
       for (const id of ids) if (this.outstanding.has(id)) this.outstanding.set(id, now);
       this.lastFailure = null;
       this.o.log(`@${this.o.participant}: woke for ${ids.length} delivery(s) ${ids.join(",")}`);
+      // A handoff that landed while this wake was out gets its own wake.
+      let again = 0;
+      for (const id of this.transitioned) {
+        if (!this.outstanding.has(id)) continue;
+        this.outstanding.set(id, 0);
+        this.stateAtWake.set(id, "delivered");
+        again++;
+      }
+      this.transitioned.clear();
+      if (again) this.schedule(this.o.coalesceMs);
     } catch (error) {
       const message = (error as Error).message;
       const now = this.o.timers.now();
@@ -146,6 +164,8 @@ export class Coordinator {
         for (const id of ids) if (this.outstanding.has(id)) this.outstanding.set(id, now);
         this.o.log(`@${this.o.participant}: wake rejected for ${ids.join(",")}: ${message}; not retrying${this.o.renudgeMs > 0 ? `, renudging in ${Math.round(this.o.renudgeMs / 60_000)} min` : ""}`);
         this.inFlight = false;
+        this.inFlightStates = null;
+        this.transitioned.clear();
         this.scheduleRenudge();
         return;
       }
@@ -159,6 +179,7 @@ export class Coordinator {
       this.schedule(this.o.retryMs);
     } finally {
       this.inFlight = false;
+      this.inFlightStates = null;
     }
     this.scheduleRenudge();
   }

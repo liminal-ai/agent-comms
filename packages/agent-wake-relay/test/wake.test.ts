@@ -156,6 +156,33 @@ describe("coordinator", () => {
     assert.equal(wakes.length, 1, "already delivered when woken; nothing new happened");
   });
 
+  it("a handoff to delivered that lands while a wake is in flight gets its own wake", async () => {
+    const timers = new FakeTimers();
+    const wakes: string[][] = [];
+    let release: () => void = () => {};
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 0,
+      wake: async (ids) => {
+        wakes.push(ids);
+        if (wakes.length === 1) await new Promise<void>((r) => (release = r));
+      },
+    });
+    c.update([{ ...d("b"), state: "pending" }]);
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["b"]], "first wake is out, still in flight");
+    c.update([d("b")]); // handed over while the wake is out
+    release();
+    await new Promise((r) => setImmediate(r));
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["b"], ["b"]], "the handoff was woken for separately, even with renudging off");
+    c.update([d("b")]);
+    await timers.advance(60_000);
+    assert.equal(wakes.length, 2);
+  });
+
   it("a terminal wake failure isn't retried every 30 s; the renudge tries again later", async () => {
     const { timers, wakes, logs, c } = setup({ terminal: 1, renudgeMs: 10 * 60_000 });
     c.update([d("a")]);

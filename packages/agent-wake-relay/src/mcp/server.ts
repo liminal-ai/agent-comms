@@ -210,8 +210,14 @@ export function createMcpServer(o: McpServerOptions): Server {
   }
 
   return createServer((req, res) => {
-    const path = new URL(req.url ?? "/", "http://x").pathname;
     const route = async () => {
+      // Inside the route, so a malformed target (`GET //[`) is a 400, not an uncaught throw.
+      let path: string;
+      try {
+        path = new URL(req.url ?? "/", "http://x").pathname;
+      } catch {
+        return json(res, 400, { error: "bad request target" });
+      }
       if (path === "/mcp") return mcp(req, res);
       if (req.method !== "GET") return json(res, 404, { error: "not found" });
       if (path === "/.well-known/oauth-protected-resource" || path === "/.well-known/oauth-protected-resource/mcp") return json(res, 200, metadata, { "cache-control": "max-age=300" });
