@@ -13,6 +13,7 @@ For versioned builds, staging/production deployments, and binding each connector
 | [`packages/adapter-t3`](packages/adapter-t3/README.md) | T3 adapter; T3's wire contract vendored, no T3 checkout needed |
 | [`packages/claude-code-mod`](packages/claude-code-mod/README.md) | Claude Code adapter (Hazel) |
 | [`packages/oaidot`](packages/oaidot/README.md) | Session-scoped native courier to the actual dot parent, with explicit receipts and replies |
+| [`packages/grokbot`](packages/grokbot/README.md) | Grok Bot bridge: registers `@grok` as a Claude Code home, durable inbox, `grokbot answer` |
 | [`convex/`](convex/) | The comms server |
 | [`apps/web`](apps/web/README.md) | Lee's view |
 

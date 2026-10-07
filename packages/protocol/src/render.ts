@@ -76,6 +76,11 @@ export interface RenderOptions {
   replyMode?: "automatic" | "explicit";
   /** A smaller transport budget, between 2,000 and MAX_RENDERED_CHARS. */
   maxChars?: number;
+  /**
+   * How to answer a request, for a harness whose turn isn't collected (its final
+   * message isn't sent back). Replaces the default "reply normally" lines.
+   */
+  answerInstructions?: (request: { messageId: string; deliveryId: string; sender: string; me: string }) => string[];
 }
 
 const SOURCE_LINE =
@@ -161,7 +166,9 @@ function build(delivery: Delivery, options: RenderOptions, budget: Budget): stri
     lines.push(...quote(body));
     lines.push(...attachments);
     lines.push("");
-    if (options.replyMode === "explicit") {
+    if (options.answerInstructions) {
+      lines.push(...options.answerInstructions({ messageId: message.id, deliveryId: delivery.id, sender: message.sender.name, me }));
+    } else if (options.replyMode === "explicit") {
       lines.push(`An explicit answer is expected. Use your explicit reply tool with messageId ${message.id} to answer this request. Nothing you write in your own conversation is sent or collected automatically.`);
     } else {
       lines.push(
