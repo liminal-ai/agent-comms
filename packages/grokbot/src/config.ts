@@ -142,6 +142,9 @@ export function loadConfig(env: Record<string, string | undefined>, overrides: C
     const authFile = env[ENV.wakeAuthorizationFile] || hook?.authorizationFile;
     const authorizationFile = authFile ? expandHome(authFile) : undefined;
     if (authorizationFile && !existsSync(authorizationFile)) throw new ConfigError(`wakeWebhook: authorizationFile ${authorizationFile} doesn't exist`);
+    // A credential over plain http would travel in cleartext; allow it only to this machine.
+    if (authorizationFile && parsed.protocol === "http:" && !isLoopback(parsed.hostname))
+      throw new ConfigError("wakeWebhook: authorizationFile needs an https URL (plain http is allowed only to localhost)");
     wakeWebhook = {
       url: parsed.toString(),
       includeText: includeEnv !== undefined ? /^(1|true|yes)$/i.test(includeEnv) : hook?.includeText === true,
@@ -169,4 +172,9 @@ export function loadConfig(env: Record<string, string | undefined>, overrides: C
     unregisterOnExit: file.unregisterOnExit === true,
     ...(existsSync(configFile) ? { configFile } : {}),
   };
+}
+
+function isLoopback(hostname: string): boolean {
+  const h = hostname.replace(/^\[|\]$/g, "");
+  return h === "localhost" || h === "::1" || /^127\.\d+\.\d+\.\d+$/.test(h);
 }

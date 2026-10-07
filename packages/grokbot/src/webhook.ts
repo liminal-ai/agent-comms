@@ -36,6 +36,12 @@ export function webhookWake(hook: NonNullable<GrokbotConfig["wakeWebhook"]>, req
     if (hook.authorizationFile) {
       const authorization = (await readFile(hook.authorizationFile, "utf8")).trim();
       if (!authorization) throw new Error(`wake webhook authorization file ${hook.authorizationFile} is empty`);
+      // fetch's own rejection of a bad header echoes the value, and the bridge logs error messages.
+      try {
+        new Headers().set("authorization", authorization);
+      } catch {
+        throw new Error(`wake webhook authorization file ${hook.authorizationFile} holds an invalid header value`);
+      }
       headers.authorization = authorization;
     }
     const res = await request(hook.url, {

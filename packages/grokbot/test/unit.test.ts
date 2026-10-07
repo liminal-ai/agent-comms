@@ -283,6 +283,16 @@ describe("webhook", () => {
     const c = loadConfig({ GROKBOT_HOME: h });
     assert.equal(c.wakeWebhook?.authorizationFile, authFile);
     assert.throws(() => loadConfig({ GROKBOT_HOME: h, GROKBOT_WAKE_AUTHORIZATION_FILE: join(h, "missing") }), /doesn't exist/);
+    assert.throws(() => loadConfig({ GROKBOT_HOME: h, GROKBOT_WAKE_WEBHOOK_URL: "http://10.0.0.5/hook" }), /https URL/, "a credential over plain http off this machine is refused");
+    assert.doesNotThrow(() => loadConfig({ GROKBOT_HOME: h, GROKBOT_WAKE_WEBHOOK_URL: "https://example.com/hook" }));
+    assert.doesNotThrow(() => loadConfig({ GROKBOT_HOME: h, GROKBOT_WAKE_WEBHOOK_URL: "http://localhost:9/hook" }));
+
+    await writeFile(authFile, "Bearer bad\r\nX-Injected: 1");
+    await assert.rejects(webhookWake({ url: "http://127.0.0.1:9/hook", includeText: false, timeoutMs: 2000, authorizationFile: authFile })("delivery", item, "/x"), (e: Error) => {
+      assert.ok(!e.message.includes("bad"), `leaked the header value: ${e.message}`);
+      return /invalid header value/.test(e.message);
+    });
+    await writeFile(authFile, "Bearer one\n");
 
     const seen: (string | undefined)[] = [];
     const server = createServer((req, res) => {
