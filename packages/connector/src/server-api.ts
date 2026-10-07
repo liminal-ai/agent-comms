@@ -70,6 +70,8 @@ export interface ServerApiShape {
   readonly send: (req: Requests["send"] & { waiterTurnId?: string }) => Effect.Effect<Responses["send"], ApiError>;
   readonly answerSeen: (participant: string, turnId: string, proofs: AnswerProof[]) => Effect.Effect<{ confirmed: number }, ApiError>;
   readonly reply: (req: Requests["reply"]) => Effect.Effect<Responses["reply"], ApiError>;
+  readonly receive: (req: Requests["receive"]) => Effect.Effect<Responses["receive"], ApiError>;
+  readonly receiveAck: (req: Requests["receive-ack"]) => Effect.Effect<Responses["receive-ack"], ApiError>;
   readonly read: (req: Requests["read"]) => Effect.Effect<Responses["read"], ApiError>;
   readonly list: (req: Requests["list"]) => Effect.Effect<Responses["list"], ApiError>;
   readonly agents: (req: Requests["agents"]) => Effect.Effect<Responses["agents"], ApiError>;
@@ -203,6 +205,20 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
           ...(req.key !== undefined ? { key: req.key } : {}),
         }),
       ),
+    receive: (req) =>
+      call("receive", () =>
+        transport.mutation(api.connector.receive, {
+          machine,
+          as: req.as,
+          locator: req.locator,
+          ...(req.limit !== undefined ? { limit: req.limit } : {}),
+          ...(req.leaseMs !== undefined ? { leaseMs: req.leaseMs } : {}),
+          ...(req.includeDelivered !== undefined ? { includeDelivered: req.includeDelivered } : {}),
+          ...(req.cursor !== undefined ? { cursor: req.cursor } : {}),
+        }),
+      ),
+    receiveAck: (req) =>
+      call("receive-ack", () => transport.mutation(api.connector.receiveAck, { machine, ...req })),
     read: (req) =>
       call("read", () =>
         transport.mutation(api.connector.read, {

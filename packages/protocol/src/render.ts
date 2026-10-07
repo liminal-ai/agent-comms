@@ -72,6 +72,10 @@ export interface RenderOptions {
   harnessLabelsSource: boolean;
   /** How long a quoted request inside an answer delivery may be. */
   maxQuotedRequestChars?: number;
+  /** Receipt-only adapters require explicit replies and never collect a final turn. */
+  replyMode?: "automatic" | "explicit";
+  /** A smaller transport budget, between 2,000 and MAX_RENDERED_CHARS. */
+  maxChars?: number;
   /**
    * How to answer a request, for a harness whose turn isn't collected (its final
    * message isn't sent back). Replaces the default "reply normally" lines.
@@ -83,24 +87,26 @@ const SOURCE_LINE =
   "Source: agent-comms, the service that carries messages between Lee's agents and people. The user of this session did not type this.";
 
 export function renderDelivery(delivery: Delivery, options: RenderOptions): string {
+  const maxChars = options.maxChars ?? MAX_RENDERED_CHARS;
+  if (!Number.isInteger(maxChars) || maxChars < 2_000 || maxChars > MAX_RENDERED_CHARS) throw new RangeError("invalid rendered delivery budget");
   const full = { history: delivery.history.messages.length, attachments: delivery.message.attachments.length, body: Infinity };
   let text = build(delivery, options, full);
-  if (text.length <= MAX_RENDERED_CHARS) return text;
+  if (text.length <= maxChars) return text;
   // Over the cap: drop history (oldest first), then attachment references, then cut the body.
   const budget = { ...full };
-  while (text.length > MAX_RENDERED_CHARS && budget.history > 0) {
+  while (text.length > maxChars && budget.history > 0) {
     budget.history = Math.max(0, budget.history - Math.max(1, Math.ceil(budget.history / 2)));
     text = build(delivery, options, budget);
   }
-  while (text.length > MAX_RENDERED_CHARS && budget.attachments > 0) {
+  while (text.length > maxChars && budget.attachments > 0) {
     budget.attachments = Math.floor(budget.attachments / 2);
     text = build(delivery, options, budget);
   }
-  if (text.length > MAX_RENDERED_CHARS) {
-    budget.body = Math.max(0, delivery.message.text.length - (text.length - MAX_RENDERED_CHARS) - 200);
+  if (text.length > maxChars) {
+    budget.body = Math.max(0, delivery.message.text.length - (text.length - maxChars) - 200);
     text = build(delivery, options, budget);
   }
-  return text.length <= MAX_RENDERED_CHARS ? text : text.slice(0, MAX_RENDERED_CHARS);
+  return text.length <= maxChars ? text : text.slice(0, maxChars);
 }
 
 interface Budget {
@@ -114,7 +120,9 @@ interface Budget {
 function build(delivery: Delivery, options: RenderOptions, budget: Budget): string {
   const { message, recipient, conversation } = delivery;
   const me = recipient.name;
-  const readCmd = `\`comms read --as ${me} ${conversation.id}\``;
+  const readCmd = options.replyMode === "explicit"
+    ? `your read tool with conversationId ${conversation.id}`
+    : `\`comms read --as ${me} ${conversation.id}\``;
   const shownHistory = delivery.history.messages.slice(delivery.history.messages.length - budget.history);
   const omitted = delivery.history.omitted + (delivery.history.messages.length - shownHistory.length);
   const lines: string[] = [];
@@ -123,7 +131,9 @@ function build(delivery: Delivery, options: RenderOptions, budget: Budget): stri
   if (!options.harnessLabelsSource) lines.push(SOURCE_LINE);
   lines.push(`From: ${who(message.sender)}, via agent-comms`);
   lines.push(`To: ${addressees(message.recipients, recipient)}`);
-  lines.push(`Your comms name is @${me}; pass it as \`--as ${me}\` to the comms CLI.`);
+  lines.push(options.replyMode === "explicit"
+    ? `Your configured comms identity is @${me}.`
+    : `Your comms name is @${me}; pass it as \`--as ${me}\` to the comms CLI.`);
   lines.push(`Conversation: ${describeConversation(delivery)}`);
   const reminder = message.meta?.type === "reminder" ? message.meta : undefined;
   if (reminder) {
@@ -158,13 +168,15 @@ function build(delivery: Delivery, options: RenderOptions, budget: Budget): stri
     lines.push("");
     if (options.answerInstructions) {
       lines.push(...options.answerInstructions({ messageId: message.id, deliveryId: delivery.id, sender: message.sender.name, me }));
+    } else if (options.replyMode === "explicit") {
+      lines.push(`An explicit answer is expected. Use your explicit reply tool with messageId ${message.id} to answer this request. Nothing you write in your own conversation is sent or collected automatically.`);
     } else {
-    lines.push(
-      `An answer is expected. Reply normally: your final message in this turn is sent back to @${message.sender.name} as your answer, so make it complete on its own. Finish the work before your final message; if you must end the turn first, send the result later with \`comms reply\`. If you answer with \`comms reply\` during this turn, that is your answer and your final message isn't sent.`,
-    );
-    lines.push(
-      `If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with \`comms reply --as ${me} ${message.id} "<your answer>"\`.`,
-    );
+      lines.push(
+        `An answer is expected. Reply normally: your final message in this turn is sent back to @${message.sender.name} as your answer, so make it complete on its own. Finish the work before your final message; if you must end the turn first, send the result later with \`comms reply\`. If you answer with \`comms reply\` during this turn, that is your answer and your final message isn't sent.`,
+      );
+      lines.push(
+        `If you're told your reply couldn't be matched, or you finish something after this turn ends, send it with \`comms reply --as ${me} ${message.id} "<your answer>"\`.`,
+      );
     }
     if (reminder) {
       lines.push(

@@ -1,0 +1,31 @@
+{
+  "name": "@agent-comms/oaidot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Event-driven native courier and explicit receipt tools for the actual dot parent.",
+  "bin": {
+    "oaidot": "./src/main.ts"
+  },
+  "exports": {
+    ".": "./src/client.ts",
+    "./cli": "./src/cli.ts",
+    "./direct": "./src/direct.ts",
+    "./stdio": "./src/stdio.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test --test-timeout=30000 \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@agent-comms/comms-cli": "workspace:*",
+    "@agent-comms/connector": "workspace:*",
+    "@agent-comms/protocol": "workspace:*",
+    "convex": "1.46.0",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

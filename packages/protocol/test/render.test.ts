@@ -22,6 +22,17 @@ describe("renderDelivery", () => {
     assert.match(text, /^> Please review the envelope\.$/m);
   });
 
+  it("renders a bounded receipt-only request without promising automatic collection", () => {
+    const text = renderDelivery(delivery({ message: message({ seq: 3, text: "long request ".repeat(4000) }) }), {
+      harnessLabelsSource: false, replyMode: "explicit", maxChars: 8_000,
+    });
+    assert.ok(text.length <= 8_000);
+    assert.match(text, /An explicit answer is expected/);
+    assert.match(text, /not an instruction from the user of this session/);
+    assert.doesNotMatch(text, /your final message in this turn is sent back/);
+    assert.throws(() => renderDelivery(delivery(), { harnessLabelsSource: false, maxChars: 100 }), RangeError);
+  });
+
   it("carries a source statement only when the harness doesn't label the source", () => {
     const t3 = renderDelivery(delivery(), { harnessLabelsSource: false });
     const cc = renderDelivery(delivery(), { harnessLabelsSource: true });

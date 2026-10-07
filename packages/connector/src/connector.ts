@@ -5,12 +5,13 @@ import { MAX_POLL_WAIT_MS, PROTOCOL_VERSION, type Requests, type Responses } fro
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
+import * as Stream from "effect/Stream";
 import { Adapters, type HarnessAdapter, makePoke, Poke } from "./adapter.ts";
 import { ClaudeCodeSessions } from "./claude-code.ts";
 import { runDispatcher } from "./dispatcher.ts";
 import { type Handlers, serveLoopback } from "./loopback.ts";
 import { LoopbackError } from "./loopback-error.ts";
-import { type ApiError, ServerApi, type ServerApiShape } from "./server-api.ts";
+import { type ApiError, ServerApi, type ServerApiShape, type WorkItem } from "./server-api.ts";
 
 export interface ConnectorOptions {
   machine: string;
@@ -30,6 +31,175 @@ export interface RunningConnector {
   sessions: ClaudeCodeSessions;
 }
 
+interface ReceiveWaiter {
+  req: Requests["receive"];
+  /** A stale snapshot can cause an empty receive; don't keep trying that same snapshot. */
+  attempted?: string;
+  inFlight: boolean;
+  expired: boolean;
+  finish: (result?: Responses["receive"], error?: unknown) => void;
+}
+
+/**
+ * Native courier requests wait locally. Only a subscription snapshot with an
+ * eligible offer permits a receive mutation; idle listeners never poll Convex
+ * inboxes. Lease expiry needs a local timer because the passage of time alone
+ * doesn't invalidate a Convex subscription.
+ */
+export class NativeReceives {
+  private latest: WorkItem[] = [];
+  private readonly waiters = new Set<ReceiveWaiter>();
+  private readonly busy = new Set<string>();
+  private leaseTimer?: ReturnType<typeof setTimeout>;
+  private closed = false;
+  private readonly api: ServerApiShape;
+  private readonly run: <A>(effect: Effect.Effect<A, ApiError>) => Promise<A>;
+
+  constructor(
+    api: ServerApiShape,
+    run: <A>(effect: Effect.Effect<A, ApiError>) => Promise<A>,
+  ) {
+    this.api = api;
+    this.run = run;
+  }
+
+  update(items: WorkItem[]) {
+    this.latest = items;
+    this.wake();
+  }
+
+  close() {
+    this.closed = true;
+    clearTimeout(this.leaseTimer);
+    for (const waiter of this.waiters) waiter.finish(undefined, new LoopbackError("unavailable", "the connector is closing"));
+  }
+
+  async receive(req: Requests["receive"], aborted: AbortSignal): Promise<Responses["receive"]> {
+    // Validate even when the inbox is empty: an invalid identity must not
+    // appear to be a valid idle listener or reveal another participant's work.
+    const { participants } = await this.run(this.api.homed);
+    const me = participants.find((p) => p.participant.name === req.as);
+    if (!me || (me.state === "retired" && !req.includeDelivered)) {
+      throw new LoopbackError("not_homed_here", `@${req.as} is not homed on this machine`);
+    }
+    if (me.home.harness !== "oaidot") throw new LoopbackError("bad_request", "receive requires an oaidot participant");
+    if (me.home.locator !== req.locator) throw new LoopbackError("conflict", `@${req.as} is bound to another native locator`);
+    if (this.closed) throw new LoopbackError("unavailable", "the connector is closing");
+    if (aborted.aborted) return { deliveries: [], hasMore: false };
+    // Explicit recovery is a one-shot, read-only recall. Delivered oaidot
+    // requests are deliberately absent from the dispatcher's work stream.
+    if (req.includeDelivered) return this.run(this.api.receive(req));
+
+    return new Promise((resolve, reject) => {
+      const waiter: ReceiveWaiter = {
+        req,
+        inFlight: false,
+        expired: false,
+        finish: (result, error) => {
+          if (!this.waiters.delete(waiter)) return;
+          clearTimeout(timer);
+          aborted.removeEventListener("abort", abort);
+          if (error !== undefined) reject(error);
+          else resolve(result ?? { deliveries: [], hasMore: false });
+          this.scheduleLeaseWake();
+        },
+      };
+      const abort = () => waiter.finish();
+      const timer = setTimeout(() => {
+        waiter.expired = true;
+        // A mutation already in flight may have reserved an offer. Return its
+        // result (bounded by the API timeout), rather than silently discarding it.
+        if (!waiter.inFlight) waiter.finish();
+      }, Math.min(req.waitMs ?? MAX_POLL_WAIT_MS, MAX_POLL_WAIT_MS));
+      this.waiters.add(waiter);
+      aborted.addEventListener("abort", abort, { once: true });
+      if (aborted.aborted) abort();
+      else this.wake();
+    });
+  }
+
+  private eligible(req: Requests["receive"]) {
+    const now = Date.now();
+    return this.latest.filter((item) => item.harness === "oaidot" && item.recipient === req.as && item.locator === req.locator && (
+      item.state === "pending" ||
+      (item.state === "claimed" && (!item.claim || item.claim.leaseExpiresAt <= now))
+    ));
+  }
+
+  private wake() {
+    if (this.closed) return;
+    for (const waiter of this.waiters) {
+      // Pending work identifies the current home. An old pinned claim may
+      // still refer to a previous home, so it must not invalidate a new binding.
+      if (this.latest.some((item) => item.recipient === waiter.req.as && item.state === "pending" &&
+        (item.harness !== "oaidot" || item.locator !== waiter.req.locator))) {
+        waiter.finish(undefined, new LoopbackError("conflict", `@${waiter.req.as} has moved to another native binding; check its current locator`));
+      } else if (!this.eligible(waiter.req).length) waiter.attempted = undefined;
+    }
+    for (const waiter of this.waiters) void this.drain(waiter.req.as);
+    this.scheduleLeaseWake();
+  }
+
+  private scheduleLeaseWake() {
+    clearTimeout(this.leaseTimer);
+    if (this.closed || this.waiters.size === 0) return;
+    const bindings = new Set([...this.waiters].map((w) => JSON.stringify([w.req.as, w.req.locator])));
+    const now = Date.now();
+    const leases = this.latest.filter((item) => item.harness === "oaidot" && bindings.has(JSON.stringify([item.recipient, item.locator])) &&
+      item.state === "claimed" && item.claim && item.claim.leaseExpiresAt > now);
+    if (leases.length) {
+      const next = Math.min(...leases.map((item) => item.claim!.leaseExpiresAt));
+      this.leaseTimer = setTimeout(() => this.wake(), Math.max(1, next - now));
+    }
+  }
+
+  private async drain(participant: string) {
+    if (this.closed || this.busy.has(participant)) return;
+    this.busy.add(participant);
+    try {
+      while (!this.closed) {
+        let candidate: { waiter: ReceiveWaiter; fingerprint: string } | undefined;
+        for (const waiter of this.waiters) {
+          if (waiter.req.as !== participant || waiter.expired) continue;
+          const eligible = this.eligible(waiter.req);
+          if (!eligible.length) {
+            // A paused/removed offer may later reappear with the same fields.
+            waiter.attempted = undefined;
+            continue;
+          }
+          const fingerprint = JSON.stringify(eligible.map((item) => [item.id, item.state, item.claim?.claimId, item.claim?.leaseExpiresAt]));
+          if (waiter.attempted !== fingerprint) {
+            candidate = { waiter, fingerprint };
+            break;
+          }
+        }
+        if (!candidate) return;
+        const { waiter, fingerprint } = candidate;
+        waiter.attempted = fingerprint;
+        waiter.inFlight = true;
+        try {
+          const result = await this.run(this.api.receive(waiter.req));
+          // Apply the returned claims before servicing another local waiter,
+          // even if the subscription has not caught up with the mutation yet.
+          const offered = new Map(result.deliveries.map((d) => [d.id, d]));
+          this.latest = this.latest.map((item) => {
+            const delivery = offered.get(item.id);
+            return delivery ? { ...item, state: delivery.status.state, claim: delivery.status.claim } : item;
+          });
+          if (result.deliveries.length || waiter.expired) waiter.finish(result);
+        } catch (error) {
+          waiter.finish(undefined, error);
+        } finally {
+          waiter.inFlight = false;
+        }
+      }
+    } finally {
+      this.busy.delete(participant);
+      this.scheduleLeaseWake();
+    }
+  }
+}
+
 /** Runs until the enclosing scope closes. */
 export const runConnector = (options: ConnectorOptions) =>
   Effect.gen(function* () {
@@ -46,6 +216,8 @@ export const runConnector = (options: ConnectorOptions) =>
           ),
         ),
       );
+
+    const receives = new NativeReceives(api, run);
 
     const sessions = new ClaudeCodeSessions({
       pollWaitMs,
@@ -123,6 +295,8 @@ export const runConnector = (options: ConnectorOptions) =>
         return run(api.send({ ...req, ...(waiterTurnId !== undefined ? { waiterTurnId } : {}) }));
       },
       reply: (req) => run(api.reply(req)),
+      receive: (req, aborted) => receives.receive(req, aborted),
+      "receive-ack": (req) => run(api.receiveAck(req)),
       read: (req) => run(api.read(req)),
       list: (req) => run(api.list(req)),
       await: (req, aborted) => holdAwait(req, aborted),
@@ -140,6 +314,7 @@ export const runConnector = (options: ConnectorOptions) =>
       Effect.promise(() => serveLoopback(options.socketPath, handlers, log)),
       (l) => Effect.promise(() => l.close()),
     );
+    yield* Effect.addFinalizer(() => Effect.sync(() => receives.close()));
     log(`machine ${options.machine}: listening on ${loopback.socketPath}`);
 
     // Nobody has registered with this process yet: any Claude Code participant homed
@@ -190,7 +365,17 @@ export const runConnector = (options: ConnectorOptions) =>
 
     const adapters = new Map([["claude-code" as const, sessions.adapter], ...(options.adapters ?? []).map((a) => [a.harness, a] as const)]);
     yield* runDispatcher({ leaseMs: options.leaseMs ?? 60_000, ...(options.fault ? { fault: options.fault } : {}), ...(options.tickMs ? { tickMs: options.tickMs } : {}), log }).pipe(
-      Effect.provideService(ServerApi, api),
+      // The dispatcher owns the one work subscription. Native listeners see
+      // the same initial snapshot and changes, without an extra server query.
+      // Pull work (oaidot) goes to native listeners only: left in the dispatcher's list, an old
+      // oaidot claim would hold back newer push work for the same participant after a rebind.
+      Effect.provideService(ServerApi, {
+        ...api,
+        work: api.work.pipe(
+          Stream.tap((items) => Effect.sync(() => receives.update(items))),
+          Stream.map((items) => items.filter((item) => item.harness !== "oaidot")),
+        ),
+      }),
       Effect.provideService(Adapters, adapters),
       Effect.provideService(Poke, poke),
       Effect.forkScoped,

@@ -197,6 +197,31 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
+  packages/oaidot:
+    dependencies:
+      '@agent-comms/comms-cli':
+        specifier: workspace:*
+        version: link:../comms-cli
+      '@agent-comms/connector':
+        specifier: workspace:*
+        version: link:../connector
+      '@agent-comms/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      convex:
+        specifier: 1.46.0
+        version: 1.46.0(react@19.3.0)
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.0-rc.115
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
   packages/protocol:
     devDependencies:
       '@types/node':

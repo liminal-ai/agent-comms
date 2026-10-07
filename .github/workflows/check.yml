@@ -41,6 +41,8 @@ jobs:
       - if: steps.scope.outputs.mode != 'docs'
         run: node dist/agent-comms-0.0.0-ci/service.mjs --help
       - if: steps.scope.outputs.mode != 'docs'
+        run: node dist/agent-comms-0.0.0-ci/oaidot.mjs --help
+      - if: steps.scope.outputs.mode != 'docs'
         run: node dist/agent-comms-0.0.0-ci/grokbot.mjs --help
       - name: Exercise local mode from the release
         if: steps.scope.outputs.mode != 'docs'

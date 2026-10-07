@@ -489,6 +489,32 @@ const requestDecoders = {
     limit: optional(integer({ min: 1, max: MAX_READ_LIMIT })),
   }),
 
+  /**
+   * Event-driven courier offers for an oaidot participant. The connector holds
+   * the local call until subscribed work is available or waitMs elapses. An
+   * offer is only claimed, not delivered. Expired offers may be offered again
+   * under the same delivery id with a new fenced claim. includeDelivered selects
+   * recovery only: acknowledged, unanswered requests, without new claims.
+   */
+  receive: object({
+    as: name,
+    /** Immutable intended parent binding, checked again when offering work. */
+    locator: harnessId,
+    /** Recovery-only pagination cursor. */
+    cursor: optional(string({ min: 1, max: 4096 })),
+    limit: optional(integer({ min: 1, max: 20 })),
+    leaseMs: optional(integer({ min: 1_000, max: 600_000 })),
+    waitMs: optional(integer({ min: 0, max: MAX_POLL_WAIT_MS })),
+    includeDelivered: optional(boolean),
+  }),
+
+  /**
+   * The actual parent explicitly confirms receipt after seeing an offered
+   * delivery. The courier must never call this on the parent's behalf. No
+   * model turn is asserted and no final answer is automatically collected.
+   */
+  "receive-ack": object({ as: name, locator: harnessId, deliveryId: id, claimId: id }),
+
   /** The conversations `as` is a member of, most recent first. */
   list: object({ as: name }),
 } as const;
@@ -584,6 +610,8 @@ export interface Responses {
   "answer-seen": Record<string, never>;
   "reminder-update": { reminder: Reminder };
   read: { conversation: ConversationSummary; messages: MessageEnvelope[]; hasMore: boolean };
+  receive: { deliveries: Delivery[]; hasMore: boolean; nextCursor?: string };
+  "receive-ack": { delivery: DeliveryStateRef };
   list: { conversations: ConversationSummary[] };
 }
 

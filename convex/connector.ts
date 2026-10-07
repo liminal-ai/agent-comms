@@ -107,6 +107,9 @@ export const work = query({
       seen.add(d._id);
       // In-flight work goes to the home it was handed to (2.5); new work to the current home.
       const home = d.target ?? p.home!;
+      // Pull offers wake the oaidot courier, but receipt is final for transport:
+      // its outstanding requests finish by explicit reply, never turn collection.
+      if (home.harness === "oaidot" && d.state === "delivered") return;
       items.push({
         id: d._id,
         recipient: p.name,
@@ -158,15 +161,126 @@ export const work = query({
 });
 
 /** A delivery this machine may act on: handed to a home here, or (not yet handed over) for a participant homed here. */
-async function deliveryForMachine(ctx: QueryCtx, machine: Doc<"machines">, deliveryId: string) {
+async function deliveryForMachine(ctx: QueryCtx, machine: Doc<"machines">, deliveryId: string, allowPull = false) {
   const d = await getOr(ctx, "deliveries", deliveryId);
   const recipient = (await ctx.db.get(d.recipientId))!;
   const owner = d.target?.machine ?? recipient.home?.machine;
   if (owner !== machine.machineId) {
     fail("not_homed_here", `delivery ${d._id} is for @${recipient.name}, handled by ${owner ?? "no machine"}, not ${machine.machineId}`);
   }
+  if (!allowPull && (d.target ?? recipient.home)?.harness === "oaidot") {
+    fail("conflict", `delivery ${d._id} uses oaidot receive/receiveAck and explicit reply, not a harness turn`);
+  }
   return { d, recipient };
 }
+
+function sameHome(a: Doc<"deliveries">["target"], b: Doc<"participants">["home"]): boolean {
+  return !!a && !!b && a.machine === b.machine && a.harness === b.harness && a.locator === b.locator;
+}
+
+/**
+ * Offer messages to the native oaidot courier. An offer only reserves work; it
+ * does not acknowledge receipt or move the participant's read position. Active
+ * leases are omitted: a lost response can be recovered after lease expiry.
+ */
+export const receive = mutation({
+  args: {
+    machine: machineAuth,
+    as: v.string(),
+    locator: v.string(),
+    limit: v.optional(v.number()),
+    leaseMs: v.optional(v.number()),
+    includeDelivered: v.optional(v.boolean()),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<Responses["receive"]> => {
+    const machine = await requireMachine(ctx, args.machine);
+    const me = await actingAs(ctx, machine, args.as);
+    if (me.kind !== "agent" || me.home?.harness !== "oaidot") fail("bad_request", `@${me.name} is not an oaidot agent`);
+    if (me.home.locator !== args.locator) fail("not_homed_here", `@${me.name} is no longer homed at this oaidot locator`);
+    const limit = args.limit ?? 1;
+    const duration = args.leaseMs ?? DEFAULT_LEASE_MS;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 20) fail("bad_request", "receive limit must be an integer from 1 to 20");
+    if (!Number.isInteger(duration) || duration < 1_000 || duration > MAX_LEASE_MS) {
+      fail("bad_request", "receive leaseMs must be an integer from 1000 to 600000");
+    }
+    if (args.cursor !== undefined && (!args.includeDelivered || args.cursor.length > 4096)) {
+      fail("bad_request", "a receive cursor is only valid for delivered recovery and must be at most 4096 characters");
+    }
+    // Despite its additive-sounding name, includeDelivered is an explicit
+    // recovery-only mode: inspection must never claim fresh incoming messages.
+    if (args.includeDelivered) {
+      const recovery = await ctx.db.query("deliveries")
+        .withIndex("by_recipient_state_collect", (q) => q.eq("recipientId", me._id).eq("state", "delivered").eq("collect", true))
+        .filter((q) => q.eq(q.field("target"), me.home))
+        .paginate({ numItems: limit, cursor: args.cursor ?? null });
+      return {
+        deliveries: await Promise.all(recovery.page.map((d) => fullDelivery(ctx, d))),
+        hasMore: !recovery.isDone,
+        ...(!recovery.isDone ? { nextCursor: recovery.continueCursor } : {}),
+      };
+    }
+    const now = Date.now();
+    const eligible = (d: Doc<"deliveries">) => !d.target || sameHome(d.target, me.home);
+    const oldest = (a: Doc<"deliveries">, b: Doc<"deliveries">) => a.createdAt - b.createdAt || a._creationTime - b._creationTime || a._id.localeCompare(b._id);
+    const offers: Doc<"deliveries">[] = [];
+    if (me.state === "active") {
+      offers.push(...(await ctx.db.query("deliveries")
+        .withIndex("by_recipient_state", (q) => q.eq("recipientId", me._id).eq("state", "pending"))
+        .filter((q) => q.or(q.eq(q.field("target"), undefined), q.eq(q.field("target"), me.home)))
+        .take(limit + 1)).filter(eligible));
+    }
+    // A pause permits recovery of previously offered work. Retirement offers
+    // nothing new; a previously forwarded claim can still be acknowledged.
+    if (me.state !== "retired") {
+      offers.push(...(await ctx.db.query("deliveries")
+        .withIndex("by_recipient_state", (q) => q.eq("recipientId", me._id).eq("state", "claimed"))
+        .filter((q) => q.and(
+          q.eq(q.field("target"), me.home),
+          q.or(q.eq(q.field("claim"), undefined), q.lte(q.field("claim.leaseExpiresAt"), now)),
+        ))
+        .take(limit + 1)).filter(eligible));
+    }
+    offers.sort(oldest);
+    const selected = offers.slice(0, limit);
+    const deliveries: Responses["receive"]["deliveries"] = [];
+    for (const d of selected) {
+      const claim = { machine: machine.machineId, claimId: crypto.randomUUID(), leaseExpiresAt: now + duration };
+      await ctx.db.patch(d._id, { state: "claimed", at: now, target: d.target ?? me.home, claim, claimCount: (d.claimCount ?? 0) + 1 });
+      deliveries.push(await fullDelivery(ctx, (await ctx.db.get(d._id))!));
+    }
+    return { deliveries, hasMore: offers.length > selected.length };
+  },
+});
+
+/** Explicit receipt after the native courier forwarded the envelope to dot. */
+export const receiveAck = mutation({
+  args: { machine: machineAuth, as: v.string(), locator: v.string(), deliveryId: v.string(), claimId: v.string() },
+  handler: async (ctx, args): Promise<Responses["receive-ack"]> => {
+    const machine = await requireMachine(ctx, args.machine);
+    const { d, recipient } = await deliveryForMachine(ctx, machine, args.deliveryId, true);
+    if (recipient.name !== args.as) fail("not_homed_here", `delivery ${d._id} is not for @${args.as}`);
+    if (d.target?.harness !== "oaidot") fail("bad_request", `delivery ${d._id} is not an oaidot offer`);
+    if (d.target.locator !== args.locator) fail("not_homed_here", `delivery ${d._id} belongs to a different oaidot locator`);
+    // The target is fixed before forwarding. A moved participant's old machine
+    // may ACK only that old offer, never work belonging to its new home.
+    if (d.received?.claimId === args.claimId && d.received.machine === machine.machineId) {
+      return { delivery: await stateRef(ctx, d) };
+    }
+    if (d.state !== "claimed" && d.state !== "replied") fail("conflict", `delivery ${d._id} is ${d.state}`);
+    holdsClaim(d, machine, args.claimId);
+    const now = Date.now();
+    if (d.claim!.leaseExpiresAt <= now) fail("conflict", `the receipt lease on delivery ${d._id} expired`);
+    await ctx.db.patch(d._id, {
+      ...(d.state === "claimed" ? { state: "delivered" as const, at: now } : {}),
+      claim: undefined,
+      received: { machine: machine.machineId, claimId: args.claimId, at: now },
+    });
+    const message = (await ctx.db.get(d.messageId))!;
+    await advanceRead(ctx, d.conversationId, d.recipientId, message.seq);
+    return { delivery: await stateRef(ctx, (await ctx.db.get(d._id))!) };
+  },
+});
 
 function leaseMs(requested: number | undefined): number {
   return Math.max(1_000, Math.min(requested ?? DEFAULT_LEASE_MS, MAX_LEASE_MS));
@@ -504,7 +618,7 @@ export const send = mutation({
 
 /**
  * An explicit answer (`comms reply`): always allowed, never collected. Completes
- * the replier's `ambiguous` or `uncertain` delivery of that message.
+ * an open delivery of that request. An oaidot reply also settles pending work.
  */
 export const reply = mutation({
   args: {
@@ -518,12 +632,40 @@ export const reply = mutation({
   },
   handler: async (ctx, args): Promise<Responses["reply"]> => {
     const machine = await requireMachine(ctx, args.machine);
-    const me = await actingAs(ctx, machine, args.as);
-    const earlier = await replayed(ctx, me, args.key);
-    if (earlier) return earlier;
+    const me = await participantByName(ctx, args.as);
+    const currentHome = me.home?.machine === machine.machineId;
+    // Preserve the existing current-home idempotency fast path, including when
+    // a retry no longer carries the original message's arguments.
+    if (currentHome) {
+      const earlier = await replayed(ctx, me, args.key);
+      if (earlier) return earlier;
+    }
     const original = await getOr(ctx, "messages", args.messageId);
+    // A native parent may finish precisely the request already handed to its
+    // oaidot home, including after a rebind, retirement or leaving the group.
+    // This exception never grants the old machine permission to send new work.
+    const pinned = await ctx.db.query("deliveries")
+      .withIndex("by_message", (q) => q.eq("messageId", original._id))
+      .filter((q) => q.and(
+        q.eq(q.field("recipientId"), me._id), q.eq(q.field("collect"), true),
+        q.eq(q.field("target.harness"), "oaidot"), q.eq(q.field("target.machine"), machine.machineId),
+      )).first();
+    const inFlight = !!pinned && (pinned.state === "claimed" || pinned.state === "delivered");
+    if (!currentHome && !inFlight && pinned?.state !== "replied") {
+      fail("not_homed_here", `@${me.name} is not homed on ${machine.machineId}`);
+    }
+    if (!currentHome) {
+      const earlier = await replayed(ctx, me, args.key);
+      if (earlier) {
+        if (earlier.message.kind !== "answer" || earlier.message.inReplyTo !== original._id) {
+          fail("not_homed_here", `the earlier message is not a reply to this machine's oaidot delivery`);
+        }
+        return earlier;
+      }
+    }
+    if (!currentHome && !inFlight) fail("not_homed_here", `@${me.name} is not homed on ${machine.machineId}`);
     const conversation = (await ctx.db.get(original.conversationId))!;
-    await membership(ctx, conversation._id, me);
+    if (!inFlight) await membership(ctx, conversation._id, me);
     const originalSender = (await ctx.db.get(original.senderId))!;
     const addressable =
       originalSender._id !== me._id && originalSender.kind !== "system" && (await isMember(ctx, conversation._id, originalSender));
@@ -533,6 +675,7 @@ export const reply = mutation({
       recipients: addressable ? [originalSender] : [],
       kind: "answer",
       inReplyTo: original._id,
+      ...(inFlight ? { inFlight: true } : {}),
       text: args.text,
       ...(args.attachments ? { attachments: args.attachments } : {}),
       ...(args.key !== undefined ? { idempotencyKey: args.key } : {}),
@@ -543,13 +686,13 @@ export const reply = mutation({
     // text is then not collected), including one whose `delivered` write hasn't landed yet
     // (claimed: docs/10 1, the reply race). The claim stays, so the connector finishes cleanly:
     // `prepare` refuses to send it, and delivered, collect and the outcomes change nothing.
-    for (const state of ["claimed", "delivered", "ambiguous", "uncertain"] as const) {
+    for (const state of ["pending", "claimed", "delivered", "ambiguous", "uncertain"] as const) {
       const open = await ctx.db
         .query("deliveries")
         .withIndex("by_recipient_state", (q) => q.eq("recipientId", me._id).eq("state", state))
         .filter((q) => q.and(q.eq(q.field("messageId"), original._id), q.eq(q.field("collect"), true)))
         .first();
-      if (open) {
+      if (open && (state !== "pending" || (open.target ?? me.home)?.harness === "oaidot")) {
         await ctx.db.patch(open._id, {
           state: "replied",
           at: Date.now(),
