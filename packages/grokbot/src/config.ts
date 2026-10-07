@@ -135,7 +135,8 @@ export function loadConfig(env: Record<string, string | undefined>, overrides: C
     try {
       parsed = new URL(hookUrl);
     } catch {
-      throw new ConfigError(`wakeWebhook: "${hookUrl}" isn't a URL`);
+      // Not echoed: a typo'd URL may still carry a secret path.
+      throw new ConfigError("wakeWebhook: the URL doesn't parse (check the config value or GROKBOT_WAKE_WEBHOOK_URL)");
     }
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new ConfigError("wakeWebhook: only http and https URLs");
     const includeEnv = env[ENV.wakeIncludeText];

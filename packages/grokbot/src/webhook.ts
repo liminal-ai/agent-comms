@@ -49,6 +49,8 @@ export function webhookWake(hook: NonNullable<GrokbotConfig["wakeWebhook"]>, req
       headers,
       body: JSON.stringify(wakePayload(event, item, { includeText: hook.includeText, inboxFile })),
       signal: AbortSignal.timeout(hook.timeoutMs),
+      // A redirect would carry the credential elsewhere and still look like a successful wake.
+      redirect: "error",
     });
     if (!res.ok) throw new Error(`wake webhook answered HTTP ${res.status}`);
   };
