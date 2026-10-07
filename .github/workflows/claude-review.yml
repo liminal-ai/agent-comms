@@ -21,13 +21,12 @@ concurrency:
 jobs:
   review:
     # Once per PR when it's ready; re-run by adding the `ai-rereview` label.
-    # Skip forks (no secrets), opt-outs, and when the Anthropic secret is absent.
+    # Skip forks and opt-outs. Secret presence is checked in the first step to skip cleanly.
     if: >-
       github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       !contains(github.event.pull_request.labels.*.name, 'skip-ai-review') &&
-      (github.event.action != 'labeled' || github.event.label.name == 'ai-rereview') &&
-      secrets.ANTHROPIC_API_KEY != ''
+      (github.event.action != 'labeled' || github.event.label.name == 'ai-rereview')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -35,14 +34,29 @@ jobs:
       pull-requests: write
       id-token: write   # allows the Claude Code GitHub App to mint its token if used
     steps:
+      - name: Check required secret
+        id: check_secrets
+        env:
+          ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${ANTHROPIC}" ]; then
+            echo "has_secret=false" >> "$GITHUB_OUTPUT"
+            echo "Missing ANTHROPIC_API_KEY; skipping review."
+          else
+            echo "has_secret=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.check_secrets.outputs.has_secret == 'true'
         with:
           fetch-depth: 1
 
       # Optional: give Copilot/Bugbot a head start so their comments exist to dedupe against.
-      - run: sleep 240
+      - if: steps.check_secrets.outputs.has_secret == 'true'
+        run: sleep 240
 
-      - uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+      - if: steps.check_secrets.outputs.has_secret == 'true'
+        uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           use_sticky_comment: true

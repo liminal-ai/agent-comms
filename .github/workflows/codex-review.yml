@@ -24,8 +24,7 @@ jobs:
       github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       !contains(github.event.pull_request.labels.*.name, 'skip-ai-review') &&
-      (github.event.action != 'labeled' || github.event.label.name == 'ai-rereview') &&
-      secrets.OPENAI_API_KEY != ''
+      (github.event.action != 'labeled' || github.event.label.name == 'ai-rereview')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -34,18 +33,33 @@ jobs:
     outputs:
       final_message: ${{ steps.run_codex.outputs.final-message }}
     steps:
+      - name: Check required secret
+        id: check_secrets
+        env:
+          OPENAI: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "${OPENAI}" ]; then
+            echo "has_secret=false" >> "$GITHUB_OUTPUT"
+            echo "Missing OPENAI_API_KEY; skipping review."
+          else
+            echo "has_secret=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.check_secrets.outputs.has_secret == 'true'
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
           persist-credentials: false
 
       - name: Fetch base/head refs
+        if: steps.check_secrets.outputs.has_secret == 'true'
         env:
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: git fetch --no-tags origin "$PR_BASE_REF" "+refs/pull/$PR_NUMBER/head"
 
       - name: Wait for faster bots, then snapshot their comments (for dedupe)
+        if: steps.check_secrets.outputs.has_secret == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -57,6 +71,7 @@ jobs:
             > .ai-review/prior-comments.txt || true
 
       - name: Run Codex
+        if: steps.check_secrets.outputs.has_secret == 'true'
         id: run_codex
         uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675  # v1.13
         with:
