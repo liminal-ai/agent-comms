@@ -894,6 +894,8 @@ describe("mcp config", () => {
     assert.throws(() => parseConfig({ ...base, mcp: { ...mcp, allowedEmails: [] } }), /allowedEmails or allowedSubjects/);
     assert.throws(() => parseConfig({ ...base, mcp: { ...mcp, publicBaseUrl: "http://lim-builder:8443" } }), /https/);
     assert.throws(() => parseConfig({ ...base, mcp: { ...mcp, publicBaseUrl: "https://lim-builder:8443/mcp" } }), /without a path/);
+    // A TTL cap must leave now + ttl a representable timestamp.
+    for (const bad of [Number.MAX_SAFE_INTEGER, "99999999999d", 400 * 86_400_000]) assert.throws(() => parseConfig({ ...base, mcp: { ...mcp, maxSubscriptionTtl: bad } }), /maxSubscriptionTtl: (too large|at most 366 days)/, String(bad));
     assert.throws(() => parseConfig({ ...base, mcp: { ...mcp, stateFile: join(dir, "missing", "state.json") } }), /doesn't exist/);
     assert.throws(() => parseConfig({ ...base, mcp: { ...mcp, listen: { port: 0 } } }), /port/);
     assert.throws(() => parseConfig({ ...base, targets: [target, { ...target, participant: "dot2", waker: { kind: "mcp-events", event: "comms.delivery.dot" } }], mcp }), /used twice/);

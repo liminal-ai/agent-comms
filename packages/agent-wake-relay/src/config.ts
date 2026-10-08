@@ -106,6 +106,7 @@ function durationValue(value: number | string | undefined, what: string, fallbac
   }
   const ms = parseDuration(value);
   if (ms === null) throw new ConfigError(`${what}: expected milliseconds or <n>s|m|h|d, got "${value}"`);
+  if (!Number.isSafeInteger(ms)) throw new ConfigError(`${what}: too large`);
   return ms;
 }
 
@@ -186,7 +187,8 @@ function parseMcp(raw: unknown): McpConfig {
   if (allowedEmails.length && !m.workosApiKeyFile) throw new ConfigError("mcp.workosApiKeyFile: required with allowedEmails");
   if (typeof m.stateFile !== "string" || !m.stateFile) throw new ConfigError("mcp.stateFile: expected a file path");
   const stateFile = expandHome(m.stateFile);
-  const maxTtlMs = duration(m.maxSubscriptionTtl, "mcp.maxSubscriptionTtl", 30 * 86_400_000);
+  // Capped so now + ttl is always a representable timestamp (and a sane grant).
+  const maxTtlMs = duration(m.maxSubscriptionTtl, "mcp.maxSubscriptionTtl", 30 * 86_400_000, 366 * 86_400_000);
   if (maxTtlMs < 60_000) throw new ConfigError("mcp.maxSubscriptionTtl: expected at least a minute");
   const publicBaseUrl = httpsUrl(m.publicBaseUrl, "mcp.publicBaseUrl");
   if (new URL(publicBaseUrl).pathname !== "/") throw new ConfigError("mcp.publicBaseUrl: expected an origin without a path (the MCP endpoint is <origin>/mcp)");
