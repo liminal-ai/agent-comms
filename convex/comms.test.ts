@@ -56,7 +56,7 @@ describe("auth", () => {
   it("rejects a wrong machine secret and a wrong admin token", async () => {
     const t = await setup();
     expect(await errorCode(t.query(api.connector.work, { machine: { id: "m1", secret: "wrong" } }))).toBe(
-      "plain: machine credential rejected",
+      "forbidden",
     );
     expect(await errorCode(t.query(api.directory.list, { adminToken: "nope" }))).toBe("plain: admin token rejected");
   });

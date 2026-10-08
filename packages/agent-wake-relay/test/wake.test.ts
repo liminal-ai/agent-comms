@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { ConfigError, parseConfig } from "../src/config.ts";
-import { Coordinator, MAX_TIMER_MS, TerminalWakeError, type Timers, type WorkDelivery } from "../src/coordinator.ts";
+import { Coordinator, RETRY_GIVE_UP, MAX_TIMER_MS, TerminalWakeError, type Timers, type WorkDelivery } from "../src/coordinator.ts";
 import { webhookWaker } from "../src/wakers.ts";
 
 /** A clock the test advances by hand. */
@@ -248,18 +248,18 @@ describe("coordinator", () => {
     assert.ok(logs.some((l) => /retrying in 30s/.test(l)));
   });
 
-  it("a renudge pre-empted by a wake that turns out empty is reinstalled", async () => {
+  it("a renudge pre-empted by a coalesced wake is reinstalled after it", async () => {
     const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
     c.update([d("a")]);
     await timers.advance(2_000);
     assert.deepEqual(wakes, [["a"]]);
     await timers.advance(5 * 60_000);
     c.update([d("a"), d("b")]); // a fresh delivery: a coalesced wake is scheduled, the renudge timer cleared
-    c.update([d("a")]); // and it's gone again before that wake fires
+    c.update([d("a")]); // and it's handed over and gone again before that wake fires: still owed its one wake
     await timers.advance(2_000);
-    assert.equal(wakes.length, 1, "nothing was due for the coalesced wake");
+    assert.deepEqual(wakes, [["a"], ["b"]], "the coalesced wake carried b only; a wasn't due");
     await timers.advance(5 * 60_000);
-    assert.deepEqual(wakes, [["a"], ["a"]], "a was still renudged on time");
+    assert.deepEqual(wakes, [["a"], ["b"], ["a"]], "a was still renudged on time");
   });
 
   it("a handoff noted during an in-flight wake is forgotten with its delivery", async () => {
@@ -382,6 +382,96 @@ describe("coordinator", () => {
     c.update([d("a"), d("b")]); // a new delivery: tried again
     await timers.advance(2_000);
     assert.equal(calls, 13);
+  });
+
+  it("a webhook that never answers gets a bounded number of POSTs with the default renudge, then nothing until something changes", async () => {
+    const timers = new FakeTimers();
+    const logs: string[] = [];
+    const at: number[] = [];
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: (l) => logs.push(l),
+      renudgeMs: 10 * 60_000, // the default
+      wake: async () => {
+        at.push(timers.now());
+        throw new Error("HTTP 500");
+      },
+    });
+    c.update([d("a")]);
+    await timers.advance(7 * 86_400_000); // a week
+    // Each wake (the first and the three renudges) is one retry run of RETRY_GIVE_UP POSTs; after the last renudge step, nothing.
+    assert.equal(at.length, 4 * RETRY_GIVE_UP, "four runs of twelve, not a fresh run every time the first step comes due");
+    const runStarts = at.filter((_, i) => i % RETRY_GIVE_UP === 0);
+    const gapsMin = runStarts.slice(1).map((t, i) => Math.round((t - runStarts[i]!) / 60_000));
+    // A run lasts 30+60+120+240 s, then 300 s × 7 (42.5 min); the next starts a renudge step after it gave up.
+    const run = Math.round((30 + 60 + 120 + 240 + 300 * 7) / 60);
+    assert.deepEqual(gapsMin, [run + 10, run + 30, run + 120], "renudge steps widen from the give-up, not from the first failure");
+    assert.equal(logs.filter((l) => /giving up/.test(l)).length, 4);
+    assert.equal(logs.filter((l) => /not waking for it again/.test(l)).length, 1);
+    const before = at.length;
+    c.update([d("a"), d("b")]); // something new: one more run, for both
+    await timers.advance(2_000);
+    assert.equal(at.length, before + 1);
+  });
+
+  it("a delivery first seen under a live lease is woken for when the lease lapses without a change", async () => {
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+    const lease = timers.now() + 2 * 60_000;
+    c.update([{ ...d("a"), state: "claimed", claim: { leaseExpiresAt: lease } }]); // the relay started while a connector held it
+    await timers.advance(60_000);
+    assert.equal(wakes.length, 0, "not while the lease is live");
+    await timers.advance(60_000 + 2_001); // the claimant died: the row never changes
+    assert.deepEqual(wakes, [["a"]], "woken once the lease lapsed");
+  });
+
+  it("a delivery that reaches delivered before it was ever woken for is woken for (Bugbot autofix 7e0dacf)", async () => {
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+    const lease = timers.now() + 30 * 60_000;
+    c.update([{ ...d("a"), state: "claimed", claim: { leaseExpiresAt: lease } }]);
+    await timers.advance(2_000);
+    assert.equal(wakes.length, 0);
+    c.update([{ ...d("a"), state: "delivered" }]); // the connector handed it over
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a"]]);
+  });
+
+  it("a delivery handed over and gone within the coalesce window is still woken for once", async () => {
+    // grok-box's connector claims an answer and puts it in the agent's inbox in well under 2 s; it then
+    // has nothing left to do and leaves the work list. The agent still has to be woken to read it.
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+    c.update([d("a")]);
+    await timers.advance(500);
+    c.update([{ ...d("a"), state: "claimed", claim: { leaseExpiresAt: timers.now() + 60_000 } }]);
+    await timers.advance(500);
+    c.update([]); // delivered; an answer isn't collected, so it's gone
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a"]], "woken for it although it had already been handed over");
+    await timers.advance(24 * 60 * 60_000);
+    assert.equal(wakes.length, 1, "owed one wake, not renudged");
+  });
+
+  it("a delivery that goes while its wake is in flight isn't woken for twice", async () => {
+    const timers = new FakeTimers();
+    const wakes: string[][] = [];
+    let release!: () => void;
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 0,
+      wake: async (ids) => {
+        wakes.push(ids);
+        await new Promise<void>((r) => (release = r));
+      },
+    });
+    c.update([d("a")]);
+    await timers.advance(2_000);
+    assert.equal(wakes.length, 1);
+    c.update([]); // gone while the POST is out
+    release();
+    await timers.advance(5_000);
+    assert.equal(wakes.length, 1);
   });
 
   it("gives the webhook a wake id that is stable across retries of the same set and new for a new set", async () => {

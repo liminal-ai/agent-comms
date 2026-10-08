@@ -453,6 +453,20 @@ describe("event delivery", () => {
     }
   });
 
+  it("a state file with a null or malformed subscription entry is moved aside, not fatal", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const path = join(dir, "state.json");
+    const logs: string[] = [];
+    for (const entry of [null, 42, { id: 7 }, { id: "s1" }]) {
+      await writeFile(path, JSON.stringify({ version: 1, subscriptions: [entry] }));
+      const store = new SubscriptionStore(path, Date.now, (l) => logs.push(l));
+      await store.load(); // must not throw
+      assert.equal(store.active().length, 0);
+      await assert.rejects(stat(path), "moved aside");
+    }
+    assert.equal(logs.filter((l) => /state file unreadable .*bad subscription entry/.test(l)).length, 4);
+  });
+
   it("a denied subscription that can't be removed from an unwritable store is still excluded, and the others get the wake", async () => {
     const good = await receiver(chatgpt());
     const bad = await receiver(chatgpt());

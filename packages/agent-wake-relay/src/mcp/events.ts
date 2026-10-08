@@ -438,7 +438,9 @@ export class EventHub {
           }
         }
         if (ok) a.state = "accepted";
-        else if (allTerminal) a.state = "terminal";
+        // Terminal only if every live subscription refused it: a refresh that landed while the post was out is a
+        // new object that never saw the event and is still owed it (it is tried on the retry).
+        else if (allTerminal && !this.o.store.active(t.event).some((s) => !a.refused.has(s))) a.state = "terminal";
       }
       // Bookkeeping only. A callback that answered 2xx has the event; failing the wake here would
       // make the coordinator retry with a fresh event id and start the same task again.

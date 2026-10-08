@@ -1,5 +1,6 @@
 // A machine's watch secret: accepted by connector:work and by nothing else (agent-wake-relay holds only that).
 import { convexTest } from "convex-test";
+import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
@@ -47,5 +48,34 @@ describe("the watch secret", () => {
     await t.mutation(api.directory.setWatchSecret, { adminToken: ADMIN, machineId: "m1", secret: watcher.secret });
     expect(await t.mutation(api.directory.setWatchSecret, { adminToken: ADMIN, machineId: "m1", secret: "" })).toEqual({ machineId: "m1", watch: false });
     await expect(t.query(api.connector.work, { machine: watcher })).rejects.toThrow(/credential rejected/);
+  });
+});
+
+describe("the two machine credentials stay distinct", () => {
+  it("a connector rotation to the watch secret is refused (Bugbot autofix 7e0dacf), and the watch secret can't copy the connector's", async () => {
+    const t = convexTest(schema, modules);
+    process.env.COMMS_ADMIN_TOKEN = ADMIN;
+    await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m1", secret: m1.secret });
+    await t.mutation(api.directory.setWatchSecret, { adminToken: ADMIN, machineId: "m1", secret: watcher.secret });
+    await expect(t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m1", secret: watcher.secret })).rejects.toThrow(/must differ from the watch secret/);
+    await expect(t.mutation(api.directory.setWatchSecret, { adminToken: ADMIN, machineId: "m1", secret: m1.secret })).rejects.toThrow(/must differ/);
+    // Rotating to a third value is fine, and the watch secret still only reads work.
+    await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m1", secret: "m1-secret-rotated-9876543210" });
+    await expect(t.mutation(api.connector.receive, { machine: watcher, as: "a", locator: "loc-a" })).rejects.toThrow(/credential rejected/);
+  });
+
+  it("a rejected credential is a protocol error with a code, so production clients see more than 'Server Error'", async () => {
+    const t = convexTest(schema, modules);
+    process.env.COMMS_ADMIN_TOKEN = ADMIN;
+    await t.mutation(api.directory.registerMachine, { adminToken: ADMIN, machineId: "m1", secret: m1.secret });
+    for (const call of [
+      () => t.query(api.connector.work, { machine: { id: "m1", secret: "wrong-secret-0123456789" } }),
+      () => t.query(api.connector.work, { machine: { id: "nope", secret: m1.secret } }),
+      () => t.mutation(api.connector.receive, { machine: { id: "m1", secret: "wrong-secret-0123456789" }, as: "a", locator: "loc-a" }),
+    ]) {
+      const error = await call().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ConvexError);
+      expect((error as ConvexError<{ code: string; message: string }>).data).toEqual({ code: "forbidden", message: "machine credential rejected" });
+    }
   });
 });

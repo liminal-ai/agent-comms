@@ -79,7 +79,7 @@ describe("oaidot pull receipt lifecycle", () => {
     for (const leaseMs of [999, 600_001, 1_000.5]) expect(await errorCode(receive(t, { leaseMs }))).toBe("bad_request");
     expect(await errorCode(t.mutation(api.connector.receive, { locator: home.locator, machine: m1, as: "a" }))).toBe("bad_request");
     expect(await errorCode(t.mutation(api.connector.receive, { locator: home.locator, machine: m2, as: "dot" }))).toBe("not_homed_here");
-    expect(await errorCode(t.mutation(api.connector.receive, { locator: home.locator, machine: { ...m1, secret: "wrong" }, as: "dot" }))).toBe("plain: machine credential rejected");
+    expect(await errorCode(t.mutation(api.connector.receive, { locator: home.locator, machine: { ...m1, secret: "wrong" }, as: "dot" }))).toBe("forbidden");
     expect(await errorCode(t.mutation(api.connector.receive, { locator: home.locator, machine: m1, as: "ghost" }))).toBe("unknown_participant");
   });
 

@@ -72,6 +72,10 @@ export class SubscriptionStore {
     try {
       state = JSON.parse(raw) as typeof state;
       if (state.version !== 1 || !Array.isArray(state.subscriptions)) throw new Error("not an agent-wake-relay state file");
+      // Each entry too: a null or malformed one would otherwise throw past this recovery and keep every waker down.
+      for (const s of state.subscriptions) {
+        if (!s || typeof s !== "object" || typeof s.id !== "string" || typeof s.url !== "string" || typeof s.event !== "string" || typeof s.expiresAt !== "number") throw new Error("not an agent-wake-relay state file (bad subscription entry)");
+      }
     } catch (error) {
       // A damaged file mustn't keep every waker down (the webhook targets don't even use it). Keep it
       // for inspection and start empty; subscribers re-subscribe from ChatGPT.

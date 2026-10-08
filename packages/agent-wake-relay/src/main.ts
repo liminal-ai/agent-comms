@@ -6,6 +6,7 @@
 // is woken by MCP Events (ChatGPT), it also hosts the MCP server ChatGPT
 // subscribes through. Usage: agent-wake-relay <config.json>
 
+import { ConvexError } from "convex/values";
 import { readFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { ConvexClient } from "convex/browser";
@@ -89,7 +90,8 @@ for (const t of config.targets) {
     (error: Error) => {
       // A rejected credential never recovers on its own (rotated or revoked secret, deleted machine): exit non-zero so
       // systemd restarts the relay and the secret file is read again, instead of looking alive while waking no one.
-      if (/credential rejected/.test(error.message)) {
+      // Convex production redacts plain error text to "Server Error"; the rejection is a ConvexError whose data survives.
+      if (error instanceof ConvexError && (error.data as { code?: string } | undefined)?.code === "forbidden") {
         log(`@${t.participant}: the machine credential was rejected; exiting so the service restarts with the current secret file`);
         process.exit(3);
       }

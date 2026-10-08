@@ -61,7 +61,7 @@ export async function requireWatcher(ctx: QueryCtx, auth: { id: string; secret: 
   };
   // Both compared every time, so a wrong secret costs the same whether or not a watch secret exists.
   const ok = [matches(machine?.secretHash), matches(machine?.watchSecretHash)].some(Boolean);
-  if (!machine || !ok) throw new Error("machine credential rejected");
+  if (!machine || !ok) fail("forbidden", "machine credential rejected");
   return machine;
 }
 
@@ -75,7 +75,7 @@ export async function requireMachine(ctx: QueryCtx, auth: { id: string; secret: 
   for (let i = 0; i < presented.length; i++) diff |= presented.charCodeAt(i) ^ (machine?.secretHash.charCodeAt(i) ?? 0);
   if (!machine || diff !== 0) {
     // Deliberately the same answer for an unknown machine and a wrong secret.
-    throw new Error("machine credential rejected");
+    fail("forbidden", "machine credential rejected");
   }
   return machine;
 }
