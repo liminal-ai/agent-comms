@@ -7,7 +7,7 @@
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { connect } from 'node:net';
-import { chmod, lstat, readFile, realpath, rename, rm } from 'node:fs/promises';
+import { chmod, lstat, open, readFile, realpath, rename, rm } from 'node:fs/promises';
 import { basename, resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localWebServer } from '../packages/service/src/web.ts';
@@ -22,33 +22,71 @@ export async function listenWeb(server, config, log = (line) => console.log(line
   if (config.socket) {
     const existing = await lstat(config.socket).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
     if (existing && !existing.isSocket()) throw new Error(`web config: socket path ${config.socket} exists and is not a socket; refusing to replace it`);
-    if (existing) {
-      // Claim the path first (rename is atomic, so of two starters only one gets it), then probe what
-      // was claimed: a live socket still answers at its new name and is put back; a stale one is removed.
-      const claim = `${config.socket}.${process.pid}.${randomBytes(4).toString('hex')}.stale`;
-      const claimed = await rename(config.socket, claim).then(() => true, (error) => { if (error.code === 'ENOENT') return false; throw error; });
-      if (claimed) {
-        if (await socketAnswers(claim)) {
-          await rename(claim, config.socket).catch(() => {});
-          throw new Error(`web config: socket ${config.socket} is in use by another instance; refusing to take it over`);
-        }
-        await rm(claim);
+    // Starters take turns under a lock, so the probe, the removal of a stale socket and the bind
+    // happen with no other starter in between, and a live socket keeps its path throughout.
+    await withStartLock(config.socket, config.lockWaitMs ?? 5000, async () => {
+      if (existing) {
+        // Only a stale socket (nobody listening) is replaced; a live one belongs to a running instance.
+        if (await socketAnswers(config.socket)) throw new Error(`web config: socket ${config.socket} is in use by another instance; refusing to take it over`);
+        await rm(config.socket);
       }
-    }
-    // Created mode 600 from the first instant (umask 177), so nobody can connect before the chmod below.
-    const umask = process.umask(0o177);
-    try {
-      await bind(server, config.socket);
-    } finally {
-      process.umask(umask);
-    }
-    await chmod(config.socket, 0o600);
+      // Created mode 600 from the first instant (umask 177), so nobody can connect before the chmod below.
+      const umask = process.umask(0o177);
+      try {
+        await bind(server, config.socket);
+      } finally {
+        process.umask(umask);
+      }
+      await chmod(config.socket, 0o600);
+    });
     log(`Comms ${config.environment} web: unix:${config.socket}${config.adminTokenFile ? ' (proxy mode)' : ''}`);
   } else {
     await bind(server, config.port, '127.0.0.1');
     log(`Comms ${config.environment} web: 127.0.0.1:${server.address().port}${config.adminTokenFile ? ' (proxy mode)' : ''}`);
   }
   return server;
+}
+
+/**
+ * Runs fn holding `<socket>.lock`, created exclusively with this pid inside. A lock whose pid is gone
+ * is stale and is taken over; one held by a live process is waited on for up to waitMs, then refused.
+ */
+async function withStartLock(socket, waitMs, fn) {
+  const lock = `${socket}.lock`;
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    try {
+      const handle = await open(lock, 'wx', 0o600);
+      await handle.writeFile(String(process.pid));
+      await handle.close();
+      break;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+    const holder = Number((await readFile(lock, 'utf8').catch(() => '')).trim());
+    if (holder && !processAlive(holder)) {
+      // Take the stale lock by renaming it (atomic: only one contender gets it), then drop it.
+      const taken = `${lock}.${process.pid}.${randomBytes(4).toString('hex')}.stale`;
+      await rename(lock, taken).then(() => rm(taken, { force: true }), () => {});
+      continue;
+    }
+    if (Date.now() >= deadline) throw new Error(`web config: another instance is starting on ${socket} (lock ${lock} held by pid ${holder || 'unknown'})`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  try {
+    return await fn();
+  } finally {
+    await rm(lock, { force: true });
+  }
+}
+
+function processAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
 }
 
 function socketAnswers(path) {

@@ -87,6 +87,14 @@ test('web service starts through the deployed current directory link' + (lowerDr
         const second = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: live }, () => {});
         try { assert.ok(second.listening, 'a stale socket is replaced'); } finally { await stop(second); }
       }
+      // A lock left by a starter that died is taken over; one held by a live process is refused after the wait.
+      const locked = join(dir, 'locked.sock');
+      await writeFile(`${locked}.lock`, '999999999');
+      const afterStale = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked }, () => {});
+      try { assert.ok(afterStale.listening, 'a stale lock does not block startup'); } finally { await stop(afterStale); }
+      await writeFile(`${locked}.lock`, String(process.pid));
+      await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /another instance is starting/);
+      await rm(`${locked}.lock`);
       // Two starters racing for the same stale socket: exactly one binds, and it keeps serving.
       const raced = join(dir, 'raced.sock');
       const abandoned = rawServer(); await new Promise((r) => abandoned.listen(raced, r)); abandoned.unref();
