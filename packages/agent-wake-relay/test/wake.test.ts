@@ -527,17 +527,36 @@ describe("coordinator", () => {
     assert.deepEqual(wakes, [["a"]], "the handoff got its own wake once the failed run gave up");
   });
 
-  it("deliveries whose wakes were spent while nothing could receive them are woken for again when a subscriber connects", async () => {
-    const { timers, wakes, logs, c } = setup({ renudgeMs: 10 * 60_000 });
+  it("deliveries whose wakes never landed are woken for again when a subscriber connects; ones whose wake landed are not", async () => {
+    // Nothing could receive the wakes: every attempt is refused for good, through all the renudge steps.
+    const { timers, wakes, logs, c } = setup({ terminal: 4, renudgeMs: 10 * 60_000 });
     c.update([d("a")]);
-    await timers.advance(4 * 60 * 60_000); // first wake and all three renudges
-    assert.equal(wakes.length, 4);
+    await timers.advance(4 * 60 * 60_000); // first wake and all three renudges, all refused
+    assert.equal(wakes.length, 0);
     assert.equal(logs.filter((l) => /not waking for it again/.test(l)).length, 1);
-    c.subscriberAvailable(); // ChatGPT (re)subscribed
+    c.subscriberAvailable(); // ChatGPT subscribed
     await timers.advance(2_000);
-    assert.equal(wakes.length, 5, "woken for once more, now");
+    assert.deepEqual(wakes, [["a"]], "woken for once more, now, and it lands");
+    c.subscriberAvailable(); // a refresh 2 s after a wake that landed
+    await timers.advance(2_000);
+    assert.equal(wakes.length, 1, "a refresh after a good wake doesn't wake again");
     await timers.advance(10 * 60_000);
-    assert.equal(wakes.length, 6, "and the renudge steps start over");
+    assert.equal(wakes.length, 2, "the renudge steps started over from the wake that landed");
+    for (let i = 0; i < 24; i++) {
+      c.subscriberAvailable(); // hourly refreshes for a day
+      await timers.advance(60 * 60_000);
+    }
+    assert.equal(wakes.length, 4, "a pending delivery still gets its capped 4 wakes, whatever the refresh rate");
+  });
+
+  it("a subscriber connecting re-arms a delivery given up on after failed retries", async () => {
+    const { timers, wakes, c } = setup({ fail: RETRY_GIVE_UP, renudgeMs: 0 });
+    c.update([d("a")]);
+    await timers.advance(2 * 60 * 60_000);
+    assert.equal(wakes.length, 0, "every retry failed; given up");
+    c.subscriberAvailable();
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a"]]);
   });
 
   it("a pending delivery that vanishes before its wake (participant paused, or message withdrawn) isn't woken for", async () => {

@@ -72,6 +72,8 @@ export class Coordinator {
   private readonly wakes = new Map<string, number>();
   /** Deliveries whose renudges are used up; logged once each. */
   private readonly exhausted = new Set<string>();
+  /** Deliveries whose latest wake attempt never landed (given up on, or refused for good); cleared by a wake that lands. */
+  private readonly unreached = new Set<string>();
   /**
    * Deliveries that left the work list before the agent was ever woken for them. On a machine with a
    * connector (grok-box) an answer is claimed and handed to the agent's inbox within the coalesce window
@@ -125,6 +127,7 @@ export class Coordinator {
       this.transitioned.delete(id);
       this.wakes.delete(id);
       this.exhausted.delete(id);
+      this.unreached.delete(id);
       gone.push(id);
     }
     if (gone.length) this.o.forget?.(gone);
@@ -221,13 +224,15 @@ export class Coordinator {
   }
 
   /**
-   * A subscriber (an MCP Events callback) became available. Deliveries whose wakes were spent while nothing could
-   * receive them, including ones that ran out of renudges, are woken for again, once, now. Costs one wake per
-   * outstanding delivery per (rare) subscriber connect.
+   * A subscriber (an MCP Events callback) became available. Only deliveries whose latest wake never landed (given up
+   * on, or refused for good while nothing could receive them, including ones that then ran out of renudges) are woken
+   * for again, once, now. A delivery whose wake landed is left alone, so a subscription refresh after a good wake
+   * doesn't wake again.
    */
   subscriberAvailable(): void {
     let n = 0;
-    for (const id of this.outstanding.keys()) {
+    for (const id of this.unreached) {
+      if (!this.outstanding.has(id)) continue;
       this.outstanding.set(id, 0);
       this.wakes.delete(id);
       this.exhausted.delete(id);
@@ -285,7 +290,7 @@ export class Coordinator {
     const wakeId = this.wakeId.id;
     try {
       await this.o.wake(ids, { wakeId });
-      this.spent(ids, this.o.timers.now());
+      this.spent(ids, this.o.timers.now(), true);
       this.failures = 0;
       this.gaveUp = false;
       this.wakeId = null;
@@ -297,7 +302,7 @@ export class Coordinator {
       const now = this.o.timers.now();
       if ((error as TerminalWakeError).terminal) {
         // Counts as this wake's attempt: no 30 s retry; the renudge (if on) gives it another go later.
-        this.spent(ids, now);
+        this.spent(ids, now, false);
         this.o.log(`@${this.o.participant}: wake rejected for ${ids.join(",")}: ${message}; not retrying${this.o.renudgeMs > 0 ? `, renudging in ${Math.round(this.o.renudgeMs / 60_000)} min` : ""}`);
         this.inFlight = false;
         this.inFlightStates = null;
@@ -321,7 +326,7 @@ export class Coordinator {
         // The whole retry run counts as one wake: the next renudge step (if any is left) tries again later,
         // the steps widen as usual and then stop, so a callback that never answers gets a bounded number of
         // POSTs (RETRY_GIVE_UP per step) instead of a fresh run every time the first step comes due.
-        this.spent(ids, now);
+        this.spent(ids, now, false);
         this.o.log(`@${this.o.participant}: wake for ${ids.join(",")} has failed ${this.failures} times in a row; giving up until something changes`);
         // A handoff that landed during the failed run is something new: it gets its own wake.
         this.wakeAgainForHandoffs();
@@ -339,9 +344,11 @@ export class Coordinator {
    * and then run out. After the last step the delivery is left alone until it changes (a handoff) or a new
    * delivery arrives; that is said once.
    */
-  private spent(ids: string[], now: number): void {
+  private spent(ids: string[], now: number, landed: boolean): void {
     for (const id of ids) {
       this.owed.delete(id);
+      if (landed) this.unreached.delete(id);
+      else this.unreached.add(id);
       if (!this.outstanding.has(id)) continue;
       this.outstanding.set(id, now);
       this.wakes.set(id, (this.wakes.get(id) ?? 0) + 1);
