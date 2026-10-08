@@ -44,6 +44,8 @@ export interface EventHubOptions {
   log: (line: string) => void;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  /** Called after a subscription to a participant's event is created or refreshed: deliveries spent while nothing could receive them are woken for again. */
+  onSubscribed?: (participant: string) => void;
   /** Longest subscription granted (also the default). Default 30 days. */
   maxTtlMs?: number;
 }
@@ -225,6 +227,7 @@ export class EventHub {
     });
     this.revoked.delete(id); // a fresh, authenticated subscribe replaces whatever was owed on the old entry
     this.o.log(`mcp: ${existing ? "refreshed" : "new"} subscription ${id} to ${t.event} (callback host ${hostOf(url)}) until ${new Date(sub.expiresAt).toISOString()}`);
+    this.o.onSubscribed?.(t.participant);
     return { id, refreshBefore: new Date(sub.expiresAt).toISOString(), cursor: null, truncated: false };
   }
 

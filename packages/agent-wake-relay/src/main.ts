@@ -31,6 +31,8 @@ const config = loadConfig(path);
 
 let events: EventHub | undefined;
 let server: Server | undefined;
+const coordinators: Coordinator[] = [];
+const byParticipant = new Map<string, Coordinator>();
 if (config.mcp) {
   const m = config.mcp;
   const store = new SubscriptionStore(m.stateFile, Date.now, log);
@@ -50,6 +52,8 @@ if (config.mcp) {
     store,
     post: guardedPost(),
     authorize: (principal) => auth.authorize(principal),
+    // A subscriber connected or refreshed: whatever that participant's coordinator spent while nothing could receive it is woken for again.
+    onSubscribed: (participant) => byParticipant.get(participant)?.subscriberAvailable(),
     log,
     maxTtlMs: m.maxTtlMs,
   });
@@ -71,7 +75,6 @@ const client = new ConvexClient(config.convexUrl, {
   },
 });
 
-const coordinators: Coordinator[] = [];
 for (const t of config.targets) {
   const machine = { id: t.machine, secret: readFileSync(t.machineSecretFile, "utf8").trim() };
   const c = new Coordinator({
@@ -82,6 +85,7 @@ for (const t of config.targets) {
     ...(t.waker.kind === "mcp-events" && events ? { forget: (ids: string[]) => events.forget(t.participant, ids) } : {}),
   });
   coordinators.push(c);
+  byParticipant.set(t.participant, c);
   client.onUpdate(
     anyApi.connector!.work!,
     { machine },

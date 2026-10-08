@@ -112,10 +112,13 @@ export class Coordinator {
     let fresh = 0;
     for (const id of [...this.outstanding.keys()]) {
       if (ids.has(id)) continue;
-      // Gone before its first wake, and no wake carrying it is out: still owed one.
-      if (this.outstanding.get(id) === 0 && !this.inFlightStates?.has(id)) {
+      // Gone before its first wake, after the connector had taken it (claimed or delivered): the agent has it in its
+      // inbox and is still owed one wake. One that vanishes while still `pending` was never handed over (the participant
+      // was paused, or the message withdrawn), so nothing is owed. If a wake carrying it is out, that wake's outcome
+      // settles it: success clears the debt, a failed one retries with it.
+      if (this.outstanding.get(id) === 0 && this.stateAtWake.get(id) !== "pending") {
         this.owed.add(id);
-        fresh++;
+        if (!this.inFlightStates?.has(id)) fresh++;
       }
       this.outstanding.delete(id);
       this.stateAtWake.delete(id);
@@ -209,7 +212,32 @@ export class Coordinator {
       again++;
     }
     this.transitioned.clear();
-    if (again) this.schedule(this.o.coalesceMs);
+    if (again) {
+      // Something new to wake for: a give-up no longer applies.
+      this.failures = 0;
+      this.gaveUp = false;
+      this.schedule(this.o.coalesceMs);
+    }
+  }
+
+  /**
+   * A subscriber (an MCP Events callback) became available. Deliveries whose wakes were spent while nothing could
+   * receive them, including ones that ran out of renudges, are woken for again, once, now. Costs one wake per
+   * outstanding delivery per (rare) subscriber connect.
+   */
+  subscriberAvailable(): void {
+    let n = 0;
+    for (const id of this.outstanding.keys()) {
+      this.outstanding.set(id, 0);
+      this.wakes.delete(id);
+      this.exhausted.delete(id);
+      n++;
+    }
+    if (!n) return;
+    this.failures = 0;
+    this.gaveUp = false;
+    this.o.log(`@${this.o.participant}: a subscriber connected; waking again for ${n} outstanding delivery(s)`);
+    this.schedule(this.o.coalesceMs);
   }
 
   /** When the next renudge of a delivery is due, or null when it has none left (or renudging is off). */
@@ -295,6 +323,8 @@ export class Coordinator {
         // POSTs (RETRY_GIVE_UP per step) instead of a fresh run every time the first step comes due.
         this.spent(ids, now);
         this.o.log(`@${this.o.participant}: wake for ${ids.join(",")} has failed ${this.failures} times in a row; giving up until something changes`);
+        // A handoff that landed during the failed run is something new: it gets its own wake.
+        this.wakeAgainForHandoffs();
       } else this.schedule(delay);
     } finally {
       this.inFlight = false;

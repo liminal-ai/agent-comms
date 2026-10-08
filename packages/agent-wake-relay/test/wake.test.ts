@@ -474,6 +474,94 @@ describe("coordinator", () => {
     assert.equal(wakes.length, 1);
   });
 
+  it("a delivery that goes while its first wake is in flight, and that wake fails, is still woken for on the retry", async () => {
+    const timers = new FakeTimers();
+    const calls: string[][] = [];
+    let fail = 1;
+    let release!: () => void;
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 0,
+      wake: async (ids) => {
+        calls.push(ids);
+        await new Promise<void>((r) => (release = r));
+        if (fail-- > 0) throw new Error("HTTP 500");
+      },
+    });
+    c.update([d("a")]);
+    await timers.advance(2_000);
+    assert.equal(calls.length, 1);
+    c.update([]); // collected and gone while the POST is out
+    release(); // ... and that POST fails
+    await new Promise((r) => setImmediate(r)); // let the rejection settle and the retry be scheduled
+    await timers.advance(30_000); // the retry
+    release();
+    await timers.advance(1_000);
+    assert.deepEqual(calls, [["a"], ["a"]], "the retry still carried it; the inbox item got a wake that landed");
+  });
+
+  it("a handoff to delivered that lands during the last failed retry gets its own wake after the give-up", async () => {
+    const timers = new FakeTimers();
+    const wakes: string[][] = [];
+    const logs: string[] = [];
+    let n = 0;
+    // biome-ignore lint/style/useConst: assigned below
+    let c: Coordinator;
+    c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: (l) => logs.push(l),
+      renudgeMs: 0,
+      wake: async (ids) => {
+        n++;
+        if (n === RETRY_GIVE_UP) c.update([d("a")]); // the connector hands it over while the final retry is out
+        if (n <= RETRY_GIVE_UP) throw new Error("HTTP 500");
+        wakes.push(ids);
+      },
+    });
+    c.update([{ ...d("a"), state: "pending" }]);
+    await timers.advance(2 * 60 * 60_000);
+    assert.equal(logs.filter((l) => /giving up/.test(l)).length, 1);
+    assert.deepEqual(wakes, [["a"]], "the handoff got its own wake once the failed run gave up");
+  });
+
+  it("deliveries whose wakes were spent while nothing could receive them are woken for again when a subscriber connects", async () => {
+    const { timers, wakes, logs, c } = setup({ renudgeMs: 10 * 60_000 });
+    c.update([d("a")]);
+    await timers.advance(4 * 60 * 60_000); // first wake and all three renudges
+    assert.equal(wakes.length, 4);
+    assert.equal(logs.filter((l) => /not waking for it again/.test(l)).length, 1);
+    c.subscriberAvailable(); // ChatGPT (re)subscribed
+    await timers.advance(2_000);
+    assert.equal(wakes.length, 5, "woken for once more, now");
+    await timers.advance(10 * 60_000);
+    assert.equal(wakes.length, 6, "and the renudge steps start over");
+  });
+
+  it("a pending delivery that vanishes before its wake (participant paused, or message withdrawn) isn't woken for", async () => {
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+    c.update([{ ...d("a"), state: "pending" }]);
+    await timers.advance(500);
+    c.update([]); // never claimed or delivered: nothing reached the agent
+    await timers.advance(24 * 60 * 60_000);
+    assert.equal(wakes.length, 0);
+  });
+
+  it("a delivery that vanishes and returns inside the coalesce window is woken for once, with its id once (Bugbot autofix 14c4e01)", async () => {
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+    c.update([{ ...d("a"), state: "claimed", claim: { leaseExpiresAt: timers.now() + 60_000 } }]);
+    await timers.advance(300);
+    c.update([]);
+    await timers.advance(300);
+    c.update([d("a")]); // back in the list (handed over, collected)
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a"]]);
+    await timers.advance(10 * 60_000 + 1);
+    assert.equal(wakes.length, 2, "renudged once, so it was counted as one wake, not two");
+  });
+
   it("gives the webhook a wake id that is stable across retries of the same set and new for a new set", async () => {
     const timers = new FakeTimers();
     const seen: { ids: string[]; wakeId: string }[] = [];

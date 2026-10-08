@@ -453,6 +453,20 @@ describe("event delivery", () => {
     }
   });
 
+  it("a new or refreshed subscription tells the hub's owner which participant can be woken again", async () => {
+    const r = await receiver(chatgpt());
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const notified: string[] = [];
+    const h = new EventHub({ targets: [{ participant: "dot", event: "comms.delivery.dot" }], store: new SubscriptionStore(join(dir, "state.json")), post: guardedPost(loopback), urlPolicy: loopback, log: () => {}, sleep: async () => {}, onSubscribed: (p) => notified.push(p) });
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      await h.subscribe("user_1", sub(r.url, newSecret())); // refresh
+      assert.deepEqual(notified, ["dot", "dot"]);
+    } finally {
+      r.close();
+    }
+  });
+
   it("a state file with a null or malformed subscription entry is moved aside, not fatal", async () => {
     const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
     const path = join(dir, "state.json");
