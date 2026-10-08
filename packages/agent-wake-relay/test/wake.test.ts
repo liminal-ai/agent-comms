@@ -220,6 +220,33 @@ describe("coordinator", () => {
     assert.equal(wakes.length, 1, "and the old retry timer didn't fire a second wake");
   });
 
+  it("a renudge that fails transiently waits the retry delay instead of hammering the webhook", async () => {
+    const { timers, wakes, c, logs } = setup({ renudgeMs: 10 * 60_000 });
+    c.update([d("a")]);
+    await timers.advance(2_000);
+    assert.equal(wakes.length, 1);
+    // From now on the webhook fails for a while.
+    const failing = c as unknown as { o: { wake: (ids: string[]) => Promise<void> } };
+    const good = failing.o.wake;
+    let calls = 0;
+    failing.o.wake = async () => {
+      calls++;
+      throw new Error("HTTP 500");
+    };
+    await timers.advance(10 * 60_000); // the renudge fires and fails
+    assert.equal(calls, 1);
+    await timers.advance(1_000);
+    assert.equal(calls, 1, "no immediate re-wake while the 30 s retry is pending");
+    await timers.advance(29_000);
+    assert.equal(calls, 2, "retried after retryMs");
+    await timers.advance(1_000);
+    assert.equal(calls, 2);
+    failing.o.wake = good;
+    await timers.advance(30_000);
+    assert.equal(wakes.length, 2, "and the renudge gets through once the webhook recovers");
+    assert.ok(logs.some((l) => /retrying every 30s/.test(l)));
+  });
+
   it("a terminal wake failure isn't retried every 30 s; the renudge tries again later", async () => {
     const { timers, wakes, logs, c } = setup({ terminal: 1, renudgeMs: 10 * 60_000 });
     c.update([d("a")]);

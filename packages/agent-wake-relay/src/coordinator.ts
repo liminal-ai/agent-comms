@@ -200,13 +200,16 @@ export class Coordinator {
   private scheduleRenudge(): void {
     if (this.renudgeTimer) this.o.timers.clear(this.renudgeTimer);
     this.renudgeTimer = null;
-    if (this.o.renudgeMs <= 0) return;
+    // While a wake (or its retry) is already pending there is nothing to add: that wake covers whatever
+    // is due, and an overdue renudge must not turn a 30 s retry into an immediate one.
+    if (this.timer || this.o.renudgeMs <= 0) return;
     const woken = [...this.outstanding.values()].filter((at) => at > 0);
     if (!woken.length) return;
     const next = Math.min(...woken) + this.o.renudgeMs - this.o.timers.now();
     // Node fires a timer past its limit at once; wait in chunks and re-check what is actually due.
     this.renudgeTimer = this.o.timers.set(() => {
       this.renudgeTimer = null;
+      if (this.timer) return;
       if (this.due().length) this.schedule(0);
       else this.scheduleRenudge();
     }, Math.min(Math.max(0, next), MAX_TIMER_MS));
