@@ -20,15 +20,16 @@ import { convexWebBackend } from '../packages/service/src/convex-backend.ts';
  */
 export async function listenWeb(server, config, log = (line) => console.log(line)) {
   if (config.socket) {
-    const existing = await lstat(config.socket).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
-    if (existing && !existing.isSocket()) throw new Error(`web config: socket path ${config.socket} exists and is not a socket; refusing to replace it`);
     // Starters take turns under a lock, so the probe, the removal of a stale socket and the bind
     // happen with no other starter in between, and a live socket keeps its path throughout.
     await withStartLock(config.socket, config.lockWaitMs ?? 5000, async () => {
+      // Looked at under the lock, so it can't have changed under us by the time we act on it.
+      const existing = await lstat(config.socket).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
+      if (existing && !existing.isSocket()) throw new Error(`web config: socket path ${config.socket} exists and is not a socket; refusing to replace it`);
       if (existing) {
         // Only a stale socket (nobody listening) is replaced; a live one belongs to a running instance.
         if (await socketAnswers(config.socket)) throw new Error(`web config: socket ${config.socket} is in use by another instance; refusing to take it over`);
-        await rm(config.socket);
+        await rm(config.socket, { force: true });
       }
       // Created mode 600 from the first instant (umask 177), so nobody can connect before the chmod below.
       const umask = process.umask(0o177);
@@ -62,13 +63,24 @@ async function withStartLock(socket, waitMs, fn) {
     for (;;) {
       const acquired = await link(mine, lock).then(() => true, (error) => { if (error.code === 'EEXIST') return false; throw error; });
       if (acquired) break;
+      const seen = await stat(lock).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
+      if (seen === null) continue; // gone between our link() and now: try the link again
       const holder = Number((await readFile(lock, 'utf8').catch(() => '')).trim());
-      const age = Date.now() - (await stat(lock).then((s) => s.mtimeMs, () => Date.now()));
       // Stale: its pid is gone, or it never got a valid pid and nobody has touched it for the wait period.
-      if ((holder && !processAlive(holder)) || (!holder && age >= waitMs)) {
+      if ((holder && !processAlive(holder)) || (!holder && Date.now() - seen.mtimeMs >= waitMs)) {
+        // Reclaim only the entry we inspected: if another starter replaced it meanwhile, the inode
+        // differs and we leave the new holder alone. ENOENT means someone else reclaimed it first.
         const taken = `${lock}.${process.pid}.${randomBytes(4).toString('hex')}.stale`;
-        await rename(lock, taken).then(() => rm(taken, { force: true }), () => {});
-        continue;
+        const now = await stat(lock).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
+        if (now !== null && now.ino === seen.ino && now.dev === seen.dev) {
+          const reclaimed = await rename(lock, taken).then(() => true, (error) => { if (error.code === 'ENOENT') return false; throw error; });
+          if (reclaimed) {
+            const got = await stat(taken);
+            if (got.ino === seen.ino) { await rm(taken, { force: true }); continue; }
+            // We moved a lock that had just been replaced; put it back for its owner.
+            await rename(taken, lock).catch(() => {});
+          }
+        }
       }
       if (Date.now() >= deadline) throw new Error(`web config: another instance is starting on ${socket} (lock ${lock} held by pid ${holder || 'unknown'})`);
       await new Promise((resolve) => setTimeout(resolve, 50));

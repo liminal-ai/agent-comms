@@ -98,6 +98,17 @@ test('web service starts through the deployed current directory link' + (lowerDr
       const afterEmpty = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {});
       try { assert.ok(afterEmpty.listening, 'an empty lock does not block startup forever'); } finally { await stop(afterEmpty); }
       assert.equal(await stat(`${locked}.lock`).then(() => true, () => false), false, 'the lock is released after startup');
+      // A stale lock in a directory we can't modify is an error, not a spin.
+      const roDir = join(dir, 'ro'); await mkdir(roDir);
+      const roSock = join(roDir, 'web.sock');
+      await writeFile(`${roSock}.lock`, '999999999');
+      const { chmod: chmodDir } = await import('node:fs/promises');
+      await chmodDir(roDir, 0o500);
+      try {
+        if (process.getuid?.() !== 0) await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: roSock, lockWaitMs: 300 }, () => {}), /EACCES|EPERM/, 'a reclaim that cannot happen fails loudly');
+      } finally {
+        await chmodDir(roDir, 0o700);
+      }
       await writeFile(`${locked}.lock`, String(process.pid));
       await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /another instance is starting/);
       await rm(`${locked}.lock`);
