@@ -47,7 +47,7 @@ export function subscriptionId(principal: string, url: string, event: string, ar
 }
 
 export class SubscriptionStore {
-  private readonly subs = new Map<string, Subscription>();
+  private subs: Map<string, Subscription> = new Map<string, Subscription>();
   private readonly path: string;
   private readonly now: () => number;
 
@@ -94,29 +94,22 @@ export class SubscriptionStore {
     return this.serialized(async () => {
       // Runs inside the queue, so a limit it checks can't be raced by another insert.
       guard?.();
-      const previous = this.subs.get(sub.id);
-      this.subs.set(sub.id, sub);
-      try {
-        await this.write();
-      } catch (error) {
-        if (previous) this.subs.set(sub.id, previous);
-        else this.subs.delete(sub.id);
-        throw error;
-      }
+      // The proposed state is written first and published only once it's on disk, so nothing
+      // reads a subscription that may yet fail to persist.
+      const next = new Map(this.subs);
+      next.set(sub.id, sub);
+      await this.write(next);
+      this.subs = next;
     });
   }
 
   delete(id: string): Promise<boolean> {
     return this.serialized(async () => {
-      const previous = this.subs.get(id);
-      if (!previous) return false;
-      this.subs.delete(id);
-      try {
-        await this.write();
-      } catch (error) {
-        this.subs.set(id, previous);
-        throw error;
-      }
+      if (!this.subs.has(id)) return false;
+      const next = new Map(this.subs);
+      next.delete(id);
+      await this.write(next);
+      this.subs = next;
       return true;
     });
   }
@@ -136,12 +129,12 @@ export class SubscriptionStore {
 
   /** Persists the current state at its turn in the queue (after any mutation already queued, before any queued later). */
   save(): Promise<void> {
-    return this.serialized(() => this.write());
+    return this.serialized(() => this.write(this.subs));
   }
 
-  private async write(): Promise<void> {
+  private async write(subs: Map<string, Subscription>): Promise<void> {
     const tmp = `${this.path}.${process.pid}.tmp`;
-    const body = `${JSON.stringify({ version: 1, subscriptions: [...this.subs.values()] }, null, 2)}\n`;
+    const body = `${JSON.stringify({ version: 1, subscriptions: [...subs.values()] }, null, 2)}\n`;
     await writeFile(tmp, body, { mode: 0o600 });
     await chmod(tmp, 0o600);
     await rename(tmp, this.path);

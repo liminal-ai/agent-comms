@@ -247,13 +247,15 @@ describe("webhook waker", () => {
       server.close();
     }
   });
-  it("won't send the bearer key over plain http off this machine", async () => {
+  it("won't send over plain http off this machine, with or without a bearer key", async () => {
     const dir = await mkdtemp(join(tmpdir(), "wake-"));
     await writeFile(join(dir, "key"), "k");
     let hits = 0;
     const wake = webhookWaker("grok", { kind: "webhook", urlFile: join(dir, "url"), bearerKeyFile: join(dir, "key") }, async () => (hits++, new Response("{}")));
-    await writeFile(join(dir, "url"), "http://10.0.0.5/hook");
+    const keyless = webhookWaker("grok", { kind: "webhook", urlFile: join(dir, "url") }, async () => (hits++, new Response("{}")));
+    await writeFile(join(dir, "url"), "http://10.0.0.5/hook?token=s3cret");
     await assert.rejects(wake(["a"]), /must be https/);
+    await assert.rejects(keyless(["a"]), /must be https/);
     assert.equal(hits, 0, "nothing was sent");
     await writeFile(join(dir, "url"), "https://example.com/hook");
     await wake(["a"]);

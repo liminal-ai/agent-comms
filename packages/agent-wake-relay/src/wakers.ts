@@ -46,17 +46,15 @@ export function webhookWaker(participant: string, config: WebhookWaker, request:
   return async (deliveryIds) => {
     const headers: Record<string, string> = { "content-type": "application/json", "user-agent": "agent-comms-agent-wake-relay" };
     const url = await secret(config.urlFile, "webhook URL");
-    if (config.bearerKeyFile) {
-      // The key would cross the network in cleartext over plain http; only this machine may see it that way.
-      let parsed: URL;
-      try {
-        parsed = new URL(url);
-      } catch {
-        throw new Error("webhook URL file doesn't hold a URL");
-      }
-      if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLoopback(parsed.hostname))) throw new Error("webhook URL must be https (or http to localhost) when a bearer key is configured");
-      headers.authorization = `Bearer ${await secret(config.bearerKeyFile, "bearer key")}`;
+    // The URL itself may carry a secret, and so may the key; neither crosses the network in cleartext.
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error("webhook URL file doesn't hold a URL");
     }
+    if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLoopback(parsed.hostname))) throw new Error("webhook URL must be https (or http to localhost)");
+    if (config.bearerKeyFile) headers.authorization = `Bearer ${await secret(config.bearerKeyFile, "bearer key")}`;
     // A fetch failure's message can carry the URL, which is a secret here; report only the error code.
     const res = await request(url, {
       method: "POST",

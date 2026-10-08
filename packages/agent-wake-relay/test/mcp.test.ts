@@ -918,15 +918,30 @@ describe("subscription store", () => {
     const base = { principal: "u", url: "https://example.com/h", event: "comms.delivery.dot", arguments: "{}", createdAt: 0, verifiedAt: 0, expiresAt: Date.now() + 60_000 };
     const first = { ...base, id: "sub_x", secret: "whsec_first" } as unknown as Parameters<typeof store.put>[0];
     const second = { ...base, id: "sub_x", secret: "whsec_second" } as unknown as Parameters<typeof store.put>[0];
-    const writer = store as unknown as { write: () => Promise<void> };
+    const writer = store as unknown as { write: (subs: unknown) => Promise<void> };
     const realWrite = writer.write.bind(store);
     let fail = true;
-    writer.write = () => (fail ? ((fail = false), Promise.reject(new Error("ENOSPC"))) : realWrite());
+    writer.write = (subs) => (fail ? ((fail = false), Promise.reject(new Error("ENOSPC"))) : realWrite(subs));
     const a = store.put(first);
     const b = store.put(second);
     await assert.rejects(a);
     await b;
     assert.equal(store.get("sub_x")?.secret, "whsec_second", "the newer refresh survives the older one's rollback");
+  });
+
+  it("a subscription is never readable while its write is still pending or after it failed", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const store = new SubscriptionStore(join(dir, "state.json"));
+    const sub = { id: "sub_x", principal: "u", url: "https://example.com/h", event: "comms.delivery.dot", arguments: "{}", secret: "whsec_x", createdAt: 0, verifiedAt: 0, expiresAt: Date.now() + 60_000 } as unknown as Subscription;
+    let fail!: (e: Error) => void;
+    (store as unknown as { write: () => Promise<void> }).write = () => new Promise((_, reject) => { fail = reject; });
+    const pending = store.put(sub);
+    await new Promise((r) => setImmediate(r));
+    assert.equal(store.get("sub_x"), undefined, "not visible while the write is in flight");
+    assert.equal(store.active("comms.delivery.dot").length, 0);
+    fail(new Error("ENOSPC"));
+    await assert.rejects(pending, /ENOSPC/);
+    assert.equal(store.get("sub_x"), undefined, "nor after the write failed");
   });
 
   it("leaves the live map unchanged when the state file can't be written", async () => {
