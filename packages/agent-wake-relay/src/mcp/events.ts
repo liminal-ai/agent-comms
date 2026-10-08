@@ -290,22 +290,22 @@ export class EventHub {
   }
 
   /** POST one event to one subscription, retrying transient failures with the same eventId and a fresh signature. */
-  private async deliver(id: string, event: { eventId: string }, body: string): Promise<{ ok: true } | { ok: false; reason: FailureReason | "gone"; status?: number }> {
-    let last: { ok: false; reason: FailureReason | "gone"; status?: number } = { ok: false, reason: "connection_refused" };
+  private async deliver(id: string, event: { eventId: string }, body: string): Promise<{ ok: true } | { ok: false; reason: FailureReason | "gone"; status?: number; terminal?: true }> {
+    let last: { ok: false; reason: FailureReason | "gone"; status?: number; terminal?: true } = { ok: false, reason: "connection_refused" };
     for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
       if (attempt) await this.sleep(RETRY_DELAYS_MS[attempt - 1]!);
       // Re-read: a refresh may have rotated the secret, or an unsubscribe removed it, while this was waiting.
       const sub = this.o.store.get(id);
-      if (!sub || sub.expiresAt <= this.now()) return { ok: false, reason: "gone" };
+      if (!sub || sub.expiresAt <= this.now()) return { ok: false, reason: "gone", terminal: true };
       try {
         const res = await this.o.post(sub.url, this.headers(event.eventId, sub.id, this.keys(sub), body), body, TIMEOUT_MS);
         if (res.status >= 200 && res.status < 300) return { ok: true };
         last = { ok: false, reason: res.status >= 500 ? "http_5xx" : "http_4xx", status: res.status };
-        // 410 and 413 are final for this event; so is any other 4xx but 408 and 429.
-        if (res.status < 500 && res.status !== 408 && res.status !== 429) return last;
+        // Any 4xx but 408 and 429 is final for this event at this subscriber: not retried here, and not reposted by the coordinator.
+        if (res.status < 500 && res.status !== 408 && res.status !== 429) return { ...last, terminal: true };
       } catch (error) {
         last = { ok: false, reason: failureReason(error) };
-        if (error instanceof BlockedUrlError) return last;
+        if (error instanceof BlockedUrlError) return { ...last, terminal: true };
       }
     }
     return last;
@@ -366,8 +366,8 @@ export class EventHub {
             sub.lastDeliveryAt = now;
             continue;
           }
-          // 410 (gone) and 413 (too large) are final for this event at this subscriber: never posted to it again.
-          if (r.status === 410 || r.status === 413 || r.reason === "gone") a.refused.add(s.id);
+          // A refusal deliver() classified as final (any non-retryable 4xx, a blocked URL, a gone subscription) is never posted to it again.
+          if (r.terminal) a.refused.add(s.id);
           else allTerminal = false;
           failures.push(`${hostOf(sub.url)} ${r.status ? `HTTP ${r.status}` : r.reason}`);
           sub.failedSince ??= now;

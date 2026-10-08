@@ -116,7 +116,10 @@ export class Authenticator {
       return "unknown";
     }
     const allowed = !!user && user.emailVerified && this.emails.has(user.email.toLowerCase());
-    this.cache.set(sub, { allowed, until: this.now() + (allowed ? ALLOWED_FOR_MS : DENIED_FOR_MS) });
+    // Expired entries go before a new one is added, so the cache holds only live decisions.
+    const now = this.now();
+    for (const [key, entry] of this.cache) if (entry.until <= now) this.cache.delete(key);
+    this.cache.set(sub, { allowed, until: now + (allowed ? ALLOWED_FOR_MS : DENIED_FOR_MS) });
     return allowed ? "allowed" : "denied";
   }
 }

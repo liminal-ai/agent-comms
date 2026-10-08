@@ -299,8 +299,8 @@ describe("event delivery", () => {
     }
   });
 
-  it("doesn't retry a 410 or 413, and fails the wake terminally when nobody accepted", async () => {
-    for (const status of [410, 413]) {
+  it("doesn't retry a final 4xx (400, 401, 403, 404, 410, 413), and fails the wake terminally when nobody accepted", async () => {
+    for (const status of [400, 401, 403, 404, 410, 413]) {
       const r = await receiver(chatgpt(() => status));
       const { h, store } = await hub();
       try {
@@ -695,6 +695,26 @@ describe("authorization", () => {
       allowedSubjects: over.allowedSubjects ?? ["user_lee"],
       ...(over.lookup ? { lookup: over.lookup } : {}),
     });
+
+  it("the authorization cache forgets expired decisions instead of growing with every denied stranger", async () => {
+    let now = Date.now();
+    const a = new Authenticator({
+      issuer: ISSUER,
+      resource: RESOURCE,
+      resourceMetadataUrl: `${BASE}/.well-known/oauth-protected-resource`,
+      jwksUrl,
+      allowedEmails: ["lee@example.com"],
+      allowedSubjects: [],
+      lookup: async () => ({ email: "nobody@example.com", emailVerified: true }),
+      now: () => now,
+    });
+    const cache = (a as unknown as { cache: Map<string, unknown> }).cache;
+    for (let i = 0; i < 50; i++) assert.equal(await a.authorize(`user_stranger_${i}`), "denied");
+    assert.equal(cache.size, 50);
+    now += 61_000; // past the one-minute denial window
+    assert.equal(await a.authorize("user_stranger_new"), "denied");
+    assert.equal(cache.size, 1, "only the fresh decision remains");
+  });
 
   it("accepts a token from the issuer, for this resource, from an allowed subject", async () => {
     assert.deepEqual(await authenticator().authenticate(`Bearer ${await token()}`), { ok: true, principal: "user_lee" });
