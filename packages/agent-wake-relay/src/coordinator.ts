@@ -255,31 +255,38 @@ export class Coordinator {
 
   /** Handoffs to delivered that landed while a wake was out get their own wake, whatever became of that wake. */
   private wakeAgainForHandoffs(): void {
-    this.wakeAgainFor([...this.transitioned]);
+    const handoffs = [...this.transitioned];
     this.transitioned.clear();
+    // An owed handoff that landed while a wake built before it was out: the next wake carries it. That wake going
+    // out clears the mark (fire()), so a callback that refuses it for good isn't retried every coalesce delay: the
+    // debt stays owed and a subscriber re-arm or a later wake for anything carries it, as for any owed id.
+    const owed = [...this.owedAfterWake].filter((id) => this.owed.has(id));
+    // The wake is over. If it was given up on or refused, the waker may still hold its event and the wake id is
+    // still the failed one; either could let a receiver that processed an earlier attempt dedupe the handoff wake
+    // away, so both are dropped, as freshEventFor() does for a handoff noted between retries.
+    this.wakeAgainFor(handoffs, owed, true);
   }
 
-  /** Those of `handoffs` still outstanding are due a wake of their own after the coalesce delay. */
-  private wakeAgainFor(handoffs: string[]): void {
-    let again = 0;
+  /** Those of `handoffs` still outstanding, and `owed`, are due a wake of their own after the coalesce delay. */
+  private wakeAgainFor(handoffs: string[], owed: string[], dropRetained: boolean): void {
+    const again: string[] = [...owed];
     for (const id of handoffs) {
       this.transitioned.delete(id);
       if (!this.outstanding.has(id)) continue;
       this.outstanding.set(id, 0);
       this.stateAtWake.set(id, "delivered");
       this.handedOver.add(id);
-      again++;
+      again.push(id);
     }
-    // An owed handoff that landed while a wake built before it was out: the next wake carries it. That wake going
-    // out clears the mark (fire()), so a callback that refuses it for good isn't retried every coalesce delay: the
-    // debt stays owed and a subscriber re-arm or a later wake for anything carries it, as for any owed id.
-    for (const id of this.owedAfterWake) if (this.owed.has(id)) again++;
-    if (again) {
-      // Something new to wake for: a give-up no longer applies.
-      this.failures = 0;
-      this.gaveUp = false;
-      this.schedule(this.o.coalesceMs);
+    if (!again.length) return;
+    if (dropRetained && this.wakeId !== null) {
+      this.o.forget?.(again);
+      this.wakeId = null;
     }
+    // Something new to wake for: a give-up no longer applies.
+    this.failures = 0;
+    this.gaveUp = false;
+    this.schedule(this.o.coalesceMs);
   }
 
   /**
@@ -389,13 +396,8 @@ export class Coordinator {
         this.o.log(`@${this.o.participant}: woke for ${accepted.length} delivery(s) ${accepted.join(",")}; the rest of the wake failed`);
       }
       // A handoff that landed while the wake was out, for an id whose event was accepted: its own wake follows after
-      // the coalesce delay, not after the retry backoff of the events that failed.
-      this.wakeAgainFor(accepted.filter((id) => this.transitioned.has(id)));
-      // An id handed over and gone while the wake was out: the retry would resend the same event, which a receiver
-      // that processed it and only lost the response would dedupe, so the waker forgets it and the retry's event
-      // for it is a new one.
-      const stale = ids.filter((id) => this.owedAfterWake.has(id) && !accepted.includes(id)); // accepted ones are forgotten above
-      if (stale.length) this.o.forget?.(stale);
+      // the coalesce delay, not after the retry backoff of the events that failed (which keep their retry as is).
+      this.wakeAgainFor(accepted.filter((id) => this.transitioned.has(id)), [], false);
       const rest = ids.filter((id) => !accepted.includes(id));
       if (!rest.length) {
         // Everything in it landed after all (a refusal only for events already settled): nothing to retry.
@@ -439,7 +441,14 @@ export class Coordinator {
         this.o.log(`@${this.o.participant}: wake for ${rest.join(",")} has failed ${this.failures} times in a row; giving up until something changes`);
         // A handoff that landed during the failed run is something new: it gets its own wake.
         this.wakeAgainForHandoffs();
-      } else this.schedule(delay);
+      } else {
+        // An id handed over and gone while the wake was out: the retry would resend the same event, which a
+        // receiver that processed it and only lost the response would dedupe, so the waker forgets it and the
+        // retry's event for it is a new one. (A refusal or give-up drops it in wakeAgainForHandoffs instead.)
+        const stale = rest.filter((id) => this.owedAfterWake.has(id));
+        if (stale.length) this.o.forget?.(stale);
+        this.schedule(delay);
+      }
     } finally {
       this.inFlight = false;
       this.inFlightStates = null;

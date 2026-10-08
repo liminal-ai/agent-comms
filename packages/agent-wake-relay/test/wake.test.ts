@@ -881,6 +881,8 @@ describe("coordinator", () => {
     const timers = new FakeTimers();
     const wakes: string[][] = [];
     const logs: string[] = [];
+    const forgotten: string[][] = [];
+    const wakeIds: string[] = [];
     let n = 0;
     // biome-ignore lint/style/useConst: assigned below
     let c: Coordinator;
@@ -889,8 +891,10 @@ describe("coordinator", () => {
       timers,
       log: (l) => logs.push(l),
       renudgeMs: 0,
-      wake: async (ids) => {
+      forget: (ids) => forgotten.push(ids),
+      wake: async (ids, info) => {
         n++;
+        wakeIds.push(info?.wakeId ?? "");
         if (n === RETRY_GIVE_UP) c.update([d("a")]); // the connector hands it over while the final retry is out
         if (n <= RETRY_GIVE_UP) throw new Error("HTTP 500");
         wakes.push(ids);
@@ -900,6 +904,11 @@ describe("coordinator", () => {
     await timers.advance(2 * 60 * 60_000);
     assert.equal(logs.filter((l) => /giving up/.test(l)).length, 1);
     assert.deepEqual(wakes, [["a"]], "the handoff got its own wake once the failed run gave up");
+    // Any of the failed attempts may have been processed with its response lost: the handoff wake is a new event
+    // under a new wake id, so a receiver that deduped on either can't discard it.
+    assert.deepEqual(forgotten, [["a"]], "the waker dropped the given-up event for a first");
+    assert.equal(new Set(wakeIds.slice(0, RETRY_GIVE_UP)).size, 1, "the failed run kept one wake id");
+    assert.notEqual(wakeIds[RETRY_GIVE_UP], wakeIds[0], "the handoff wake has a new one");
   });
 
   it("deliveries whose wakes never landed are woken for again when a subscriber connects; ones whose wake landed are not", async () => {
