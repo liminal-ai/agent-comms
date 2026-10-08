@@ -5,6 +5,7 @@
 // `allowedClients` (proxy mode) limits who is served to the tailnet addresses tailscale serve reports
 // in X-Forwarded-For; `devAllowLoopback: true` lets header-less loopback requests through in development.
 import { createServer } from 'node:http';
+import { connect } from 'node:net';
 import { chmod, lstat, readFile, realpath, rm } from 'node:fs/promises';
 import { basename, resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +21,11 @@ export async function listenWeb(server, config, log = (line) => console.log(line
   if (config.socket) {
     const existing = await lstat(config.socket).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
     if (existing && !existing.isSocket()) throw new Error(`web config: socket path ${config.socket} exists and is not a socket; refusing to replace it`);
-    if (existing) await rm(config.socket);
+    if (existing) {
+      // Only a stale socket (nobody listening) is replaced; a live one belongs to a running instance.
+      if (await socketAnswers(config.socket)) throw new Error(`web config: socket ${config.socket} is in use by another instance; refusing to take it over`);
+      await rm(config.socket);
+    }
     await new Promise((resolve, reject) => server.once('error', reject).listen(config.socket, resolve));
     await chmod(config.socket, 0o600);
     log(`Comms ${config.environment} web: unix:${config.socket}${config.adminTokenFile ? ' (proxy mode)' : ''}`);
@@ -29,6 +34,14 @@ export async function listenWeb(server, config, log = (line) => console.log(line
     log(`Comms ${config.environment} web: 127.0.0.1:${server.address().port}${config.adminTokenFile ? ' (proxy mode)' : ''}`);
   }
   return server;
+}
+
+function socketAnswers(path) {
+  return new Promise((resolve) => {
+    const probe = connect(path);
+    probe.once('connect', () => { probe.destroy(); resolve(true); });
+    probe.once('error', () => resolve(false));
+  });
 }
 
 /** The listener for a web config: proxy mode when it names an admin token file, static otherwise. */

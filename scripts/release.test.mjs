@@ -53,6 +53,29 @@ test('web service starts through the deployed current directory link' + (lowerDr
       await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: notASocket }, () => {}), /not a socket/);
       const { readFile: readBack } = await import('node:fs/promises');
       assert.equal(await readBack(notASocket, 'utf8'), 'keep me');
+      // A live socket is never unlinked from under its owner; a stale one is.
+      const live = join(dir, 'live.sock');
+      const stop = (s) => new Promise((resolve) => { s.closeAllConnections(); s.close(resolve); });
+      const first = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: live }, () => {});
+      try {
+        const contender = webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir);
+        await assert.rejects(listenWeb(contender, { environment: 'x', socket: live }, () => {}), /in use by another instance/);
+        const stillServed = await new Promise((resolve, reject) => request({ socketPath: live, path: '/healthz', agent: false }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); }).on('error', reject).end());
+        assert.equal(stillServed, 200, 'the first instance still answers on its socket');
+      } finally {
+        await stop(first);
+      }
+      // A stale socket file (its owner gone without cleaning up) is replaced.
+      const { stat: statSock } = await import('node:fs/promises');
+      const { createServer: rawServer } = await import('node:net');
+      const stale = rawServer(); await new Promise((r) => stale.listen(live, r)); stale.unref();
+      // Simulate an owner that died: close the handle without letting Node unlink the path.
+      await new Promise((r) => stale.close(r));
+      if (!(await statSock(live).then(() => true, () => false))) await writeFile(live, ''); // ensure something is there
+      if ((await statSock(live)).isSocket()) {
+        const second = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: live }, () => {});
+        try { assert.ok(second.listening, 'a stale socket is replaced'); } finally { await stop(second); }
+      }
       // Deployed shape: a mode-600 unix socket for the serve hop.
       const sock = join(dir, 'web.sock');
       const sockConfig = join(dir, 'config-sock.json');
