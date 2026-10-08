@@ -435,7 +435,7 @@ describe("event delivery", () => {
       assert.equal(r.seen.length, 3, "the replacement got exactly one more post");
       const last = JSON.parse(r.seen[2]!.body);
       assert.notEqual(last.type, "verification", "the cached verification was reused");
-      assert.ok(!JSON.stringify(last).includes("d1"), "d1's wake had landed: it isn't resent to the replacement");
+      assert.deepEqual(last.data.deliveryIds, ["d2"], "d1's wake had landed: it isn't resent to the replacement");
     } finally {
       r.close();
     }
