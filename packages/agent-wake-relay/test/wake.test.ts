@@ -286,6 +286,32 @@ describe("coordinator", () => {
     assert.equal(calls, 1, "and nothing is woken for");
   });
 
+  it("a handoff that lands while a renudge is in flight gets its own wake right after", async () => {
+    const timers = new FakeTimers();
+    const wakes: string[][] = [];
+    let release: () => void = () => {};
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 10 * 60_000,
+      wake: async (ids) => {
+        wakes.push(ids);
+        if (wakes.length === 2) await new Promise<void>((r) => (release = r));
+      },
+    });
+    c.update([{ ...d("b"), state: "pending" }]);
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["b"]]);
+    await timers.advance(10 * 60_000); // the renudge goes out and is held in flight
+    assert.equal(wakes.length, 2);
+    c.update([d("b")]); // handed over while the renudge is out
+    release();
+    await new Promise((r) => setImmediate(r));
+    await timers.advance(2_000);
+    assert.equal(wakes.length, 3, "the handoff got its own wake after the coalesce delay, not a full renudge interval later");
+  });
+
   it("tells the waker which deliveries are no longer outstanding", async () => {
     const timers = new FakeTimers();
     const forgotten: string[][] = [];

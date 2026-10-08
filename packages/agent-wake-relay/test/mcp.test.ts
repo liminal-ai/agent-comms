@@ -735,6 +735,40 @@ describe("event delivery", () => {
     }
   });
 
+  it("a subscription re-created under the same key during a retry isn't marked as refusing", async () => {
+    let status = 500;
+    const r = await receiver(chatgpt(() => status));
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const store = new SubscriptionStore(join(dir, "state.json"));
+    let swapped = false;
+    const h = new EventHub({
+      targets: [{ participant: "dot", event: "comms.delivery.dot" }],
+      store,
+      post: guardedPost(loopback),
+      urlPolicy: loopback,
+      log: () => {},
+      sleep: async () => {
+        if (swapped) return;
+        swapped = true; // between two tries: unsubscribe, then subscribe again under the same key
+        await h.unsubscribe("user_1", { name: "comms.delivery.dot", delivery: { url: r.url } });
+        await h.subscribe("user_1", sub(r.url, newSecret()));
+      },
+    });
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const wake = h.waker("dot");
+      await assert.rejects(wake(["d1"]), /no subscriber|refused|gone|HTTP/);
+      const attempts = (h as unknown as { attempts: Map<string, { refused: Set<unknown>; state: string }[]> }).attempts;
+      assert.equal(attempts.get("dot")?.[0]?.refused.size, 0, "the new object was never posted to, so it isn't refused");
+      assert.equal(attempts.get("dot")?.[0]?.state, "pending");
+      status = 200;
+      await wake(["d1"]);
+      assert.equal(JSON.parse(r.seen.at(-1)!.body).eventId, JSON.parse(r.seen[1]!.body).eventId, "the pending event reached the re-created subscription");
+    } finally {
+      r.close();
+    }
+  });
+
   it("a retry of a split wake resends only the batches that didn't settle", async () => {
     let calls = 0;
     // First wake: batch 1 accepted, batch 2 fails transiently (all its attempts). Second wake: everything accepted.

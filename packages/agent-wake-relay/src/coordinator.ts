@@ -103,6 +103,12 @@ export class Coordinator {
       // Machines with a connector (grok-box) hand items over one at a time; a request that was still
       // `pending` at the last wake reaches the agent's inbox later, as `delivered`. Wake again then.
       if (d.state === "delivered" && this.stateAtWake.get(d.id) !== "delivered") {
+        // During an in-flight renudge the event was built before this handoff: note it for the wake that follows.
+        const started = this.inFlightStates?.get(d.id);
+        if (started !== undefined && started !== "delivered") {
+          this.transitioned.add(d.id);
+          continue;
+        }
         this.outstanding.set(d.id, 0);
         this.stateAtWake.set(d.id, d.state);
         fresh++;

@@ -308,7 +308,8 @@ export class EventHub {
       if (attempt) await this.sleep(RETRY_DELAYS_MS[attempt - 1]!);
       // Re-read: a refresh may have rotated the secret, or an unsubscribe removed it, while this was waiting.
       const sub = this.o.store.get(id);
-      if (!sub || sub.expiresAt <= this.now()) return { ok: false, reason: "gone", terminal: true };
+      // Gone mid-way: if an earlier try was posted, the refusal belongs to that object; if nothing was ever posted, to nobody.
+      if (!sub || sub.expiresAt <= this.now()) return { ok: false, reason: "gone", terminal: true, ...(last.posted ? { posted: last.posted } : {}) };
       try {
         const res = await this.o.post(sub.url, this.headers(event.eventId, sub.id, this.keys(sub), body), body, TIMEOUT_MS);
         if (res.status >= 200 && res.status < 300) return { ok: true };
@@ -413,6 +414,11 @@ export class EventHub {
         for (const { s, r } of results) {
           const sub = this.o.store.get(s.id);
           if (!sub) continue;
+          // The subscription vanished before anything was posted and a new one took its key: nothing was refused, and the new one is still owed the event.
+          if (!r.ok && r.reason === "gone" && !r.posted) {
+            allTerminal = false;
+            continue;
+          }
           if (r.ok) {
             ok = true;
             delete sub.failedSince;
@@ -421,7 +427,7 @@ export class EventHub {
           }
           // A refusal deliver() classified as final (any non-retryable 4xx, a blocked URL, a gone subscription) is never posted to it again.
           // Recorded against the object the refusing post actually went to; a refresh that landed since is a different object and gets tried.
-          if (r.terminal) a.refused.add(r.posted ?? sub);
+          if (r.terminal && r.posted) a.refused.add(r.posted);
           else allTerminal = false;
           failures.push(`${hostOf(sub.url)} ${r.status ? `HTTP ${r.status}` : r.reason}`);
           sub.failedSince ??= now;
