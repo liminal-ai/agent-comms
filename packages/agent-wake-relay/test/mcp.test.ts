@@ -644,6 +644,27 @@ describe("event delivery", () => {
     }
   });
 
+  it("a delivery forgotten while a wake is still being prepared never becomes an attempt", async () => {
+    const r = await receiver(chatgpt(() => 500));
+    let release!: () => void;
+    const gate = new Promise<void>((res) => (release = res));
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const store = new SubscriptionStore(join(dir, "state.json"));
+    const h = new EventHub({ targets: [{ participant: "dot", event: "comms.delivery.dot" }], store, post: guardedPost(loopback), urlPolicy: loopback, log: () => {}, sleep: async () => {}, authorize: async () => (await gate, "allowed") });
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const wake = h.waker("dot")(["d1", "d2"]).catch(() => {}); // blocked in the access check
+      await new Promise((res) => setImmediate(res));
+      h.forget("dot", ["d1"]); // answered meanwhile
+      release();
+      await wake;
+      const attempts = (h as unknown as { attempts: Map<string, { ids: string[] }[]> }).attempts;
+      assert.deepEqual(attempts.get("dot")?.map((a) => a.ids), [["d2"]], "only the delivery still outstanding was published");
+    } finally {
+      r.close();
+    }
+  });
+
   it("a subscriber found revoked whose subscription then expires is no longer remembered", async () => {
     const bad = await receiver(chatgpt());
     let now = Date.now();

@@ -108,6 +108,8 @@ export class EventHub {
   private readonly maxTtlMs: number;
   /** (principal, url) → when its callback last passed verification. */
   private readonly verified = new Map<string, number>();
+  /** Per participant, while a wake is between its start and the publishing of its attempts: deliveries forgotten in that window. */
+  private readonly preparing = new Map<string, Set<string>>();
   /** Subscriptions whose subscriber was found revoked but whose removal couldn't be saved yet: never delivered to, whatever a later access check says, until the removal lands or a fresh subscribe replaces them. */
   private readonly revoked = new Set<string>();
   private readonly o: EventHubOptions;
@@ -321,6 +323,10 @@ export class EventHub {
 
   /** Deliveries that are no longer outstanding: whatever was kept to retry them is dropped, so a backlog that was answered meanwhile doesn't linger. */
   forget(participant: string, ids: string[]): void {
+    // A wake being prepared (pruning, access checks) hasn't published its attempts yet; what's
+    // forgotten meanwhile is applied when it does.
+    const preparing = this.preparing.get(participant);
+    if (preparing) for (const id of ids) preparing.add(id);
     const kept: Attempt[] = [];
     for (const a of this.attempts.get(participant) ?? []) {
       for (const id of ids) a.settled.add(id);
@@ -336,6 +342,18 @@ export class EventHub {
     const t = this.o.targets.find((x) => x.participant === participant);
     if (!t) throw new Error(`@${participant} has no mcp-events target`);
     return async (deliveryIds) => {
+      const forgotten = new Set<string>();
+      this.preparing.set(participant, forgotten);
+      try {
+        return await this.wake(participant, t, deliveryIds, forgotten);
+      } finally {
+        this.preparing.delete(participant);
+      }
+    };
+  }
+
+  private async wake(participant: string, t: { participant: string; event: string }, deliveryIds: string[], forgotten: Set<string>): Promise<void> {
+    {
       // Dropping expired entries is bookkeeping; a state file that can't be written right now
       // doesn't hold up a wake that live subscribers are waiting for.
       await this.o.store.pruneExpired().catch((error: unknown) => this.o.log(`mcp: could not save the removal of expired subscriptions (${(error as NodeJS.ErrnoException)?.code ?? "error"})`));
@@ -369,14 +387,17 @@ export class EventHub {
       // attempts with fresh ids. An attempt whose delivery was answered meanwhile is over.
       // An attempt stays, unchanged, while any of its deliveries is still outstanding: the receiver may
       // have processed the event already (a lost response), and only the same id lets it dedupe.
-      const current = new Set(deliveryIds);
+      // Deliveries forgotten while this wake was being prepared are settled before anything is published.
+      const current = new Set(deliveryIds.filter((id) => !forgotten.has(id)));
       const attempts = (this.attempts.get(participant) ?? []).filter((a) => a.ids.some((id) => current.has(id)));
       const covered = new Set(attempts.flatMap((a) => a.ids));
-      for (const ids of this.chunk(participant, t.event, deliveryIds.filter((id) => !covered.has(id)).sort())) {
+      for (const ids of this.chunk(participant, t.event, [...current].filter((id) => !covered.has(id)).sort())) {
         const event = this.event(t.event, randomId("evt"), participant, ids);
         attempts.push({ eventId: event.eventId, ids, event, body: JSON.stringify(event), state: "pending", refused: new Set(), settled: new Set() });
       }
       this.attempts.set(participant, attempts);
+      this.preparing.delete(participant); // published: forget() applies to the attempts directly from here on
+      if (!current.size) return;
       const failures: string[] = [];
       for (const a of attempts) {
         if (a.state !== "pending") continue;
@@ -424,7 +445,7 @@ export class EventHub {
         return;
       }
       throw new Error(`no subscriber accepted the event (${failures.join(", ") || "subscriptions went away"})`);
-    };
+    }
   }
 
   /** Per participant, the events of the wake being retried: each pinned to its exact delivery ids. Cleared when every attempt has settled (accepted, or refused for good). */
