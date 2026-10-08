@@ -289,6 +289,74 @@ describe("coordinator", () => {
     assert.equal(calls, 2, "and once that landed, nothing more");
   });
 
+  it("doesn't renudge a delivered request while the connector holds its lease, and does once it lapses (#26)", async () => {
+    // A collectable request keeps its claim after `delivered`: the dispatcher renews the lease while it awaits the
+    // answer (convex/connector.ts `delivered`, dispatcher `withLease`). grok-box claims and hands over inside the
+    // coalesce window, so the one wake is built from `delivered`; the run can take 20 min, and a renudge at 10 min
+    // would start a second paid run.
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+    const lease = () => ({ leaseExpiresAt: timers.now() + 60_000 });
+    c.update([{ ...d("a"), state: "pending" }]);
+    await timers.advance(500);
+    c.update([{ ...d("a"), state: "claimed", claim: lease() }]);
+    await timers.advance(500);
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }]); // handed over; the claim stays while the run goes on
+    await timers.advance(1_000);
+    assert.deepEqual(wakes, [["a"]], "one wake, built from delivered, even though the claim is live");
+    for (let i = 0; i < 50; i++) {
+      await timers.advance(30_000); // the run takes 25 min; the dispatcher renews every 30 s
+      c.update([{ ...d("a"), state: "delivered", claim: lease() }]);
+    }
+    assert.equal(wakes.length, 1, "no renudge while the lease is live: it would start a second run");
+    await timers.advance(60_000 + 2_001); // the run died: renewals stop and the lease lapses
+    assert.equal(wakes.length, 2, "renudged once the lease lapsed");
+    c.update([]);
+    await timers.advance(60 * 60_000);
+    assert.equal(wakes.length, 2);
+  });
+
+  it("a handoff to delivered is woken for even though the connector still holds the claim (#26)", async () => {
+    // The handoff wake (a request woken while pending reaching the inbox later) happens under the live claim the
+    // dispatcher keeps for the run; only repeat wakes for the same state wait for the lease.
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+    const lease = () => ({ leaseExpiresAt: timers.now() + 60_000 });
+    c.update([{ ...d("a"), state: "pending" }]);
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a"]]);
+    await timers.advance(5_000);
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }]);
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a"], ["a"]], "the handoff is a fresh wake");
+    await timers.advance(60_000);
+    assert.equal(wakes.length, 2);
+  });
+
+  it("an owed handoff is still woken for after a wake built before it lands (#26)", async () => {
+    const timers = new FakeTimers();
+    let release: () => void = () => {};
+    const wakes: string[][] = [];
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 0,
+      wake: async (ids) => {
+        wakes.push(ids);
+        if (wakes.length === 1) await new Promise<void>((r) => (release = r));
+      },
+    });
+    c.update([{ ...d("b"), state: "pending" }]);
+    await timers.advance(2_000); // the wake is out, built while b was pending
+    c.update([d("b")]); // handed over while it is out
+    c.update([]); // and gone before it lands
+    release();
+    await new Promise((r) => setImmediate(r));
+    await timers.advance(2_001);
+    assert.deepEqual(wakes, [["b"], ["b"]], "the inbox item got a wake built after the handoff");
+    await timers.advance(60 * 60_000);
+    assert.equal(wakes.length, 2, "and only one");
+  });
+
   it("a handoff that lands while a renudge is in flight gets its own wake right after", async () => {
     const timers = new FakeTimers();
     const wakes: string[][] = [];

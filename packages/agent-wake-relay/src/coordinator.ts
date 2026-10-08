@@ -96,6 +96,17 @@ export class Coordinator {
   /** For the wake in flight: each id's state when it started, and the ids that reached `delivered` since. */
   private inFlightStates: Map<string, string> | null = null;
   private readonly transitioned = new Set<string>();
+  /**
+   * Handoffs to `delivered` the relay saw and hasn't woken for yet. A collectable request keeps its claim after the
+   * handoff (the dispatcher renews the lease while it awaits the answer), so the lease must not hold this one wake
+   * back; it holds back repeat wakes, which would start a second run.
+   */
+  private readonly handedOver = new Set<string>();
+  /**
+   * Owed handoffs that landed while a wake built from their `pending` state was out: that wake landing doesn't
+   * settle them, since its event predates the inbox item. Cleared when a wake built after the handoff goes out.
+   */
+  private readonly owedAfterWake = new Set<string>();
   /** The last failure logged, so a wake that keeps failing the same way is logged every 5 min, not every retry. */
   private lastFailure: { message: string; at: number; repeats: number } | null = null;
 
@@ -123,9 +134,11 @@ export class Coordinator {
       // A handoff noted during an in-flight wake (`transitioned`) counts as having seen it taken.
       if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && this.stateAtWake.get(id) !== "pending")) {
         this.owed.add(id);
+        if (this.transitioned.has(id)) this.owedAfterWake.add(id);
         if (!this.inFlightStates?.has(id)) fresh++;
       }
       this.outstanding.delete(id);
+      this.handedOver.delete(id);
       this.stateAtWake.delete(id);
       this.transitioned.delete(id);
       this.wakes.delete(id);
@@ -157,7 +170,10 @@ export class Coordinator {
           const prev = this.stateAtWake.get(d.id);
           this.stateAtWake.set(d.id, d.state);
           // A delivery that flips to delivered while still at 0 (never woken) must schedule a wake.
-          if (d.state === "delivered" && prev !== "delivered") fresh++;
+          if (d.state === "delivered" && prev !== "delivered") {
+            this.handedOver.add(d.id);
+            fresh++;
+          }
         }
         continue;
       }
@@ -172,6 +188,7 @@ export class Coordinator {
         }
         this.outstanding.set(d.id, 0);
         this.stateAtWake.set(d.id, d.state);
+        this.handedOver.add(d.id);
         fresh++;
       }
     }
@@ -218,9 +235,12 @@ export class Coordinator {
       if (!this.outstanding.has(id)) continue;
       this.outstanding.set(id, 0);
       this.stateAtWake.set(id, "delivered");
+      this.handedOver.add(id);
       again++;
     }
     this.transitioned.clear();
+    // An owed handoff that landed while a wake built before it was out: the next wake carries it.
+    for (const id of this.owedAfterWake) if (this.owed.has(id)) again++;
     if (again) {
       // Something new to wake for: a give-up no longer applies.
       this.failures = 0;
@@ -265,10 +285,14 @@ export class Coordinator {
     return step === undefined ? null : lastWakeAt + step * this.o.renudgeMs;
   }
 
-  /** A claimed delivery whose lease is live is being worked on; waking again would start a parallel run. */
+  /**
+   * A delivery under a live lease is being worked on; waking again would start a parallel run. A collectable
+   * request keeps its claim after `delivered` (the dispatcher renews it while it awaits the answer), so the state
+   * doesn't matter, only the lease. The one wake for a handoff the relay saw is exempt (see `handedOver`).
+   */
   private leased(id: string): boolean {
     const d = this.latest.get(id);
-    return d?.state === "claimed" && (d.claim?.leaseExpiresAt ?? 0) > this.o.timers.now();
+    return (d?.claim?.leaseExpiresAt ?? 0) > this.o.timers.now() && !this.handedOver.has(id);
   }
 
   /** Deliveries that were never woken for, or whose next renudge is due (and that aren't under a live lease). */
@@ -298,6 +322,7 @@ export class Coordinator {
     }
     this.inFlight = true;
     this.inFlightStates = new Map(ids.map((id) => [id, this.stateAtWake.get(id) ?? ""]));
+    for (const id of ids) this.owedAfterWake.delete(id); // this wake is built after any handoff noted so far
     const key = [...ids].sort().join("\n");
     if (this.wakeId?.key !== key) this.wakeId = { key, id: `wake_${this.o.participant}_${++this.wakeSeq}_${this.o.timers.now().toString(36)}` };
     const wakeId = this.wakeId.id;
@@ -363,12 +388,14 @@ export class Coordinator {
       // An owed delivery (handed over, gone from the list) is only settled by a wake that lands: an attempt given up
       // on or refused keeps the debt, so a later wake for anything, or a subscriber connecting, carries it again.
       if (landed) {
-        if (this.owed.delete(id)) paid.push(id);
+        // A wake built before the handoff doesn't pay the debt (owedAfterWake): the next one does.
+        if (!this.owedAfterWake.has(id) && this.owed.delete(id)) paid.push(id);
         this.unreached.delete(id);
         this.rearmed.delete(id);
       } else if (this.outstanding.has(id) || this.owed.has(id)) this.unreached.add(id); // nothing to reach for an id that is gone
       if (!this.outstanding.has(id)) continue;
       this.outstanding.set(id, now);
+      this.handedOver.delete(id);
       this.wakes.set(id, (this.wakes.get(id) ?? 0) + 1);
       if (this.o.renudgeMs > 0 && this.renudgeAt(id, now) === null && !this.exhausted.has(id)) {
         this.exhausted.add(id);
@@ -392,7 +419,7 @@ export class Coordinator {
     const now = this.o.timers.now();
     const nexts = [...this.outstanding].flatMap(([id, at]) => {
       const d = this.latest.get(id);
-      const lease = d?.state === "claimed" ? (d.claim?.leaseExpiresAt ?? 0) : 0;
+      const lease = this.handedOver.has(id) ? 0 : (d?.claim?.leaseExpiresAt ?? 0);
       if (at === 0) return lease > now ? [lease] : [];
       const next = this.renudgeAt(id, at);
       if (next === null) return [];
