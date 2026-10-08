@@ -559,7 +559,7 @@ describe("coordinator", () => {
       wake: async (ids, info) => {
         wakes.push(ids);
         wakeIds.push(info?.wakeId ?? "");
-        if (wakes.length === 1) throw new Error("socket hang up");
+        if (wakes.length === 1 || wakes.length === 3) throw new Error("socket hang up");
       },
     });
     const lease = () => ({ leaseExpiresAt: timers.now() + 60_000 });
@@ -571,6 +571,11 @@ describe("coordinator", () => {
     assert.deepEqual(wakes, [["a"], ["a"]], "the handoff wake went out after the coalesce delay");
     assert.notEqual(wakeIds[1], wakeIds[0], "under a new wake id, so a webhook receiver that deduped on it can't discard it");
     assert.equal(forgotten.length, 1, "a handoff with no retry pending forgets nothing");
+    // Two handoffs in one update after a failed wake: both are forgotten, not just the first.
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }, { ...d("b"), state: "pending" }, { ...d("c"), state: "pending" }]);
+    await timers.advance(2_000); // the wake for b and c fails (lost response)
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }, { ...d("b"), state: "delivered", claim: lease() }, { ...d("c"), state: "delivered", claim: lease() }]);
+    assert.deepEqual(forgotten[1]?.sort(), ["b", "c"], "both handoffs noted in one update are forgotten");
   });
 
   it("a newcomer whose event is accepted on a retry of a failing wake isn't woken for again by the next retry (#27 review)", async () => {

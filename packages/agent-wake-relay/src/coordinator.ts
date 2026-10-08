@@ -132,6 +132,7 @@ export class Coordinator {
     for (const d of mine) this.latest.set(d.id, d);
     const ids = new Set(mine.map((d) => d.id));
     const gone: string[] = [];
+    const handoffs: string[] = [];
     let fresh = 0;
     for (const id of [...this.outstanding.keys()]) {
       if (ids.has(id)) continue;
@@ -182,7 +183,7 @@ export class Coordinator {
             this.handedOver.add(d.id);
             // The wake this schedules covers the handoff; one noted during an earlier, failed wake is the same handoff.
             this.transitioned.delete(d.id);
-            this.freshEventFor(d.id);
+            handoffs.push(d.id);
             fresh++;
           }
         }
@@ -200,10 +201,11 @@ export class Coordinator {
         this.outstanding.set(d.id, 0);
         this.stateAtWake.set(d.id, d.state);
         this.handedOver.add(d.id);
-        this.freshEventFor(d.id);
+        handoffs.push(d.id);
         fresh++;
       }
     }
+    this.freshEventFor(handoffs);
     if (this.first) {
       this.first = false;
       this.o.log(`@${this.o.participant}: watching; ${mine.length} outstanding at start`);
@@ -241,14 +243,14 @@ export class Coordinator {
   }
 
   /**
-   * A handoff noted between a failed wake and its retry: the retry would resend the retained event for this id,
+   * Handoffs noted between a failed wake and its retry: the retry would resend the retained event for these ids,
    * which a receiver that processed it and only lost the response would dedupe, so the waker forgets the id and
    * the wake for the handoff is a new event, with a new wake id. Never while a wake is out: a forget during its preparation would drop
    * the id from it; a handoff then is noted in `transitioned` and gets its own wake after that wake ends.
    */
-  private freshEventFor(id: string): void {
-    if (this.wakeId === null || this.inFlight) return;
-    this.o.forget?.([id]);
+  private freshEventFor(ids: string[]): void {
+    if (!ids.length || this.wakeId === null || this.inFlight) return;
+    this.o.forget?.(ids);
     // The webhook waker sends the wake id itself for the receiver's dedupe: the handoff wake gets a new one.
     this.wakeId = null;
   }
