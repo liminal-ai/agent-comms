@@ -61,6 +61,8 @@ interface Attempt {
   eventId: string;
   ids: string[];
   state: "pending" | "accepted" | "terminal";
+  /** Subscriptions that refused this event for good (410/413); never sent this event again. */
+  refused: Set<string>;
 }
 
 interface Event {
@@ -271,7 +273,7 @@ export class EventHub {
       if (attempt) await this.sleep(RETRY_DELAYS_MS[attempt - 1]!);
       // Re-read: a refresh may have rotated the secret, or an unsubscribe removed it, while this was waiting.
       const sub = this.o.store.get(id);
-      if (!sub) return { ok: false, reason: "gone" };
+      if (!sub || sub.expiresAt <= this.now()) return { ok: false, reason: "gone" };
       try {
         const res = await this.o.post(sub.url, this.headers(event.eventId, sub.id, this.keys(sub), body), body, TIMEOUT_MS);
         if (res.status >= 200 && res.status < 300) return { ok: true };
@@ -308,17 +310,20 @@ export class EventHub {
       // Each attempt is one event pinned to an exact set of delivery ids. A retry resends the attempts
       // still pending, unchanged (same id, same body), and puts deliveries that arrived since into new
       // attempts with fresh ids. An attempt whose delivery was answered meanwhile is over.
+      // An attempt stays, unchanged, while any of its deliveries is still outstanding: the receiver may
+      // have processed the event already (a lost response), and only the same id lets it dedupe.
       const current = new Set(deliveryIds);
-      const attempts = (this.attempts.get(participant) ?? []).filter((a) => a.ids.every((id) => current.has(id)));
+      const attempts = (this.attempts.get(participant) ?? []).filter((a) => a.ids.some((id) => current.has(id)));
       const covered = new Set(attempts.flatMap((a) => a.ids));
-      for (const ids of this.chunk(participant, t.event, deliveryIds.filter((id) => !covered.has(id)).sort())) attempts.push({ eventId: randomId("evt"), ids, state: "pending" });
+      for (const ids of this.chunk(participant, t.event, deliveryIds.filter((id) => !covered.has(id)).sort())) attempts.push({ eventId: randomId("evt"), ids, state: "pending", refused: new Set() });
       this.attempts.set(participant, attempts);
       const failures: string[] = [];
       for (const a of attempts) {
         if (a.state !== "pending") continue;
         const event = this.event(t.event, a.eventId, participant, a.ids);
         const body = JSON.stringify(event);
-        const results = await Promise.all(subs.map((s) => this.deliver(s.id, event, body).then((r) => ({ s, r }))));
+        const targets = subs.filter((s) => !a.refused.has(s.id));
+        const results = await Promise.all(targets.map((s) => this.deliver(s.id, event, body).then((r) => ({ s, r }))));
         const now = this.now();
         let ok = false;
         let allTerminal = true;
@@ -331,8 +336,9 @@ export class EventHub {
             sub.lastDeliveryAt = now;
             continue;
           }
-          // 410 (gone) and 413 (too large) are final for this event: it must not be posted again.
-          if (!(r.status === 410 || r.status === 413 || r.reason === "gone")) allTerminal = false;
+          // 410 (gone) and 413 (too large) are final for this event at this subscriber: never posted to it again.
+          if (r.status === 410 || r.status === 413 || r.reason === "gone") a.refused.add(s.id);
+          else allTerminal = false;
           failures.push(`${hostOf(sub.url)} ${r.status ? `HTTP ${r.status}` : r.reason}`);
           sub.failedSince ??= now;
           if (now - sub.failedSince >= DROP_AFTER_FAILING_MS) {

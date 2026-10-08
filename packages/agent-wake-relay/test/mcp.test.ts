@@ -59,7 +59,7 @@ function verifies(r: Received, secret: string): boolean {
   return String(r.headers["webhook-signature"]).split(" ").includes(`v1,${expected}`);
 }
 
-async function hub(opts: { authorize?: (p: string) => Promise<"allowed" | "denied" | "unknown">; now?: () => number } = {}) {
+async function hub(opts: { authorize?: (p: string) => Promise<"allowed" | "denied" | "unknown">; now?: () => number; sleep?: () => Promise<void> } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
   const now = opts.now ?? Date.now;
   const store = new SubscriptionStore(join(dir, "state.json"), now);
@@ -70,7 +70,7 @@ async function hub(opts: { authorize?: (p: string) => Promise<"allowed" | "denie
     post: guardedPost(loopback),
     urlPolicy: loopback,
     log: (l) => logs.push(l),
-    sleep: async () => {},
+    sleep: opts.sleep ?? (async () => {}),
     now,
     ...(opts.authorize ? { authorize: opts.authorize } : {}),
   });
@@ -353,6 +353,57 @@ describe("event delivery", () => {
       } finally {
         r.close();
       }
+    }
+  });
+
+  it("an attempt keeps its event id while any of its deliveries is outstanding", async () => {
+    let status = 500;
+    const r = await receiver(chatgpt(() => status));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const wake = h.waker("dot");
+      await assert.rejects(wake(["a", "b"]), /HTTP 500/);
+      status = 200;
+      await wake(["b"]); // a was answered meanwhile (the receiver may have processed the lost-response event)
+      const events = r.seen.slice(1).map((e) => JSON.parse(e.body));
+      assert.equal(new Set(events.map((e) => e.eventId)).size, 1, "same id, so the receiver can dedupe");
+      assert.deepEqual(events.at(-1)!.data.deliveryIds, ["a", "b"], "the body is immutable");
+    } finally {
+      r.close();
+    }
+  });
+
+  it("a subscriber that refused an event for good isn't sent that event again while another subscriber retries", async () => {
+    let n = 0;
+    const gone = await receiver(chatgpt(() => 410));
+    const flaky = await receiver(chatgpt(() => (++n <= 3 ? 503 : 200)));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(gone.url, newSecret()));
+      await h.subscribe("user_1", sub(flaky.url, newSecret()));
+      const wake = h.waker("dot");
+      await assert.rejects(wake(["d1"]), /no subscriber accepted/);
+      await wake(["d1"]);
+      assert.equal(gone.seen.length, 2, "verification, then exactly one event post");
+      assert.ok(flaky.seen.length >= 5, "the flaky one was retried until it accepted");
+    } finally {
+      gone.close();
+      flaky.close();
+    }
+  });
+
+  it("an event isn't posted to a subscription that expired during its retry delay", async () => {
+    let now = Date.now();
+    const r = await receiver(chatgpt(() => 503));
+    // The retry delay is where the TTL (60 s minimum) runs out.
+    const { h } = await hub({ now: () => now, sleep: async () => void (now += 61_000) });
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret(), { ttlMs: 60_000 }));
+      await assert.rejects(h.waker("dot")(["d1"]), /gone/);
+      assert.equal(r.seen.length, 2, "verification, one attempt, then nothing: the subscription had expired");
+    } finally {
+      r.close();
     }
   });
 
@@ -639,6 +690,13 @@ describe("authorization", () => {
       assert.deepEqual(result.supportedVersions, [PROTOCOL_VERSION]);
       assert.deepEqual(result.capabilities, { tools: {}, events: {} });
       assert.equal(result._meta["io.modelcontextprotocol/serverInfo"].name, "agent-wake-relay");
+    });
+
+    it("answers an oversized POST with a JSON-RPC 413 instead of resetting the connection", async () => {
+      const port = (server!.address() as { port: number }).port;
+      const res = await fetch(`http://127.0.0.1:${port}/mcp`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${await token()}` }, body: "x".repeat(1024 * 1024 + 10) });
+      assert.equal(res.status, 413);
+      assert.equal(((await res.json()) as { error: { message: string } }).error.message, "request too large");
     });
 
     it("answers a malformed request target with 400 and keeps serving", async () => {

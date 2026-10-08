@@ -75,14 +75,16 @@ function readBody(req: IncomingMessage): Promise<string | null> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
+    let tooLarge = false;
     req.on("data", (c: Buffer) => {
+      if (tooLarge) return; // keep draining so the 413 can be written and read
       size += c.length;
       if (size > MAX_REQUEST) {
-        resolve(null);
-        req.destroy();
+        tooLarge = true;
+        chunks.length = 0;
       } else chunks.push(c);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("end", () => resolve(tooLarge ? null : Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
 }
