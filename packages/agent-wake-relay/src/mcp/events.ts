@@ -312,7 +312,9 @@ export class EventHub {
     const t = this.o.targets.find((x) => x.participant === participant);
     if (!t) throw new Error(`@${participant} has no mcp-events target`);
     return async (deliveryIds) => {
-      if (this.o.store.prune()) await this.o.store.save();
+      // Dropping expired entries is bookkeeping; a state file that can't be written right now
+      // doesn't hold up a wake that live subscribers are waiting for.
+      if (this.o.store.prune()) await this.o.store.save().catch((error: unknown) => this.o.log(`mcp: could not save the removal of expired subscriptions (${(error as NodeJS.ErrnoException)?.code ?? "error"})`));
       let subs = this.o.store.active(t.event);
       if (this.o.authorize) {
         const allowed: Subscription[] = [];

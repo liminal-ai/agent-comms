@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHmac, randomBytes } from "node:crypto";
-import { chmod, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -57,6 +57,13 @@ function verifies(r: Received, secret: string): boolean {
   const key = parseSecret(secret)!;
   const expected = createHmac("sha256", key).update(`${r.headers["webhook-id"]}.${r.headers["webhook-timestamp"]}.${r.body}`).digest("base64");
   return String(r.headers["webhook-signature"]).split(" ").includes(`v1,${expected}`);
+}
+
+/** Every save from now on fails as if the state file's directory were read-only (portable: a directory chmod doesn't bite on Windows). */
+function unwritable(store: SubscriptionStore): void {
+  store.save = async () => {
+    throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+  };
 }
 
 async function hub(opts: { authorize?: (p: string) => Promise<"allowed" | "denied" | "unknown">; now?: () => number; sleep?: () => Promise<void> } = {}) {
@@ -457,15 +464,37 @@ describe("event delivery", () => {
     try {
       await h.subscribe("user_good", sub(good.url, newSecret()));
       await h.subscribe("user_bad", sub(bad.url, newSecret()));
-      await chmod(dir, 0o500); // the state file can't be rewritten now
+      unwritable(store); // the state file can't be rewritten now
       await h.waker("dot")(["d1"]);
       assert.equal(good.seen.length, 2, "the allowed subscriber got the event");
       assert.equal(bad.seen.length, 1, "the denied one got only its verification");
       assert.ok(logs.some((l) => /could not save its removal/.test(l)));
     } finally {
-      await chmod(dir, 0o700);
       good.close();
       bad.close();
+    }
+  });
+
+  it("a wake still reaches live subscribers when an expired one can't be pruned from an unwritable store", async () => {
+    const live = await receiver(chatgpt());
+    const stale = await receiver(chatgpt());
+    let now = Date.now();
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const store = new SubscriptionStore(join(dir, "state.json"), () => now);
+    const logs: string[] = [];
+    const h = new EventHub({ targets: [{ participant: "dot", event: "comms.delivery.dot" }], store, post: guardedPost(loopback), urlPolicy: loopback, log: (l) => logs.push(l), sleep: async () => {}, now: () => now });
+    try {
+      await h.subscribe("user_live", sub(live.url, newSecret()));
+      await h.subscribe("user_stale", { ...sub(stale.url, newSecret()), ttlMs: 60_000 });
+      now += 120_000; // the short one has expired; the wake is the first thing to notice
+      unwritable(store);
+      await h.waker("dot")(["d1"]);
+      assert.equal(live.seen.length, 2, "the live subscriber got the event");
+      assert.equal(stale.seen.length, 1, "the expired one got only its verification");
+      assert.ok(logs.some((l) => /could not save the removal of expired/.test(l)));
+    } finally {
+      live.close();
+      stale.close();
     }
   });
 
