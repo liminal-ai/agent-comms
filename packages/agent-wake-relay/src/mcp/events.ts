@@ -172,8 +172,9 @@ export class EventHub {
     const id = subscriptionId(principal, url, t.event, args);
     const now = this.now();
     const existing = this.o.store.get(id);
+    // Read-only: active() already leaves expired entries out. Dropping them from the store happens
+    // inside the serialized insert below, where no in-flight write can publish them back.
     const underLimit = () => {
-      this.o.store.prune(); // expired entries don't count, and don't linger in memory or the state file
       const live = this.o.store.get(id);
       return (live !== undefined && live.expiresAt > this.now()) || this.o.store.active().filter((s) => s.principal === principal).length < MAX_PER_PRINCIPAL;
     };
@@ -211,6 +212,7 @@ export class EventHub {
       }
     };
     await this.o.store.put(sub, () => {
+      this.o.store.prune(); // inside the queue: expired entries leave memory and, with this write, the state file
       if (!underLimit()) throw new RpcError(RESOURCE_EXHAUSTED, "too many subscriptions", { limit: "subscriptions", max: MAX_PER_PRINCIPAL });
       rotate();
     });
