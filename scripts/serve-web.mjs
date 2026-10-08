@@ -26,7 +26,13 @@ export async function listenWeb(server, config, log = (line) => console.log(line
       if (await socketAnswers(config.socket)) throw new Error(`web config: socket ${config.socket} is in use by another instance; refusing to take it over`);
       await rm(config.socket);
     }
-    await new Promise((resolve, reject) => server.once('error', reject).listen(config.socket, resolve));
+    // Created mode 600 from the first instant (umask 177), so nobody can connect before the chmod below.
+    const umask = process.umask(0o177);
+    try {
+      await new Promise((resolve, reject) => server.once('error', reject).listen(config.socket, resolve));
+    } finally {
+      process.umask(umask);
+    }
     await chmod(config.socket, 0o600);
     log(`Comms ${config.environment} web: unix:${config.socket}${config.adminTokenFile ? ' (proxy mode)' : ''}`);
   } else {

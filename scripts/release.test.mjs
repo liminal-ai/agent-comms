@@ -56,8 +56,12 @@ test('web service starts through the deployed current directory link' + (lowerDr
       // A live socket is never unlinked from under its owner; a stale one is.
       const live = join(dir, 'live.sock');
       const stop = (s) => new Promise((resolve) => { s.closeAllConnections(); s.close(resolve); });
+      const before = process.umask();
       const first = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: live }, () => {});
       try {
+        assert.equal(process.umask(), before, 'umask restored');
+        const { stat: statLive } = await import('node:fs/promises');
+        assert.equal((await statLive(live)).mode & 0o777, 0o600);
         const contender = webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir);
         await assert.rejects(listenWeb(contender, { environment: 'x', socket: live }, () => {}), /in use by another instance/);
         const stillServed = await new Promise((resolve, reject) => request({ socketPath: live, path: '/healthz', agent: false }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); }).on('error', reject).end());
@@ -86,6 +90,7 @@ test('web service starts through the deployed current directory link' + (lowerDr
         assert.match(line, /unix:/);
         const { stat } = await import('node:fs/promises');
         assert.equal((await stat(sock)).mode & 0o777, 0o600);
+        assert.equal(process.umask(), process.umask(), 'the parent umask is untouched');
         const viaSock = await new Promise((resolve, reject) => {
           request({ socketPath: sock, path: '/runtime-config.json', headers: { host: 'comms.example.test:8464', 'x-forwarded-for': '100.100.0.1' } }, (res) => { let b = ''; res.on('data', (c) => (b += c)); res.on('end', () => resolve({ status: res.statusCode, body: b })); }).on('error', reject).end();
         });
