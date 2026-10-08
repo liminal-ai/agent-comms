@@ -6,7 +6,7 @@
 // answers them through its normal comms path.
 
 import { timingSafeEqual } from "node:crypto";
-import { TerminalWakeError, type WakeFn, type WakeOutcome } from "../coordinator.ts";
+import { TerminalWakeError, type WakeFailure, type WakeFn } from "../coordinator.ts";
 import type { Access } from "./auth.ts";
 import { canonicalJson, subscriptionId, type Subscription, type SubscriptionStore } from "./store.ts";
 import { BlockedUrlError, failureReason, parseSecret, randomId, sign, urlProblem, type FailureReason, type Post, type UrlPolicy } from "./webhook.ts";
@@ -358,7 +358,7 @@ export class EventHub {
     };
   }
 
-  private async wake(participant: string, t: { participant: string; event: string }, deliveryIds: string[], forgotten: Set<string>): Promise<void | WakeOutcome> {
+  private async wake(participant: string, t: { participant: string; event: string }, deliveryIds: string[], forgotten: Set<string>): Promise<void> {
     {
       // Dropping expired entries is bookkeeping; a state file that can't be written right now
       // doesn't hold up a wake that live subscribers are waiting for.
@@ -397,8 +397,6 @@ export class EventHub {
       const current = new Set(deliveryIds.filter((id) => !forgotten.has(id)));
       const attempts = (this.attempts.get(participant) ?? []).filter((a) => a.ids.some((id) => current.has(id)));
       const covered = new Set(attempts.flatMap((a) => a.ids));
-      // Accepted on an earlier attempt of this wake and kept while a sibling is retried: not sent again now.
-      const acceptedBefore = attempts.filter((a) => a.state === "accepted").flatMap((a) => a.ids.filter((id) => current.has(id)));
       for (const ids of this.chunk(participant, t.event, [...current].filter((id) => !covered.has(id)).sort())) {
         const event = this.event(t.event, randomId("evt"), participant, ids);
         attempts.push({ eventId: event.eventId, ids, event, body: JSON.stringify(event), state: "pending", refused: new Set(), settled: new Set() });
@@ -466,14 +464,17 @@ export class EventHub {
       });
       const pending = attempts.filter((a) => a.state === "pending").length;
       const terminal = attempts.filter((a) => a.state === "terminal").length;
+      // Events accepted (now or on an earlier attempt of this wake) are landed for their ids, whatever became of the rest.
+      const accepted = attempts.filter((a) => a.state === "accepted").flatMap((a) => a.ids.filter((id) => current.has(id)));
+      const failure = <E extends Error>(e: E): E & WakeFailure => Object.assign(e, { accepted });
       if (pending === 0) {
         // Every attempt settled: the next wake for this participant starts over.
         this.attempts.delete(participant);
-        if (terminal > 0) throw new TerminalWakeError(`${terminal === attempts.length ? "every event was" : terminal === 1 ? "one event was" : `${terminal} events were`} refused for good (${failures.join(", ")})`);
+        if (terminal > 0) throw failure(new TerminalWakeError(`${terminal === attempts.length ? "every event was" : terminal === 1 ? "one event was" : `${terminal} events were`} refused for good (${failures.join(", ")})`));
         if (failures.length) this.o.log(`@${participant}: ${attempts.length === 1 ? `event ${attempts[0]!.eventId}` : `${attempts.length} events`} not accepted by ${failures.join(", ")}`);
-        return { acceptedBefore };
+        return;
       }
-      throw new Error(`no subscriber accepted the event (${failures.join(", ") || "subscriptions went away"})`);
+      throw failure(new Error(`no subscriber accepted the event (${failures.join(", ") || "subscriptions went away"})`));
     }
   }
 

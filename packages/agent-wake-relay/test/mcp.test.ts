@@ -842,23 +842,29 @@ describe("event delivery", () => {
     }
   });
 
-  it("a landed retry reports the ids whose event was accepted on an earlier attempt and not sent again", async () => {
+  it("a failed wake reports the ids whose events were accepted, and forgetting them makes the next wake for them a new event", async () => {
     let posts = 0;
-    // The first event is accepted; the second is refused through deliver()'s three same-id tries; the retry is accepted.
+    // The first event is accepted; the second is refused through deliver()'s three same-id tries; then everything is accepted.
     const r = await receiver(chatgpt(() => (++posts >= 2 && posts <= 4 ? 500 : 200)));
     const { h } = await hub();
     try {
       await h.subscribe("user_1", sub(r.url, newSecret()));
       const ids = Array.from({ length: 6_000 }, (_, i) => `j97${String(i).padStart(5, "0")}${"x".repeat(40)}`); // two events' worth
       const wake = h.waker("dot");
-      await assert.rejects(wake(ids), /HTTP 500/);
-      const sent = r.seen.slice(1).map((e) => JSON.parse(e.body).data.deliveryIds as string[]);
+      const failure = await wake(ids).then(
+        () => assert.fail("expected a rejection"),
+        (e: Error & { accepted?: string[] }) => e,
+      );
+      assert.match(failure.message, /HTTP 500/);
+      const sent = r.seen.slice(1).map((e) => JSON.parse(e.body) as { eventId: string; data: { deliveryIds: string[] } });
       assert.equal(sent.length, 4, "two events on the first attempt, the second tried three times");
-      const outcome = await wake(ids);
-      assert.equal(r.seen.length, 6, "the retry resent only the refused event");
-      assert.deepEqual(JSON.parse(r.seen[5]!.body).data.deliveryIds, sent[1], "and that one unchanged");
-      assert.deepEqual([...(outcome?.acceptedBefore ?? [])].sort(), [...sent[0]!].sort(), "the ids of the event accepted first time, not sent again");
-      assert.deepEqual(await wake(ids), { acceptedBefore: [] }, "the next wake for the set is new: nothing was accepted before it");
+      assert.deepEqual([...(failure.accepted ?? [])].sort(), [...sent[0]!.data.deliveryIds].sort(), "the accepted event's ids are reported");
+      h.forget("dot", failure.accepted ?? []); // the coordinator settles them: the hub drops the accepted event
+      await wake(sent[1]!.data.deliveryIds); // the retry, for what is still outstanding
+      assert.equal(r.seen.length, 6, "the retry resent the refused event only");
+      assert.equal(JSON.parse(r.seen[5]!.body).eventId, sent[1]!.eventId, "unchanged");
+      await wake(sent[0]!.data.deliveryIds.slice(0, 3)); // a later wake for some of the settled ids (a handoff, say)
+      assert.notEqual(JSON.parse(r.seen[6]!.body).eventId, sent[0]!.eventId, "is a new event, not the accepted one again");
     } finally {
       r.close();
     }
