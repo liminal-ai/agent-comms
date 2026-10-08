@@ -631,6 +631,45 @@ describe("coordinator", () => {
     assert.deepEqual(calls, [["a"], ["a"]], "the handoff seen during the failed wake made it owed");
   });
 
+  it("a subscriber connecting re-arms a delivery at most once until a wake lands, so a failing callback isn't retried per refresh", async () => {
+    const timers = new FakeTimers();
+    const logs: string[] = [];
+    let calls = 0;
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: (l) => logs.push(l),
+      renudgeMs: 0,
+      wake: async () => {
+        calls++;
+        throw new Error("HTTP 500");
+      },
+    });
+    c.update([d("a")]);
+    await timers.advance(2 * 60 * 60_000); // one full run of 12, then give-up
+    assert.equal(calls, RETRY_GIVE_UP);
+    for (let i = 0; i < 24; i++) {
+      c.subscriberAvailable(); // hourly refreshes
+      await timers.advance(60 * 60_000);
+    }
+    assert.equal(calls, 2 * RETRY_GIVE_UP, "exactly one more run from the first refresh; later refreshes don't restart it");
+  });
+
+  it("an owed delivery that is gone and whose wake fails doesn't linger as unreached", async () => {
+    const { timers, wakes, c } = setup({ terminal: 1, renudgeMs: 0 });
+    c.update([{ ...d("a"), state: "claimed", claim: { leaseExpiresAt: timers.now() + 60_000 } }]);
+    c.update([]); // owed
+    await timers.advance(2_000); // refused for good: still owed, and unreached
+    assert.equal(wakes.length, 0);
+    const sets = c as unknown as { unreached: Set<string>; owed: Set<string> };
+    assert.deepEqual([...sets.unreached], ["a"]);
+    c.subscriberAvailable();
+    await timers.advance(2_000); // this one lands
+    assert.deepEqual(wakes, [["a"]]);
+    assert.equal(sets.unreached.size, 0);
+    assert.equal(sets.owed.size, 0);
+  });
+
   it("gives the webhook a wake id that is stable across retries of the same set and new for a new set", async () => {
     const timers = new FakeTimers();
     const seen: { ids: string[]; wakeId: string }[] = [];

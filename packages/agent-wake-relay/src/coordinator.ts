@@ -74,6 +74,8 @@ export class Coordinator {
   private readonly exhausted = new Set<string>();
   /** Deliveries whose latest wake attempt never landed (given up on, or refused for good); cleared by a wake that lands. */
   private readonly unreached = new Set<string>();
+  /** Deliveries already re-armed once by a subscriber connecting and still not reached: not re-armed again until a wake lands. */
+  private readonly rearmed = new Set<string>();
   /**
    * Deliveries that left the work list before the agent was ever woken for them. On a machine with a
    * connector (grok-box) an answer is claimed and handed to the agent's inbox within the coalesce window
@@ -128,7 +130,10 @@ export class Coordinator {
       this.transitioned.delete(id);
       this.wakes.delete(id);
       this.exhausted.delete(id);
-      if (!this.owed.has(id)) this.unreached.delete(id);
+      if (!this.owed.has(id)) {
+        this.unreached.delete(id);
+        this.rearmed.delete(id);
+      }
       gone.push(id);
     }
     if (gone.length) this.o.forget?.(gone);
@@ -233,6 +238,9 @@ export class Coordinator {
   subscriberAvailable(): void {
     let n = 0;
     for (const id of this.unreached) {
+      // One re-arm per delivery until a wake lands: a callback that keeps failing doesn't get a full retry run per refresh.
+      if (this.rearmed.has(id)) continue;
+      this.rearmed.add(id);
       if (this.owed.has(id)) {
         n++; // still owed: the next wake carries it
         continue;
@@ -356,7 +364,8 @@ export class Coordinator {
       if (landed) {
         this.owed.delete(id);
         this.unreached.delete(id);
-      } else this.unreached.add(id);
+        this.rearmed.delete(id);
+      } else if (this.outstanding.has(id) || this.owed.has(id)) this.unreached.add(id); // nothing to reach for an id that is gone
       if (!this.outstanding.has(id)) continue;
       this.outstanding.set(id, now);
       this.wakes.set(id, (this.wakes.get(id) ?? 0) + 1);
