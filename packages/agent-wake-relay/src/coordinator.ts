@@ -121,7 +121,7 @@ export class Coordinator {
       // was paused, or the message withdrawn), so nothing is owed. If a wake carrying it is out, that wake's outcome
       // settles it: success clears the debt, a failed one retries with it.
       // A handoff noted during an in-flight wake (`transitioned`) counts as having seen it taken.
-      if (this.outstanding.get(id) === 0 && (this.stateAtWake.get(id) !== "pending" || this.transitioned.has(id))) {
+      if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && this.stateAtWake.get(id) !== "pending")) {
         this.owed.add(id);
         if (!this.inFlightStates?.has(id)) fresh++;
       }
@@ -133,8 +133,8 @@ export class Coordinator {
       if (!this.owed.has(id)) {
         this.unreached.delete(id);
         this.rearmed.delete(id);
+        gone.push(id); // an owed id stays known to the waker until its wake lands (forgotten in spent())
       }
-      gone.push(id);
     }
     if (gone.length) this.o.forget?.(gone);
     for (const d of mine) {
@@ -358,11 +358,12 @@ export class Coordinator {
    * delivery arrives; that is said once.
    */
   private spent(ids: string[], now: number, landed: boolean): void {
+    const paid: string[] = [];
     for (const id of ids) {
       // An owed delivery (handed over, gone from the list) is only settled by a wake that lands: an attempt given up
       // on or refused keeps the debt, so a later wake for anything, or a subscriber connecting, carries it again.
       if (landed) {
-        this.owed.delete(id);
+        if (this.owed.delete(id)) paid.push(id);
         this.unreached.delete(id);
         this.rearmed.delete(id);
       } else if (this.outstanding.has(id) || this.owed.has(id)) this.unreached.add(id); // nothing to reach for an id that is gone
@@ -374,6 +375,7 @@ export class Coordinator {
         this.o.log(`@${this.o.participant}: delivery ${id} is still outstanding after ${RENUDGE_STEPS.length} renudges; not waking for it again unless it changes`);
       }
     }
+    if (paid.length) this.o.forget?.(paid);
   }
 
   private scheduleRenudge(): void {
@@ -381,7 +383,9 @@ export class Coordinator {
     this.renudgeTimer = null;
     // While a wake (or its retry) is already pending there is nothing to add: that wake covers whatever
     // is due, and an overdue renudge must not turn a 30 s retry into an immediate one.
-    if (this.timer || this.o.renudgeMs <= 0) return;
+    // With renudging off there are no renudge steps (renudgeAt() is null), but a never-woken leased delivery still
+    // has to be revisited when its lease lapses, so the timer is installed in that case too.
+    if (this.timer) return;
     // A leased delivery's renudge waits for its lease to lapse, so the timer never spins on something it won't wake for.
     // One first seen under a live lease (the relay restarted while a connector was working on it) has never been
     // woken for and has no wake pending: the lease lapsing changes nothing in the query, so it is revisited then.

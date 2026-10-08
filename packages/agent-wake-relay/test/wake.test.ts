@@ -670,6 +670,55 @@ describe("coordinator", () => {
     assert.equal(sets.owed.size, 0);
   });
 
+  it("with renudging off, a delivery first seen under a live lease is still woken for when the lease lapses", async () => {
+    const { timers, wakes, c } = setup({ renudgeMs: 0 });
+    c.update([{ ...d("a"), state: "claimed", claim: { leaseExpiresAt: timers.now() + 2 * 60_000 } }]);
+    await timers.advance(60_000);
+    assert.equal(wakes.length, 0);
+    await timers.advance(60_000 + 2_001);
+    assert.deepEqual(wakes, [["a"]]);
+  });
+
+  it("an owed delivery isn't forgotten by the waker until its wake lands", async () => {
+    const timers = new FakeTimers();
+    const forgotten: string[][] = [];
+    const wakes: string[][] = [];
+    const c = new Coordinator({ participant: "dot", timers, log: () => {}, renudgeMs: 0, wake: async (ids) => void wakes.push(ids), forget: (ids) => forgotten.push(ids) });
+    c.update([{ ...d("a", "dot"), state: "claimed", claim: { leaseExpiresAt: timers.now() + 60_000 } }]);
+    c.update([]); // handed over and gone: owed
+    assert.deepEqual(forgotten, [], "not forgotten while owed: the waker still has to carry it");
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a"]]);
+    assert.deepEqual(forgotten, [["a"]], "forgotten once the wake landed");
+  });
+
+  it("a handoff that lands during a failing renudge, whose delivery then goes, is owed and retried", async () => {
+    const timers = new FakeTimers();
+    const calls: string[][] = [];
+    let n = 0;
+    // biome-ignore lint/style/useConst: assigned below
+    let c: Coordinator;
+    c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 10 * 60_000,
+      wake: async (ids) => {
+        calls.push(ids);
+        if (++n === 2) {
+          c.update([d("a")]); // handed over while the renudge is out
+          c.update([]); // ... and gone before it fails
+          throw new Error("HTTP 500");
+        }
+      },
+    });
+    c.update([{ ...d("a"), state: "pending" }]);
+    await timers.advance(2_000); // first wake lands
+    await timers.advance(10 * 60_000); // the renudge, which fails with the handoff in flight
+    await timers.advance(30_000); // the retry
+    assert.deepEqual(calls, [["a"], ["a"], ["a"]], "the retry carried the handed-over delivery");
+  });
+
   it("gives the webhook a wake id that is stable across retries of the same set and new for a new set", async () => {
     const timers = new FakeTimers();
     const seen: { ids: string[]; wakeId: string }[] = [];
