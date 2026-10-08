@@ -415,17 +415,29 @@ export class EventHub {
         let ok = false;
         let allTerminal = true;
         for (const { s, r } of results) {
-          const sub = this.o.store.get(s.id);
-          if (!sub) continue;
-          // The subscription vanished before anything was posted and a new one took its key: nothing was refused, and the new one is still owed the event.
-          if (!r.ok && r.reason === "gone" && !r.posted) {
+          // A successful POST means the receiver already has the event, even if the subscription
+          // vanished before we record bookkeeping. Count it as accepted regardless.
+          if (r.ok) {
+            ok = true;
+            const sub = this.o.store.get(s.id);
+            if (sub) {
+              delete sub.failedSince;
+              sub.lastDeliveryAt = now;
+            }
+            continue;
+          }
+          // The subscription vanished before anything was posted and a new one took its key:
+          // nothing was refused, and the new one is still owed the event.
+          if (r.reason === "gone" && !r.posted) {
             allTerminal = false;
             continue;
           }
-          if (r.ok) {
-            ok = true;
-            delete sub.failedSince;
-            sub.lastDeliveryAt = now;
+          const sub = this.o.store.get(s.id);
+          if (!sub) {
+            // No current subscription to attribute the refusal to; still record terminal refusal
+            // against the posted object when available, or consider it non-terminal otherwise.
+            if (r.terminal && r.posted) a.refused.add(r.posted);
+            else allTerminal = false;
             continue;
           }
           // A refusal deliver() classified as final (any non-retryable 4xx, a blocked URL, a gone subscription) is never posted to it again.
