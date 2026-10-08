@@ -514,6 +514,25 @@ describe("event delivery", () => {
     assert.equal(store.get("bad"), undefined);
   });
 
+  it("the verified-callback cache forgets entries past their reuse window", async () => {
+    const r = await receiver(chatgpt());
+    let now = Date.now();
+    const { h } = await hub({ now: () => now });
+    try {
+      const cache = (h as unknown as { verified: Map<string, number> }).verified;
+      for (let i = 0; i < 30; i++) {
+        await h.subscribe("user_1", sub(`${r.url}?n=${i}`, newSecret()));
+        await h.unsubscribe("user_1", { name: "comms.delivery.dot", delivery: { url: `${r.url}?n=${i}` } });
+      }
+      assert.equal(cache.size, 30);
+      now += 25 * 60 * 60 * 1000; // past the 24 h reuse window
+      await h.subscribe("user_1", sub(`${r.url}?n=fresh`, newSecret()));
+      assert.equal(cache.size, 1, "only the fresh verification remains");
+    } finally {
+      r.close();
+    }
+  });
+
   it("overlapping refreshes keep the secret granted just before as the rotation fallback", async () => {
     const r = await receiver(chatgpt());
     const { h, store } = await hub();

@@ -262,6 +262,10 @@ export class EventHub {
       throw new RpcError(CALLBACK_ENDPOINT_ERROR, "callback verification failed", { reason: "challenge_failed" });
     }
     const now = this.now();
+    // Entries past their reuse window are dropped here, so the cache is bounded by what was verified
+    // in the last VERIFIED_FOR_MS, not by everything ever verified.
+    const cutoff = now - VERIFIED_FOR_MS;
+    for (const [key, at] of this.verified) if (at <= cutoff) this.verified.delete(key);
     this.verified.set(`${principal}\n${url}`, now);
     return now;
   }
