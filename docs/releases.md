@@ -70,7 +70,7 @@ Without `adminTokenFile` in `web.json`, the web service serves the page statical
 - `allowedClients`: the tailnet addresses (v4 and v6) of the devices allowed to use the page, matched against the single `X-Forwarded-For` value `tailscale serve` sets. Anything else, and any request without that header, gets 403. This is device-level: anyone on a listed device has the page's full admin power.
 - `publicHosts`: the `host:port` names the page is published under; any other Host gets 403.
 - `devAllowLoopback: true` adds one exception for development, header-less requests from loopback; the two keys above are still required. Never set it in a deployment.
-- `socket`: listen on this unix socket (created mode 600) instead of `127.0.0.1:port`, and point `tailscale serve` at `unix:<path>`. Only the service's user and root (tailscaled) can open it, so no other local account can forge the forwarded client address. Use it in deployments.
+- `socket`: listen on this unix socket (created mode 600) instead of `127.0.0.1:port`, and point `tailscale serve` at `unix:<path>`. Only the service's user and root (tailscaled) can open it, so no other local account can forge the forwarded client address. Use it in deployments. Starters on the same `socket` take turns under `<socket>.lock`: a lock left by a dead process is taken over, one held by a live process is waited on for `lockWaitMs` (default 5000) and then startup refuses.
 
 ```json
 { "environment": "prod", "port": 3790, "convexUrl": "https://<deployment>.convex.cloud",
