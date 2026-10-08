@@ -360,6 +360,13 @@ export class Coordinator {
         if (notSentNow.has(id)) this.followUp.add(id); // not sent again by this wake: due a wake of its own (a new event)
         else this.owedAfterWake.delete(id);
       }
+      // An owed id this wake didn't send again, however it came to be owed (handed over and gone during the retry
+      // delay, say): its event predates the handoff, so the debt stands and it is due a wake of its own.
+      for (const id of ids) {
+        if (!notSentNow.has(id) || !this.owed.has(id)) continue;
+        this.owedAfterWake.add(id);
+        this.followUp.add(id);
+      }
       // A handoff this wake was to carry whose event, accepted on an earlier attempt, wasn't sent again: nothing
       // built after the handoff reached the agent, so it is treated like a handoff that landed while the wake was
       // out and gets a wake of its own (a new event).
