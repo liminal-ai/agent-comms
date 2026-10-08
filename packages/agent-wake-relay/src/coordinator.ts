@@ -116,12 +116,34 @@ export class Coordinator {
     this.timer = this.renudgeTimer = null;
   }
 
+  private timerDue = 0;
+
+  /** Fires in `ms`; an earlier request replaces a later pending one (a new delivery during a 30 s retry wait gets the 2 s coalesce). */
   private schedule(ms: number): void {
-    if (this.timer) return;
+    const wait = Math.min(ms, MAX_TIMER_MS);
+    const due = this.o.timers.now() + wait;
+    if (this.timer) {
+      if (due >= this.timerDue) return;
+      this.o.timers.clear(this.timer);
+    }
+    this.timerDue = due;
     this.timer = this.o.timers.set(() => {
       this.timer = null;
       void this.fire();
-    }, Math.min(ms, MAX_TIMER_MS));
+    }, wait);
+  }
+
+  /** Handoffs to delivered that landed while a wake was out get their own wake, whatever became of that wake. */
+  private wakeAgainForHandoffs(): void {
+    let again = 0;
+    for (const id of this.transitioned) {
+      if (!this.outstanding.has(id)) continue;
+      this.outstanding.set(id, 0);
+      this.stateAtWake.set(id, "delivered");
+      again++;
+    }
+    this.transitioned.clear();
+    if (again) this.schedule(this.o.coalesceMs);
   }
 
   /** Deliveries that were never woken for, or whose last wake is older than renudgeMs. */
@@ -146,16 +168,7 @@ export class Coordinator {
       for (const id of ids) if (this.outstanding.has(id)) this.outstanding.set(id, now);
       this.lastFailure = null;
       this.o.log(`@${this.o.participant}: woke for ${ids.length} delivery(s) ${ids.join(",")}`);
-      // A handoff that landed while this wake was out gets its own wake.
-      let again = 0;
-      for (const id of this.transitioned) {
-        if (!this.outstanding.has(id)) continue;
-        this.outstanding.set(id, 0);
-        this.stateAtWake.set(id, "delivered");
-        again++;
-      }
-      this.transitioned.clear();
-      if (again) this.schedule(this.o.coalesceMs);
+      this.wakeAgainForHandoffs();
     } catch (error) {
       const message = (error as Error).message;
       const now = this.o.timers.now();
@@ -165,7 +178,7 @@ export class Coordinator {
         this.o.log(`@${this.o.participant}: wake rejected for ${ids.join(",")}: ${message}; not retrying${this.o.renudgeMs > 0 ? `, renudging in ${Math.round(this.o.renudgeMs / 60_000)} min` : ""}`);
         this.inFlight = false;
         this.inFlightStates = null;
-        this.transitioned.clear();
+        this.wakeAgainForHandoffs();
         this.scheduleRenudge();
         return;
       }

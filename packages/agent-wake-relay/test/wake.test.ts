@@ -183,6 +183,43 @@ describe("coordinator", () => {
     assert.equal(wakes.length, 2);
   });
 
+  it("a handoff that lands while a wake is in flight still gets its own wake when that wake is refused for good", async () => {
+    const timers = new FakeTimers();
+    const wakes: string[][] = [];
+    let release: (e?: Error) => void = () => {};
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 0,
+      wake: async (ids) => {
+        wakes.push(ids);
+        if (wakes.length === 1) await new Promise<void>((_, reject) => (release = (e) => reject(e)));
+      },
+    });
+    c.update([{ ...d("b"), state: "pending" }]);
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["b"]], "first wake is out, still in flight");
+    c.update([d("b")]); // handed over while the wake is out
+    release(new TerminalWakeError("HTTP 410"));
+    await new Promise((r) => setImmediate(r));
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["b"], ["b"]], "the handoff was woken for even though the first wake ended terminally");
+  });
+
+  it("a new delivery during a 30 s retry wait is woken for after the 2 s coalesce, not the full retry wait", async () => {
+    const { timers, wakes, c } = setup({ fail: 1 });
+    c.update([d("a")]);
+    await timers.advance(2_000); // first wake fails; a 30 s retry is pending
+    assert.equal(wakes.length, 0);
+    await timers.advance(5_000);
+    c.update([d("a"), d("b")]);
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a", "b"]], "the retry was pulled forward to the coalesce delay");
+    await timers.advance(60_000);
+    assert.equal(wakes.length, 1, "and the old retry timer didn't fire a second wake");
+  });
+
   it("a terminal wake failure isn't retried every 30 s; the renudge tries again later", async () => {
     const { timers, wakes, logs, c } = setup({ terminal: 1, renudgeMs: 10 * 60_000 });
     c.update([d("a")]);
