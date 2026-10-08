@@ -79,6 +79,7 @@ export class Coordinator {
       if (ids.has(id)) continue;
       this.outstanding.delete(id);
       this.stateAtWake.delete(id);
+      this.transitioned.delete(id);
       gone.push(id);
     }
     if (gone.length) this.o.forget?.(gone);

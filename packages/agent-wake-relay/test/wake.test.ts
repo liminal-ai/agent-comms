@@ -261,6 +261,31 @@ describe("coordinator", () => {
     assert.deepEqual(wakes, [["a"], ["a"]], "a was still renudged on time");
   });
 
+  it("a handoff noted during an in-flight wake is forgotten with its delivery", async () => {
+    const timers = new FakeTimers();
+    let release: (e?: Error) => void = () => {};
+    let calls = 0;
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 0,
+      wake: async () => {
+        calls++;
+        if (calls === 1) await new Promise<void>((_, reject) => (release = (e) => reject(e)));
+      },
+    });
+    c.update([{ ...d("b"), state: "pending" }]);
+    await timers.advance(2_000);
+    c.update([d("b")]); // handed over while the wake is out
+    c.update([]); // and gone before the wake ends
+    release(new Error("HTTP 500"));
+    await new Promise((r) => setImmediate(r));
+    assert.equal((c as unknown as { transitioned: Set<string> }).transitioned.size, 0, "nothing stale is kept");
+    await timers.advance(60_000);
+    assert.equal(calls, 1, "and nothing is woken for");
+  });
+
   it("tells the waker which deliveries are no longer outstanding", async () => {
     const timers = new FakeTimers();
     const forgotten: string[][] = [];

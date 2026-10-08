@@ -714,6 +714,27 @@ describe("event delivery", () => {
     }
   });
 
+  it("a refreshed subscription that refuses for good again is not posted to a third time", async () => {
+    const a = await receiver(chatgpt(() => 410));
+    const b = await receiver(chatgpt(() => 500));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_a", sub(a.url, newSecret()));
+      await h.subscribe("user_b", sub(b.url, newSecret()));
+      const wake = h.waker("dot");
+      await assert.rejects(wake(["d1"]), /HTTP 500/);
+      assert.equal(a.seen.length, 2);
+      await h.subscribe("user_a", sub(a.url, newSecret())); // refreshed (recently verified, so no new challenge), still answering 410
+      await assert.rejects(wake(["d1"]), /HTTP 500/);
+      assert.equal(a.seen.length, 3, "one more refused post after the refresh");
+      await assert.rejects(wake(["d1"]), /HTTP 500/);
+      assert.equal(a.seen.length, 3, "the refreshed object's refusal is remembered too");
+    } finally {
+      a.close();
+      b.close();
+    }
+  });
+
   it("a retry of a split wake resends only the batches that didn't settle", async () => {
     let calls = 0;
     // First wake: batch 1 accepted, batch 2 fails transiently (all its attempts). Second wake: everything accepted.

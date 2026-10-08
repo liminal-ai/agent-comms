@@ -419,7 +419,8 @@ export class EventHub {
             continue;
           }
           // A refusal deliver() classified as final (any non-retryable 4xx, a blocked URL, a gone subscription) is never posted to it again.
-          if (r.terminal) a.refused.add(s);
+          // Recorded on the object as it is now (deliver() re-reads it per try), so a refresh that landed during the tries is the one marked.
+          if (r.terminal) a.refused.add(sub);
           else allTerminal = false;
           failures.push(`${hostOf(sub.url)} ${r.status ? `HTTP ${r.status}` : r.reason}`);
           sub.failedSince ??= now;
