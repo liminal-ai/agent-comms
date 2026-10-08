@@ -357,6 +357,82 @@ describe("coordinator", () => {
     assert.equal(wakes.length, 2, "and only one");
   });
 
+  const failingFirstWake = () => {
+    const timers = new FakeTimers();
+    const wakes: string[][] = [];
+    let release: (e: Error) => void = () => {};
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 10 * 60_000,
+      wake: async (ids) => {
+        wakes.push(ids);
+        if (wakes.length === 1) await new Promise<void>((_, reject) => (release = reject));
+      },
+    });
+    const lease = () => ({ leaseExpiresAt: timers.now() + 60_000 });
+    return { timers, wakes, c, lease, fail: (e: Error) => release(e) };
+  };
+
+  it("a handoff that lands during a failing pre-handoff wake is carried by the retry despite the live claim (#27 review)", async () => {
+    const { timers, wakes, c, lease, fail } = failingFirstWake();
+    c.update([{ ...d("a"), state: "pending" }]);
+    await timers.advance(2_000); // the wake is out, built from pending
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }]); // handed over while it is out (noted in `transitioned`)
+    fail(new Error("HTTP 500")); // then it fails: a retry is due in 30 s; the row doesn't change again before that
+    await new Promise((r) => setImmediate(r));
+    await timers.advance(30_000);
+    assert.deepEqual(wakes, [["a"], ["a"]], "the retry went out under the live claim: nothing has reached the agent yet");
+    await timers.advance(2_001);
+    assert.equal(wakes.length, 3, "the retry was built from pending, so the handoff got its own wake after it");
+    for (let i = 0; i < 60; i++) {
+      await timers.advance(30_000);
+      c.update([{ ...d("a"), state: "delivered", claim: lease() }]);
+    }
+    assert.equal(wakes.length, 3, "once a wake landed, the lease holds the renudges");
+  });
+
+  it("a handoff noted during a failing wake and seen again on a lease renewal is woken for once, not twice", async () => {
+    const { timers, wakes, c, lease, fail } = failingFirstWake();
+    c.update([{ ...d("a"), state: "pending" }]);
+    await timers.advance(2_000);
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }]); // handed over while the wake is out
+    fail(new Error("HTTP 500"));
+    await new Promise((r) => setImmediate(r));
+    await timers.advance(10_000);
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }]); // the dispatcher renewed the claim: same handoff, seen outside a wake
+    await timers.advance(2_001);
+    assert.deepEqual(wakes, [["a"], ["a"]], "the handoff pulled the retry forward to the coalesce delay");
+    await timers.advance(60_000);
+    assert.equal(wakes.length, 2, "and isn't woken for a second time off the stale in-flight note");
+  });
+
+  it("a handoff wake refused for good is tried again by a subscriber re-arm and by the renudge despite the live claim (#27 review)", async () => {
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, terminal: 1 });
+    const lease = () => ({ leaseExpiresAt: timers.now() + 60_000 });
+    c.update([{ ...d("a"), state: "pending" }]);
+    await timers.advance(500);
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }]); // handed over inside the coalesce window
+    await timers.advance(1_500); // the one wake is refused for good (410): the inbox item is unread, no run started
+    assert.equal(wakes.length, 0);
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }]);
+    c.subscriberAvailable(); // the callback was repaired
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a"]], "re-armed and woken under the live claim");
+    const { timers: t2, wakes: w2, c: c2 } = setup({ renudgeMs: 10 * 60_000, terminal: 1 });
+    const lease2 = () => ({ leaseExpiresAt: t2.now() + 60_000 });
+    c2.update([{ ...d("a"), state: "pending" }]);
+    await t2.advance(500);
+    c2.update([{ ...d("a"), state: "delivered", claim: lease2() }]);
+    await t2.advance(1_500); // refused for good
+    for (let i = 0; i < 21; i++) {
+      await t2.advance(30_000);
+      c2.update([{ ...d("a"), state: "delivered", claim: lease2() }]); // the claim is renewed throughout
+    }
+    assert.deepEqual(w2, [["a"]], "the 10 min renudge went out under the live claim: no wake had landed");
+  });
+
   it("a handoff that lands while a renudge is in flight gets its own wake right after", async () => {
     const timers = new FakeTimers();
     const wakes: string[][] = [];
