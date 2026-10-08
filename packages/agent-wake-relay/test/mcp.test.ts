@@ -889,6 +889,7 @@ describe("mcp config", () => {
     assert.equal(c.mcp!.jwksUrl, "https://enthusiastic-roar-48-staging.authkit.app/oauth2/jwks");
     assert.equal(c.mcp!.maxTtlMs, 30 * 86_400_000);
     assert.equal(parseConfig({ ...base, targets: [{ ...target, waker: { kind: "mcp-events", event: "dot.wake" } }], mcp }).targets[0]!.waker.kind, "mcp-events");
+    for (const bad of [123, ["dot.wake"]]) assert.throws(() => parseConfig({ ...base, targets: [{ ...target, waker: { kind: "mcp-events", event: bad } }], mcp }), /waker\.event: expected a name/, "a non-string event name is refused, not coerced");
     assert.throws(() => parseConfig({ ...base, mcp: { ...mcp, workosApiKeyFile: undefined } }), /workosApiKeyFile/);
     assert.throws(() => parseConfig({ ...base, mcp: { ...mcp, workosApiKeyFile: join(dir, "nope") } }), /doesn't exist/);
     assert.throws(() => parseConfig({ ...base, mcp: { ...mcp, allowedEmails: [] } }), /allowedEmails or allowedSubjects/);

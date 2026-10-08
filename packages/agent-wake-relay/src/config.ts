@@ -130,7 +130,7 @@ export function parseConfig(raw: unknown): WakeConfig {
     let waker: WakerConfig;
     if (w.kind === "mcp-events") {
       const event = eventName(t.participant, w as { kind: "mcp-events"; event?: string });
-      if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(event)) throw new ConfigError(`${at}.waker.event: expected a name of letters, digits, ".", "_" and "-"`);
+      if (typeof event !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(event)) throw new ConfigError(`${at}.waker.event: expected a name of letters, digits, ".", "_" and "-"`);
       if (events.has(event)) throw new ConfigError(`${at}.waker.event: ${event} is used twice`);
       events.add(event);
       waker = { kind: "mcp-events", event };
