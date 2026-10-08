@@ -125,6 +125,7 @@ test('web service starts through the deployed current directory link' + (lowerDr
       await symlink(join(dir, 'nowhere'), `${locked}.lock`);
       await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /not a regular file/);
       await rm(`${locked}.lock`);
+      await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: join(dir, 'w.sock'), lockWaitMs: '200' }, () => {}), /lockWaitMs must be a non-negative number/);
       await writeFile(`${locked}.lock`, String(process.pid));
       await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /another instance is starting/);
       await rm(`${locked}.lock`);

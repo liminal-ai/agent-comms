@@ -20,9 +20,11 @@ import { convexWebBackend } from '../packages/service/src/convex-backend.ts';
  */
 export async function listenWeb(server, config, log = (line) => console.log(line)) {
   if (config.socket) {
+    const lockWaitMs = config.lockWaitMs ?? 5000;
+    if (typeof lockWaitMs !== 'number' || !Number.isFinite(lockWaitMs) || lockWaitMs < 0) throw new Error('web config: lockWaitMs must be a non-negative number of milliseconds');
     // Starters take turns under a lock, so the probe, the removal of a stale socket and the bind
     // happen with no other starter in between, and a live socket keeps its path throughout.
-    await withStartLock(config.socket, config.lockWaitMs ?? 5000, async () => {
+    await withStartLock(config.socket, lockWaitMs, async () => {
       // Looked at under the lock, so it can't have changed under us by the time we act on it.
       const existing = await lstat(config.socket).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
       if (existing && !existing.isSocket()) throw new Error(`web config: socket path ${config.socket} exists and is not a socket; refusing to replace it`);
@@ -81,18 +83,24 @@ async function withStartLock(socket, waitMs, fn) {
         if (await claim(guard)) {
           try {
             // Under the guard the lock can't be replaced (link() refuses while it exists) or removed by
-            // anyone else, so this is the same entry we classified; re-check and remove it.
+            // anyone else, so this is the same entry we classified; re-check, confirm the guard is still
+            // ours (a stale-guard reclaim by another starter could have displaced it), then remove it.
             const again = await inspect(lock);
-            if (again !== null && again.st.ino === seen.st.ino && again.st.dev === seen.st.dev && again.stale) await rm(lock, { force: true });
+            const stillMine = (await readFile(guard, 'utf8').catch(() => '')).trim() === String(process.pid);
+            if (stillMine && again !== null && again.st.ino === seen.st.ino && again.st.dev === seen.st.dev && again.stale) await rm(lock, { force: true });
           } finally {
-            await rm(guard, { force: true });
+            if ((await readFile(guard, 'utf8').catch(() => '')).trim() === String(process.pid)) await rm(guard, { force: true });
           }
           continue;
         }
         // Someone else is reclaiming. A guard whose reclaimer died (dead pid, and older than the
-        // wait period, which a live reclaim never reaches) is itself stale and is removed.
+        // wait period, which a live reclaim never reaches) is itself stale: remove it only if it is
+        // still the entry we inspected.
         const g = await inspect(guard);
-        if (g !== null && g.stale && Date.now() - g.st.mtimeMs >= waitMs) await rm(guard, { force: true });
+        if (g !== null && g.stale && Date.now() - g.st.mtimeMs >= waitMs) {
+          const check = await inspect(guard);
+          if (check !== null && check.st.ino === g.st.ino && check.st.dev === g.st.dev) await rm(guard, { force: true });
+        }
       }
       if (Date.now() >= deadline) throw new Error(`web config: another instance is starting on ${socket} (lock ${lock} held by pid ${seen?.holder || 'unknown'})`);
       await new Promise((resolve) => setTimeout(resolve, 50));
