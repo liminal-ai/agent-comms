@@ -243,11 +243,14 @@ export class Coordinator {
   /**
    * A handoff noted between a failed wake and its retry: the retry would resend the retained event for this id,
    * which a receiver that processed it and only lost the response would dedupe, so the waker forgets the id and
-   * the wake for the handoff is a new event. Never while a wake is out: a forget during its preparation would drop
+   * the wake for the handoff is a new event, with a new wake id. Never while a wake is out: a forget during its preparation would drop
    * the id from it; a handoff then is noted in `transitioned` and gets its own wake after that wake ends.
    */
   private freshEventFor(id: string): void {
-    if (this.wakeId !== null && !this.inFlight) this.o.forget?.([id]);
+    if (this.wakeId === null || this.inFlight) return;
+    this.o.forget?.([id]);
+    // The webhook waker sends the wake id itself for the receiver's dedupe: the handoff wake gets a new one.
+    this.wakeId = null;
   }
 
   /** Handoffs to delivered that landed while a wake was out get their own wake, whatever became of that wake. */

@@ -549,14 +549,16 @@ describe("coordinator", () => {
     const timers = new FakeTimers();
     const forgotten: string[][] = [];
     const wakes: string[][] = [];
+    const wakeIds: string[] = [];
     const c = new Coordinator({
       participant: "grok",
       timers,
       log: () => {},
       renudgeMs: 10 * 60_000,
       forget: (ids) => forgotten.push(ids),
-      wake: async (ids) => {
+      wake: async (ids, info) => {
         wakes.push(ids);
+        wakeIds.push(info?.wakeId ?? "");
         if (wakes.length === 1) throw new Error("socket hang up");
       },
     });
@@ -567,6 +569,7 @@ describe("coordinator", () => {
     assert.deepEqual(forgotten, [["a"]], "the retained event is dropped for a before the handoff wake");
     await timers.advance(2_001);
     assert.deepEqual(wakes, [["a"], ["a"]], "the handoff wake went out after the coalesce delay");
+    assert.notEqual(wakeIds[1], wakeIds[0], "under a new wake id, so a webhook receiver that deduped on it can't discard it");
     assert.equal(forgotten.length, 1, "a handoff with no retry pending forgets nothing");
   });
 
