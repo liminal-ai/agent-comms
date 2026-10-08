@@ -986,6 +986,33 @@ describe("subscription store", () => {
     assert.equal(store.get("sub_x"), undefined, "nor after the write failed");
   });
 
+  it("pruning while a put is in flight is not undone by that put", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const path = join(dir, "state.json");
+    let now = Date.now();
+    const store = new SubscriptionStore(path, () => now);
+    const base = { principal: "u", url: "https://example.com/h", event: "comms.delivery.dot", arguments: "{}", secret: "whsec_x", createdAt: 0, verifiedAt: 0 };
+    await store.put({ ...base, id: "sub_old", expiresAt: now + 1_000 } as unknown as Subscription);
+    now += 2_000; // sub_old has expired
+    const writer = store as unknown as { write: (subs: unknown) => Promise<void> };
+    const realWrite = writer.write.bind(store);
+    let release!: () => void;
+    writer.write = async (subs) => {
+      writer.write = realWrite;
+      await new Promise<void>((r) => (release = r));
+      return realWrite(subs);
+    };
+    const inFlight = store.put({ ...base, id: "sub_new", expiresAt: now + 60_000 } as unknown as Subscription);
+    await new Promise((r) => setImmediate(r));
+    const pruned = store.pruneExpired(); // queued behind the in-flight put
+    release();
+    await inFlight;
+    assert.equal(await pruned, true);
+    assert.equal(store.get("sub_old"), undefined, "the expired entry is gone from the live map");
+    const onDisk = JSON.parse(await readFile(path, "utf8")) as { subscriptions: { id: string }[] };
+    assert.deepEqual(onDisk.subscriptions.map((s) => s.id).sort(), ["sub_new"], "and from the state file");
+  });
+
   it("leaves the live map unchanged when the state file can't be written", async () => {
     const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
     const store = new SubscriptionStore(join(dir, "missing-dir", "state.json"));

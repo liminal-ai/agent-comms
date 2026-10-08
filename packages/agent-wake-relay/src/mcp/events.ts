@@ -318,7 +318,7 @@ export class EventHub {
     return async (deliveryIds) => {
       // Dropping expired entries is bookkeeping; a state file that can't be written right now
       // doesn't hold up a wake that live subscribers are waiting for.
-      if (this.o.store.prune()) await this.o.store.save().catch((error: unknown) => this.o.log(`mcp: could not save the removal of expired subscriptions (${(error as NodeJS.ErrnoException)?.code ?? "error"})`));
+      await this.o.store.pruneExpired().catch((error: unknown) => this.o.log(`mcp: could not save the removal of expired subscriptions (${(error as NodeJS.ErrnoException)?.code ?? "error"})`));
       let subs = this.o.store.active(t.event);
       if (this.o.authorize) {
         const allowed: Subscription[] = [];

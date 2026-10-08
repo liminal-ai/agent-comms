@@ -114,7 +114,19 @@ export class SubscriptionStore {
     });
   }
 
-  /** Drop expired subscriptions. Returns whether anything went. */
+  /** Drop expired subscriptions and persist that, at this call's turn in the queue, so an in-flight mutation can't publish them back. Resolves to whether anything went. */
+  pruneExpired(): Promise<boolean> {
+    return this.serialized(async () => {
+      const now = this.now();
+      const next = new Map([...this.subs].filter(([, s]) => s.expiresAt > now));
+      if (next.size === this.subs.size) return false;
+      await this.write(next);
+      this.subs = next;
+      return true;
+    });
+  }
+
+  /** Drop expired subscriptions from the live map only. Call it from inside the queue (a put guard); elsewhere use pruneExpired(). Returns whether anything went. */
   prune(): boolean {
     const now = this.now();
     let changed = false;
