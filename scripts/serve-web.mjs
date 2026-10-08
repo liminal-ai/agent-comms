@@ -5,8 +5,9 @@
 // `allowedClients` (proxy mode) limits who is served to the tailnet addresses tailscale serve reports
 // in X-Forwarded-For; `devAllowLoopback: true` lets header-less loopback requests through in development.
 import { createServer } from 'node:http';
+import { randomBytes } from 'node:crypto';
 import { connect } from 'node:net';
-import { chmod, lstat, readFile, realpath, rm } from 'node:fs/promises';
+import { chmod, lstat, readFile, realpath, rename, rm } from 'node:fs/promises';
 import { basename, resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localWebServer } from '../packages/service/src/web.ts';
@@ -22,9 +23,17 @@ export async function listenWeb(server, config, log = (line) => console.log(line
     const existing = await lstat(config.socket).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
     if (existing && !existing.isSocket()) throw new Error(`web config: socket path ${config.socket} exists and is not a socket; refusing to replace it`);
     if (existing) {
-      // Only a stale socket (nobody listening) is replaced; a live one belongs to a running instance.
-      if (await socketAnswers(config.socket)) throw new Error(`web config: socket ${config.socket} is in use by another instance; refusing to take it over`);
-      await rm(config.socket);
+      // Claim the path first (rename is atomic, so of two starters only one gets it), then probe what
+      // was claimed: a live socket still answers at its new name and is put back; a stale one is removed.
+      const claim = `${config.socket}.${process.pid}.${randomBytes(4).toString('hex')}.stale`;
+      const claimed = await rename(config.socket, claim).then(() => true, (error) => { if (error.code === 'ENOENT') return false; throw error; });
+      if (claimed) {
+        if (await socketAnswers(claim)) {
+          await rename(claim, config.socket).catch(() => {});
+          throw new Error(`web config: socket ${config.socket} is in use by another instance; refusing to take it over`);
+        }
+        await rm(claim);
+      }
     }
     // Created mode 600 from the first instant (umask 177), so nobody can connect before the chmod below.
     const umask = process.umask(0o177);

@@ -87,6 +87,22 @@ test('web service starts through the deployed current directory link' + (lowerDr
         const second = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: live }, () => {});
         try { assert.ok(second.listening, 'a stale socket is replaced'); } finally { await stop(second); }
       }
+      // Two starters racing for the same stale socket: exactly one binds, and it keeps serving.
+      const raced = join(dir, 'raced.sock');
+      const abandoned = rawServer(); await new Promise((r) => abandoned.listen(raced, r)); abandoned.unref();
+      await new Promise((r) => abandoned.close(r));
+      if (!(await statSock(raced).then(() => true, () => false))) await writeFile(raced, '');
+      if ((await statSock(raced)).isSocket()) {
+        const outcomes = await Promise.allSettled([1, 2].map(() => listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: raced }, () => {})));
+        const winners = outcomes.filter((o) => o.status === 'fulfilled').map((o) => o.value);
+        try {
+          assert.equal(winners.length, 1, `exactly one starter wins (${outcomes.map((o) => o.status).join(', ')})`);
+          const health = await new Promise((resolve, reject) => request({ socketPath: raced, path: '/healthz' }, (res) => resolve(res.statusCode)).on('error', reject).end());
+          assert.equal(health, 200, 'the winner serves at the path');
+        } finally {
+          await Promise.all(winners.map((w) => stop(w)));
+        }
+      }
       // Deployed shape: a mode-600 unix socket for the serve hop.
       const sock = join(dir, 'web.sock');
       const sockConfig = join(dir, 'config-sock.json');
