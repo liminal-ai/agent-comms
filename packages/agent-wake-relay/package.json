@@ -1,0 +1,24 @@
+{
+  "name": "@agent-comms/agent-wake-relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "agent-wake-relay: provider-specific code that wakes sandboxed and similar agents, which can't keep a listener running, when comms has a delivery for them. Runs on an always-on host.",
+  "bin": {
+    "agent-wake-relay": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test --test-timeout=60000 \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@agent-comms/protocol": "workspace:*",
+    "convex": "1.46.0",
+    "jose": "6.2.12"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
