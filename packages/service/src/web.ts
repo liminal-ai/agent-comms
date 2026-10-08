@@ -4,10 +4,15 @@
 // behind Host/Origin checks and the admin token as a bearer header.
 
 import { createHash, timingSafeEqual } from "node:crypto";
+import { BlockList, isIP } from "node:net";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, resolve, sep } from "node:path";
-import type { LocalBackend } from "@agent-comms/local-backend";
+import type { FunctionInfo, LocalBackend } from "@agent-comms/local-backend";
+
+/** What the web API needs from a backend: the local SQLite one, or a proxy to a Convex deployment. */
+export type WebBackend = Pick<LocalBackend, "info" | "call" | "subscribe">;
+export type { FunctionInfo };
 
 /** Modules whose public functions the web view and admin commands may call. */
 export const WEB_MODULES = new Set(["alerts", "conversations", "directory", "inbox", "registry", "reminders"]);
@@ -23,8 +28,31 @@ const TYPES: Record<string, string> = {
 };
 
 export interface WebOptions {
-  backend: LocalBackend;
-  adminToken: string;
+  backend: WebBackend;
+  /**
+   * `local`: the page sends this token as a bearer header and only loopback Hosts are served.
+   * `proxy`: no page token and any Host; the backend holds the real admin token and the network
+   * (a tailnet-only listener, a firewall) decides who may reach the page. The token never reaches a browser.
+   */
+  mode?: "local" | "proxy";
+  adminToken?: string;
+  /**
+   * Proxy mode: the only client addresses served, as `tailscale serve` reports them in the single
+   * `X-Forwarded-For` value it sets (it overwrites the header with the real peer). With this set, a
+   * request whose header is missing, multi-valued, unparsable, or not listed gets 403, including
+   * loopback requests that bypassed serve, unless `devAllowLoopback` is on.
+   */
+  allowedClients?: string[];
+  /** Development only: with `allowedClients`, accept header-less requests from loopback. Off in prod. */
+  devAllowLoopback?: boolean;
+  /** Proxy mode: the Host values the page is published under (e.g. `lim-builder.tailb30114.ts.net:8461`). Any other Host is refused, as in local mode; DNS rebinding can't reach the API. Required in proxy mode. */
+  publicHosts?: string[];
+  /**
+   * Proxy mode over a unix socket: `tailscale serve` rewrites `Host` to `localhost` for unix targets and
+   * carries the public name in a single `X-Forwarded-Host`, so that header is what the Host and Origin
+   * checks compare against. Only safe when the hop is authenticated (the mode-600 socket); never over TCP.
+   */
+  trustForwardedHost?: boolean;
   environment: string;
   /** The built web view; absent serves only the API. */
   root?: string;
@@ -40,7 +68,13 @@ class HttpError extends Error {
 }
 
 export function localWebServer(options: WebOptions): Server & { streams(): number } {
-  const expected = digest(options.adminToken);
+  const mode = options.mode ?? "local";
+  if (mode === "local" && !options.adminToken) throw new Error("local mode needs an admin token");
+  // An admin proxy that admits any client or any Host would hand the page's power to the network; no caller may build one.
+  if (mode === "proxy" && (!options.publicHosts?.length || !options.allowedClients?.length)) throw new Error("proxy mode needs publicHosts and allowedClients");
+  if (options.trustForwardedHost && mode !== "proxy") throw new Error("trustForwardedHost is only for proxy mode");
+  const expected = options.adminToken ? digest(options.adminToken) : undefined;
+  const clients = options.allowedClients ? allowlist(options.allowedClients) : undefined;
   let streams = 0;
 
   const server = createServer(async (req, res) => {
@@ -48,21 +82,26 @@ export function localWebServer(options: WebOptions): Server & { streams(): numbe
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Referrer-Policy", "no-referrer");
     try {
-      checkHost(req, server);
+      const host = options.trustForwardedHost ? forwardedHost(req) : (req.headers.host ?? "");
+      if (mode === "local") checkHost(req, server);
+      else checkPublicHost(host, options.publicHosts!, options.devAllowLoopback === true, server);
+      if (clients) checkClient(req, clients, options.devAllowLoopback === true);
       const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
       if (pathname.startsWith("/api/")) {
         if (req.method !== "POST") throw new HttpError(405, "POST only");
-        checkOrigin(req);
+        checkOrigin(req, host);
         if (!/^application\/json\b/.test(req.headers["content-type"] ?? "")) throw new HttpError(415, "send application/json");
-        const auth = /^Bearer (.+)$/.exec(req.headers.authorization ?? "")?.[1];
-        if (!auth || !timingSafeEqual(digest(auth), expected)) throw new HttpError(401, "admin token rejected");
+        if (expected) {
+          const auth = /^Bearer (.+)$/.exec(req.headers.authorization ?? "")?.[1];
+          if (!auth || !timingSafeEqual(digest(auth), expected)) throw new HttpError(401, "admin token rejected");
+        }
         if (pathname === "/api/call") return await call(req, res);
         if (pathname === "/api/watch") return await watch(req, res);
         throw new HttpError(404, "no such endpoint");
       }
       if (req.method !== "GET" && req.method !== "HEAD") throw new HttpError(405, "GET only");
-      if (pathname === "/runtime-config.json") return json(res, 200, { environment: options.environment, mode: "local" });
-      if (pathname === "/healthz") return json(res, 200, { environment: options.environment, mode: "local", status: "ok" });
+      if (pathname === "/runtime-config.json") return json(res, 200, { environment: options.environment, mode });
+      if (pathname === "/healthz") return json(res, 200, { environment: options.environment, mode, status: "ok" });
       if (!options.root) throw new HttpError(404, "not found");
       const root = resolve(options.root);
       const path = resolve(root, "." + decodeURIComponent(pathname === "/" ? "/index.html" : pathname));
@@ -164,6 +203,50 @@ export function localWebServer(options: WebOptions): Server & { streams(): numbe
   return Object.assign(server, { streams: () => streams });
 }
 
+function allowlist(addresses: string[]): BlockList {
+  const list = new BlockList();
+  for (const a of addresses) {
+    const family = isIP(a);
+    if (!family) throw new Error(`allowedClients: "${a}" is not an IP address`);
+    list.addAddress(a, family === 6 ? "ipv6" : "ipv4");
+  }
+  return list;
+}
+
+/**
+ * The client as `tailscale serve` reports it: exactly one `X-Forwarded-For` value that is an IP on the
+ * list. Anything else is refused, with no guessing among several values. A request with no header came
+ * from somewhere other than serve (loopback), which only development may allow.
+ */
+function checkClient(req: IncomingMessage, clients: BlockList, devAllowLoopback: boolean): void {
+  const raw = req.headers["x-forwarded-for"];
+  if (raw === undefined) {
+    const peer = req.socket.remoteAddress ?? "";
+    if (devAllowLoopback && (peer === "127.0.0.1" || peer === "::1" || peer === "::ffff:127.0.0.1")) return;
+    throw new HttpError(403, "client not allowed");
+  }
+  if (Array.isArray(raw) || raw.includes(",")) throw new HttpError(403, "client not allowed");
+  const value = raw.trim();
+  const family = isIP(value);
+  if (!family || !clients.check(value, family === 6 ? "ipv6" : "ipv4")) throw new HttpError(403, "client not allowed");
+}
+
+/** Over an authenticated socket hop: the single public name `tailscale serve` forwards. Missing, repeated or comma-joined is refused. */
+function forwardedHost(req: IncomingMessage): string {
+  const raw = req.headers["x-forwarded-host"];
+  if (raw === undefined || Array.isArray(raw) || raw.includes(",")) throw new HttpError(403, "unexpected Host");
+  return raw.trim();
+}
+
+/** Proxy mode: only the published names (plus loopback in development). */
+function checkPublicHost(hostValue: string, hosts: string[], devAllowLoopback: boolean, server: Server): void {
+  const host = hostValue.toLowerCase();
+  if (hosts.some((h) => h.toLowerCase() === host)) return;
+  const port = (server.address() as { port: number } | null)?.port;
+  if (devAllowLoopback && allowedHosts(port ?? -1).has(host)) return;
+  throw new HttpError(403, "unexpected Host");
+}
+
 /** Only this listener's own loopback names: a page from elsewhere (DNS rebinding included) can't reach the API. */
 function checkHost(req: IncomingMessage, server: Server): void {
   const port = (server.address() as { port: number } | null)?.port;
@@ -176,11 +259,21 @@ export function allowedHosts(port: number): Set<string> {
   return new Set(["127.0.0.1", "localhost", "[::1]"].flatMap((n) => (port === 80 ? [n, `${n}:80`] : [`${n}:${port}`])));
 }
 
-function checkOrigin(req: IncomingMessage): void {
+/** The page's own origin only. Behind a TLS proxy (tailscale serve) the browser's Origin is https while the hop here is http, so the scheme isn't compared. */
+function checkOrigin(req: IncomingMessage, host: string): void {
   const origin = req.headers.origin;
-  if (origin !== undefined && origin !== `http://${req.headers.host}`) throw new HttpError(403, "cross-origin requests are refused");
+  if (origin !== undefined && originHost(origin) !== host) throw new HttpError(403, "cross-origin requests are refused");
   if (req.headers["sec-fetch-site"] && !["same-origin", "none"].includes(req.headers["sec-fetch-site"] as string)) {
     throw new HttpError(403, "cross-site requests are refused");
+  }
+}
+
+function originHost(origin: string): string | undefined {
+  try {
+    const u = new URL(origin);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.host : undefined;
+  } catch {
+    return undefined;
   }
 }
 

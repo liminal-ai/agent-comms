@@ -11,7 +11,7 @@ await mkdir(dest, { recursive: false });
 await build({
   entryPoints: {
     connector: 'packages/connector/src/main.ts', comms: 'packages/comms-cli/src/main.ts',
-    upgrade: 'scripts/upgrade.ts', setup: 'scripts/dev-setup.ts', service: 'packages/service/src/main.ts', oaidot: 'packages/oaidot/src/main.ts', grokbot: 'packages/grokbot/src/main.ts',
+    upgrade: 'scripts/upgrade.ts', setup: 'scripts/dev-setup.ts', service: 'packages/service/src/main.ts', 'serve-web': 'scripts/serve-web.mjs', oaidot: 'packages/oaidot/src/main.ts', grokbot: 'packages/grokbot/src/main.ts',
   }, outdir: dest, outExtension: { '.js': '.mjs' }, bundle: true, platform: 'node', format: 'esm', target: 'node24',
   banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
 });
@@ -25,7 +25,7 @@ await cp('packages/claude-code-mod/.claude-plugin', `${dest}/claude-plugin/.clau
 await cp('packages/claude-code-mod/hooks', `${dest}/claude-plugin/hooks`, { recursive: true });
 execFileSync('pnpm', ['--filter', '@agent-comms/web', 'build'], { stdio: 'inherit', shell: process.platform === 'win32' });
 await cp('apps/web/dist', `${dest}/web`, { recursive: true });
-for (const name of ['serve-web.mjs', 'run-convex.mjs']) await cp(`scripts/${name}`, `${dest}/${name}`);
+for (const name of ['run-convex.mjs']) await cp(`scripts/${name}`, `${dest}/${name}`);
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 await writeFile(`${dest}/release.json`, JSON.stringify({ version, commit, node: '24.18.0', convexBackend: 'precompiled-2026-09-28-5c7cb5b' }, null, 2)+'\n');
 console.log(dest);
