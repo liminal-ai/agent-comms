@@ -57,6 +57,11 @@ const realTimers: Timers = {
 export interface CoordinatorOptions {
   /** Called with the ids of deliveries that are no longer outstanding, so a waker can drop what it kept for them. */
   forget?: (ids: string[]) => void;
+  /**
+   * Called with ids whose next wake must be a new event (a handoff landed after the kept one was built): a waker
+   * drops whatever it kept for them, including a kept event's other ids, so that one fresh event covers them all.
+   */
+  retire?: (ids: string[]) => void;
   participant: string;
   wake: WakeFn;
   log: (line: string) => void;
@@ -70,7 +75,11 @@ export interface CoordinatorOptions {
 }
 
 export class Coordinator {
-  private readonly o: Required<Omit<CoordinatorOptions, "timers" | "forget">> & { timers: Timers; forget?: (ids: string[]) => void };
+  private readonly o: Required<Omit<CoordinatorOptions, "timers" | "forget" | "retire">> & {
+    timers: Timers;
+    forget?: (ids: string[]) => void;
+    retire?: (ids: string[]) => void;
+  };
   /** Outstanding deliveries for the participant → when they were last woken for (0 = not yet). */
   /** Delivery id -> when it was last woken for (0 = never). */
   private readonly outstanding = new Map<string, number>();
@@ -244,13 +253,13 @@ export class Coordinator {
 
   /**
    * Handoffs noted between a failed wake and its retry: the retry would resend the retained event for these ids,
-   * which a receiver that processed it and only lost the response would dedupe, so the waker forgets the id and
+   * which a receiver that processed it and only lost the response would dedupe, so the waker retires it and
    * the wake for the handoff is a new event, with a new wake id. Never while a wake is out: a forget during its preparation would drop
    * the id from it; a handoff then is noted in `transitioned` and gets its own wake after that wake ends.
    */
   private freshEventFor(ids: string[]): void {
     if (!ids.length || this.wakeId === null || this.inFlight) return;
-    this.o.forget?.(ids);
+    this.o.retire?.(ids);
     // The webhook waker sends the wake id itself for the receiver's dedupe: the handoff wake gets a new one.
     this.wakeId = null;
   }
@@ -282,7 +291,7 @@ export class Coordinator {
     }
     if (!again.length) return;
     if (dropRetained && this.wakeId !== null) {
-      this.o.forget?.(again);
+      this.o.retire?.(again);
       this.wakeId = null;
     }
     // Something new to wake for: a give-up no longer applies.
@@ -448,7 +457,7 @@ export class Coordinator {
         // receiver that processed it and only lost the response would dedupe, so the waker forgets it and the
         // retry's event for it is a new one. (A refusal or give-up drops it in wakeAgainForHandoffs instead.)
         const stale = rest.filter((id) => this.owedAfterWake.has(id));
-        if (stale.length) this.o.forget?.(stale);
+        if (stale.length) this.o.retire?.(stale);
         this.schedule(delay);
       }
     } finally {

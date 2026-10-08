@@ -327,6 +327,26 @@ export class EventHub {
     return last;
   }
 
+  /**
+   * Deliveries whose next wake must be a new event: a handoff landed for them after the kept event was built, so a
+   * receiver that processed that event (its response lost) would dedupe a resend. A pending event holding any of
+   * them is dropped whole, so the next wake sends one fresh event for all its ids rather than the kept one plus a
+   * fresh one (two events, two runs). Deliberate trade-off: if the kept event had in fact been processed with its
+   * response lost, its other ids get a repeated run; that needs a lost response and a handoff in the same retry
+   * window, and the alternative is a lost wake for the handoff. An accepted event is settled as in forget().
+   */
+  retire(participant: string, ids: string[]): void {
+    const hit = new Set(ids);
+    const kept: Attempt[] = [];
+    for (const a of this.attempts.get(participant) ?? []) {
+      if (a.state === "pending" && a.ids.some((id) => hit.has(id))) continue;
+      for (const id of ids) a.settled.add(id);
+      if (a.ids.some((id) => !a.settled.has(id))) kept.push(a);
+    }
+    if (kept.length) this.attempts.set(participant, kept);
+    else this.attempts.delete(participant);
+  }
+
   /** Deliveries that are no longer outstanding: whatever was kept to retry them is dropped, so a backlog that was answered meanwhile doesn't linger. */
   forget(participant: string, ids: string[]): void {
     // A wake being prepared (pruning, access checks) hasn't published its attempts yet; what's
@@ -396,8 +416,7 @@ export class EventHub {
       // Deliveries forgotten while this wake was being prepared are settled before anything is published.
       const current = new Set(deliveryIds.filter((id) => !forgotten.has(id)));
       const attempts = (this.attempts.get(participant) ?? []).filter((a) => a.ids.some((id) => current.has(id)));
-      // An id settled out of a kept attempt (forgotten, then outstanding again) gets a new event rather than the old one.
-      const covered = new Set(attempts.flatMap((a) => a.ids.filter((id) => !a.settled.has(id))));
+      const covered = new Set(attempts.flatMap((a) => a.ids));
       for (const ids of this.chunk(participant, t.event, [...current].filter((id) => !covered.has(id)).sort())) {
         const event = this.event(t.event, randomId("evt"), participant, ids);
         attempts.push({ eventId: event.eventId, ids, event, body: JSON.stringify(event), state: "pending", refused: new Set(), settled: new Set() });

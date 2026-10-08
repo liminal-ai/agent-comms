@@ -489,10 +489,10 @@ describe("coordinator", () => {
     assert.equal(wakes.length, 2, "then the live lease holds a's renudges");
   });
 
-  it("an id handed over and gone while its wake is out is forgotten by the waker when that wake fails, so the retry's event is new (#27 review)", async () => {
+  it("an id handed over and gone while its wake is out is retired by the waker when that wake fails, so the retry's event is new (#27 review)", async () => {
     // A receiver that processed the first event and only lost the response would dedupe a retry of the same event.
     const timers = new FakeTimers();
-    const forgotten: string[][] = [];
+    const retired: string[][] = [];
     const wakes: string[][] = [];
     let release: (e: Error) => void = () => {};
     const c = new Coordinator({
@@ -500,7 +500,7 @@ describe("coordinator", () => {
       timers,
       log: () => {},
       renudgeMs: 0,
-      forget: (ids) => forgotten.push(ids),
+      retire: (ids) => retired.push(ids),
       wake: async (ids) => {
         wakes.push(ids);
         if (wakes.length === 1) await new Promise<void>((_, reject) => (release = reject));
@@ -512,7 +512,7 @@ describe("coordinator", () => {
     c.update([]); // and gone
     release(new Error("socket hang up")); // the response was lost
     await new Promise((r) => setImmediate(r));
-    assert.deepEqual(forgotten, [["b"]], "the waker drops the event it may have got through, so the retry mints a new one");
+    assert.deepEqual(retired, [["b"]], "the waker drops the event it may have got through, so the retry mints a new one");
     await timers.advance(30_000);
     assert.deepEqual(wakes, [["b"], ["b"]], "the retry carries b");
     await timers.advance(60 * 60_000);
@@ -544,10 +544,10 @@ describe("coordinator", () => {
     assert.ok(wakes[1]!.includes("a"), `and carried a: ${JSON.stringify(wakes[1])}`);
   });
 
-  it("a handoff noted between a failed wake and its retry makes the waker forget the id, so the handoff wake is a new event (#27 review)", async () => {
+  it("a handoff noted between a failed wake and its retry makes the waker retire its event, so the handoff wake is a new event (#27 review)", async () => {
     // The failed wake may have been processed with its response lost; the retry would be deduped and count as landed.
     const timers = new FakeTimers();
-    const forgotten: string[][] = [];
+    const retired: string[][] = [];
     const wakes: string[][] = [];
     const wakeIds: string[] = [];
     const c = new Coordinator({
@@ -555,7 +555,7 @@ describe("coordinator", () => {
       timers,
       log: () => {},
       renudgeMs: 10 * 60_000,
-      forget: (ids) => forgotten.push(ids),
+      retire: (ids) => retired.push(ids),
       wake: async (ids, info) => {
         wakes.push(ids);
         wakeIds.push(info?.wakeId ?? "");
@@ -566,16 +566,16 @@ describe("coordinator", () => {
     c.update([{ ...d("a"), state: "pending" }]);
     await timers.advance(2_000); // the wake fails with a lost response; a retry is due in 30 s
     c.update([{ ...d("a"), state: "delivered", claim: lease() }]); // handed over during the retry delay
-    assert.deepEqual(forgotten, [["a"]], "the retained event is dropped for a before the handoff wake");
+    assert.deepEqual(retired, [["a"]], "the retained event is dropped for a before the handoff wake");
     await timers.advance(2_001);
     assert.deepEqual(wakes, [["a"], ["a"]], "the handoff wake went out after the coalesce delay");
     assert.notEqual(wakeIds[1], wakeIds[0], "under a new wake id, so a webhook receiver that deduped on it can't discard it");
-    assert.equal(forgotten.length, 1, "a handoff with no retry pending forgets nothing");
-    // Two handoffs in one update after a failed wake: both are forgotten, not just the first.
+    assert.equal(retired.length, 1, "a handoff with no retry pending forgets nothing");
+    // Two handoffs in one update after a failed wake: both are retired, not just the first.
     c.update([{ ...d("a"), state: "delivered", claim: lease() }, { ...d("b"), state: "pending" }, { ...d("c"), state: "pending" }]);
     await timers.advance(2_000); // the wake for b and c fails (lost response)
     c.update([{ ...d("a"), state: "delivered", claim: lease() }, { ...d("b"), state: "delivered", claim: lease() }, { ...d("c"), state: "delivered", claim: lease() }]);
-    assert.deepEqual(forgotten[1]?.sort(), ["b", "c"], "both handoffs noted in one update are forgotten");
+    assert.deepEqual(retired[1]?.sort(), ["b", "c"], "both handoffs noted in one update are retired");
   });
 
   it("a newcomer whose event is accepted on a retry of a failing wake isn't woken for again by the next retry (#27 review)", async () => {
@@ -886,7 +886,7 @@ describe("coordinator", () => {
     const timers = new FakeTimers();
     const wakes: string[][] = [];
     const logs: string[] = [];
-    const forgotten: string[][] = [];
+    const retired: string[][] = [];
     const wakeIds: string[] = [];
     let n = 0;
     // biome-ignore lint/style/useConst: assigned below
@@ -896,7 +896,7 @@ describe("coordinator", () => {
       timers,
       log: (l) => logs.push(l),
       renudgeMs: 0,
-      forget: (ids) => forgotten.push(ids),
+      retire: (ids) => retired.push(ids),
       wake: async (ids, info) => {
         n++;
         wakeIds.push(info?.wakeId ?? "");
@@ -911,7 +911,7 @@ describe("coordinator", () => {
     assert.deepEqual(wakes, [["a"]], "the handoff got its own wake once the failed run gave up");
     // Any of the failed attempts may have been processed with its response lost: the handoff wake is a new event
     // under a new wake id, so a receiver that deduped on either can't discard it.
-    assert.deepEqual(forgotten, [["a"]], "the waker dropped the given-up event for a first");
+    assert.deepEqual(retired, [["a"]], "the waker dropped the given-up event for a first");
     assert.equal(new Set(wakeIds.slice(0, RETRY_GIVE_UP)).size, 1, "the failed run kept one wake id");
     assert.notEqual(wakeIds[RETRY_GIVE_UP], wakeIds[0], "the handoff wake has a new one");
   });

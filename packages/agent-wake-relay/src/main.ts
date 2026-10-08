@@ -82,7 +82,12 @@ for (const t of config.targets) {
     wake: makeWaker(t.participant, t.waker, { events }),
     log,
     renudgeMs: t.renudgeMs,
-    ...(t.waker.kind === "mcp-events" && events ? { forget: (ids: string[]) => events.forget(t.participant, ids) } : {}),
+    ...(t.waker.kind === "mcp-events" && events
+      ? {
+          forget: (ids: string[]) => events.forget(t.participant, ids),
+          retire: (ids: string[]) => events.retire(t.participant, ids),
+        }
+      : {}),
   });
   coordinators.push(c);
   byParticipant.set(t.participant, c);
