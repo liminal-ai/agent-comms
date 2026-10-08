@@ -7,7 +7,7 @@ import * as convexReact from "convex/react";
 import { getFunctionName } from "convex/server";
 import { type ReactNode, useCallback, useMemo, useSyncExternalStore } from "react";
 
-export type Mode = "convex" | "local";
+export type Mode = "convex" | "local" | "proxy";
 let mode: Mode = "convex";
 let local: LocalClient | undefined;
 
@@ -24,25 +24,37 @@ export function startLocal(): void {
   local = new LocalClient(() => sessionStorage.getItem(TOKEN_KEY) ?? "");
 }
 
+/** Proxy mode: the served page's own server holds the admin token and adds it to every call; the page has none. */
+export function startProxy(): void {
+  mode = "proxy";
+  local = new LocalClient(() => "");
+}
+
+const PROXY_PLACEHOLDER = "(held by the server)";
+
+/** After an error boundary reset: drop every failed live query so the remount subscribes afresh instead of re-reading a cached error. */
+export function resetFailed(): void {
+  local?.resetFailed();
+}
 export const tokens = {
-  get: () => (mode === "local" ? sessionStorage : localStorage).getItem(TOKEN_KEY) ?? "",
-  set: (t: string) => (mode === "local" ? sessionStorage : localStorage).setItem(TOKEN_KEY, t),
-  forget: () => (mode === "local" ? sessionStorage : localStorage).removeItem(TOKEN_KEY),
+  get: () => (mode === "proxy" ? PROXY_PLACEHOLDER : (mode === "local" ? sessionStorage : localStorage).getItem(TOKEN_KEY) ?? ""),
+  set: (t: string) => mode !== "proxy" && (mode === "local" ? sessionStorage : localStorage).setItem(TOKEN_KEY, t),
+  forget: () => mode !== "proxy" && (mode === "local" ? sessionStorage : localStorage).removeItem(TOKEN_KEY),
 };
 
 export function BackendProvider({ convexUrl, children }: { convexUrl?: string; children: ReactNode }) {
   const client = useMemo(() => (mode === "convex" && convexUrl ? new convexReact.ConvexReactClient(convexUrl) : undefined), [convexUrl]);
-  if (mode === "local") return <>{children}</>;
+  if (mode !== "convex") return <>{children}</>;
   if (!client) throw new Error("This deployment has no Convex URL");
   return <convexReact.ConvexProvider client={client}>{children}</convexReact.ConvexProvider>;
 }
 
 // The mode never changes after startup, so each component always calls the same hooks.
 export const useQuery = ((ref: unknown, ...rest: unknown[]) =>
-  mode === "local" ? useLocalQuery(ref, rest[0]) : (convexReact.useQuery as (r: unknown, ...a: unknown[]) => unknown)(ref, ...rest)) as typeof convexReact.useQuery;
+  mode !== "convex" ? useLocalQuery(ref, rest[0]) : (convexReact.useQuery as (r: unknown, ...a: unknown[]) => unknown)(ref, ...rest)) as typeof convexReact.useQuery;
 
 export const useMutation = ((ref: unknown) =>
-  mode === "local" ? useLocalMutation(ref) : (convexReact.useMutation as (r: unknown) => unknown)(ref)) as typeof convexReact.useMutation;
+  mode !== "convex" ? useLocalMutation(ref) : (convexReact.useMutation as (r: unknown) => unknown)(ref)) as typeof convexReact.useMutation;
 
 function useLocalQuery(ref: unknown, args: unknown): unknown {
   const name = getFunctionName(ref as never);
@@ -87,8 +99,9 @@ class LocalClient {
     this.token = token;
   }
 
-  private headers() {
-    return { "content-type": "application/json", authorization: `Bearer ${this.token()}` };
+  private headers(): Record<string, string> {
+    const token = this.token();
+    return { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) };
   }
 
   async call(kind: "query" | "mutation", name: string, args: unknown): Promise<unknown> {
@@ -124,6 +137,17 @@ class LocalClient {
     };
     this.entries.set(key, e);
     return e;
+  }
+
+  resetFailed(): void {
+    let changed = false;
+    for (const [key, e] of this.entries) {
+      if (e.state?.error) {
+        this.entries.delete(key);
+        changed = true;
+      }
+    }
+    if (changed) this.reopen();
   }
 
   /** The watched set changed: one new stream carries all of it. */
