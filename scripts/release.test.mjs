@@ -56,6 +56,13 @@ test('web service starts through the deployed current directory link' + (lowerDr
       // A live socket is never unlinked from under its owner; a stale one is.
       const live = join(dir, 'live.sock');
       const stop = (s) => new Promise((resolve) => { s.closeAllConnections(); s.close(resolve); });
+      // A runtime 'error' after binding has no stale startup handler left to swallow it.
+      const probe = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: join(dir, 'probe.sock') }, () => {});
+      try {
+        assert.equal(probe.listenerCount('error'), 0, 'the startup error handler is detached once bound');
+      } finally {
+        await new Promise((resolve) => probe.close(resolve));
+      }
       const before = process.umask();
       const first = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: live }, () => {});
       try {
@@ -164,6 +171,19 @@ test('one web build serves each environment config at runtime, without leaking o
     assert.equal((await getAs(pport, { host: 'comms.example.test:8461', 'x-forwarded-for': '100.100.0.9' })).status, 403, 'unlisted client');
     assert.equal((await getAs(pport, { host: 'comms.example.test:8461' })).status, 403, 'no forwarded client');
     assert.deepEqual(JSON.parse(config), { environment: 'prod', mode: 'proxy' });
+    // close() finishes even with a watch stream held open by a client that never hangs up.
+    const held = webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile, allowedClients: ['127.0.0.1'], publicHosts: ['comms.example.test:8461'] }, dir, () => {});
+    await new Promise(resolve => held.listen(0, '127.0.0.1', resolve));
+    const hport = held.address().port;
+    const stream = await new Promise((resolve, reject) => {
+      const req = request({ host: '127.0.0.1', port: hport, method: 'POST', path: '/api/watch', headers: { host: 'comms.example.test:8461', 'x-forwarded-for': '127.0.0.1', 'content-type': 'application/json' } }, resolve);
+      req.on('error', reject);
+      req.end(JSON.stringify({ queries: [{ id: 'q', name: 'directory:list', args: {} }] }));
+    });
+    assert.equal(stream.statusCode, 200, 'the watch stream is open');
+    const closed = await Promise.race([new Promise(resolve => held.close(() => resolve('closed'))), new Promise(resolve => setTimeout(() => resolve('hung'), 5000))]);
+    assert.equal(closed, 'closed', 'close() ends the held stream instead of waiting on it');
+    stream.destroy();
     assert.doesNotMatch(config, /released-admin-token/);
   } finally {
     await Promise.all(servers.map(s => new Promise(resolve => { s.closeAllConnections(); s.close(resolve); })));

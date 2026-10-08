@@ -29,14 +29,14 @@ export async function listenWeb(server, config, log = (line) => console.log(line
     // Created mode 600 from the first instant (umask 177), so nobody can connect before the chmod below.
     const umask = process.umask(0o177);
     try {
-      await new Promise((resolve, reject) => server.once('error', reject).listen(config.socket, resolve));
+      await bind(server, config.socket);
     } finally {
       process.umask(umask);
     }
     await chmod(config.socket, 0o600);
     log(`Comms ${config.environment} web: unix:${config.socket}${config.adminTokenFile ? ' (proxy mode)' : ''}`);
   } else {
-    await new Promise((resolve, reject) => server.once('error', reject).listen(config.port, '127.0.0.1', resolve));
+    await bind(server, config.port, '127.0.0.1');
     log(`Comms ${config.environment} web: 127.0.0.1:${server.address().port}${config.adminTokenFile ? ' (proxy mode)' : ''}`);
   }
   return server;
@@ -70,8 +70,18 @@ export function webListener(config, root, log = (line) => console.log(line)) {
     ...(config.publicHosts ? { publicHosts: config.publicHosts } : {}),
   });
   const close = server.close.bind(server);
-  server.close = (cb) => { void backend.close(); return close(cb); };
+  // Open /api/watch streams would keep close() from ever finishing; end them once the listener is shut.
+  server.close = (cb) => { const result = close(cb); server.closeAllConnections(); void backend.close(); return result; };
   return server;
+}
+
+/** Resolves once the server listens, rejects if binding fails; the startup error handler is gone either way, so a later runtime error isn't swallowed by it. */
+function bind(server, ...args) {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => reject(error);
+    server.once('error', onError);
+    server.listen(...args, () => { server.off('error', onError); resolve(); });
+  });
 }
 
 export function webServer(config, root) {
