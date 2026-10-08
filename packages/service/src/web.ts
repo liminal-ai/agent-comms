@@ -45,8 +45,14 @@ export interface WebOptions {
   allowedClients?: string[];
   /** Development only: with `allowedClients`, accept header-less requests from loopback. Off in prod. */
   devAllowLoopback?: boolean;
-  /** Proxy mode: the Host values the page is published under (e.g. `lim-builder.tailb30114.ts.net:8461`). Any other Host is refused, as in local mode; DNS rebinding can't reach the API. */
+  /** Proxy mode: the Host values the page is published under (e.g. `lim-builder.tailb30114.ts.net:8461`). Any other Host is refused, as in local mode; DNS rebinding can't reach the API. Required in proxy mode. */
   publicHosts?: string[];
+  /**
+   * Proxy mode over a unix socket: `tailscale serve` rewrites `Host` to `localhost` for unix targets and
+   * carries the public name in a single `X-Forwarded-Host`, so that header is what the Host and Origin
+   * checks compare against. Only safe when the hop is authenticated (the mode-600 socket); never over TCP.
+   */
+  trustForwardedHost?: boolean;
   environment: string;
   /** The built web view; absent serves only the API. */
   root?: string;
@@ -64,6 +70,9 @@ class HttpError extends Error {
 export function localWebServer(options: WebOptions): Server & { streams(): number } {
   const mode = options.mode ?? "local";
   if (mode === "local" && !options.adminToken) throw new Error("local mode needs an admin token");
+  // An admin proxy that admits any client or any Host would hand the page's power to the network; no caller may build one.
+  if (mode === "proxy" && (!options.publicHosts?.length || !options.allowedClients?.length)) throw new Error("proxy mode needs publicHosts and allowedClients");
+  if (options.trustForwardedHost && mode !== "proxy") throw new Error("trustForwardedHost is only for proxy mode");
   const expected = options.adminToken ? digest(options.adminToken) : undefined;
   const clients = options.allowedClients ? allowlist(options.allowedClients) : undefined;
   let streams = 0;
@@ -73,13 +82,14 @@ export function localWebServer(options: WebOptions): Server & { streams(): numbe
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Referrer-Policy", "no-referrer");
     try {
+      const host = options.trustForwardedHost ? forwardedHost(req) : (req.headers.host ?? "");
       if (mode === "local") checkHost(req, server);
-      else if (options.publicHosts) checkPublicHost(req, options.publicHosts, options.devAllowLoopback === true, server);
+      else checkPublicHost(host, options.publicHosts!, options.devAllowLoopback === true, server);
       if (clients) checkClient(req, clients, options.devAllowLoopback === true);
       const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
       if (pathname.startsWith("/api/")) {
         if (req.method !== "POST") throw new HttpError(405, "POST only");
-        checkOrigin(req);
+        checkOrigin(req, host);
         if (!/^application\/json\b/.test(req.headers["content-type"] ?? "")) throw new HttpError(415, "send application/json");
         if (expected) {
           const auth = /^Bearer (.+)$/.exec(req.headers.authorization ?? "")?.[1];
@@ -221,9 +231,16 @@ function checkClient(req: IncomingMessage, clients: BlockList, devAllowLoopback:
   if (!family || !clients.check(value, family === 6 ? "ipv6" : "ipv4")) throw new HttpError(403, "client not allowed");
 }
 
+/** Over an authenticated socket hop: the single public name `tailscale serve` forwards. Missing, repeated or comma-joined is refused. */
+function forwardedHost(req: IncomingMessage): string {
+  const raw = req.headers["x-forwarded-host"];
+  if (raw === undefined || Array.isArray(raw) || raw.includes(",")) throw new HttpError(403, "unexpected Host");
+  return raw.trim();
+}
+
 /** Proxy mode: only the published names (plus loopback in development). */
-function checkPublicHost(req: IncomingMessage, hosts: string[], devAllowLoopback: boolean, server: Server): void {
-  const host = (req.headers.host ?? "").toLowerCase();
+function checkPublicHost(hostValue: string, hosts: string[], devAllowLoopback: boolean, server: Server): void {
+  const host = hostValue.toLowerCase();
   if (hosts.some((h) => h.toLowerCase() === host)) return;
   const port = (server.address() as { port: number } | null)?.port;
   if (devAllowLoopback && allowedHosts(port ?? -1).has(host)) return;
@@ -243,9 +260,9 @@ export function allowedHosts(port: number): Set<string> {
 }
 
 /** The page's own origin only. Behind a TLS proxy (tailscale serve) the browser's Origin is https while the hop here is http, so the scheme isn't compared. */
-function checkOrigin(req: IncomingMessage): void {
+function checkOrigin(req: IncomingMessage, host: string): void {
   const origin = req.headers.origin;
-  if (origin !== undefined && originHost(origin) !== req.headers.host) throw new HttpError(403, "cross-origin requests are refused");
+  if (origin !== undefined && originHost(origin) !== host) throw new HttpError(403, "cross-origin requests are refused");
   if (req.headers["sec-fetch-site"] && !["same-origin", "none"].includes(req.headers["sec-fetch-site"] as string)) {
     throw new HttpError(403, "cross-site requests are refused");
   }

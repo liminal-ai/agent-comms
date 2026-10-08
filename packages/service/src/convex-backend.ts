@@ -55,7 +55,8 @@ export function scrubbed(error: unknown): Error & { data?: unknown } {
   if (data !== undefined) return error as Error & { data?: unknown };
   const message = error instanceof Error ? error.message : String(error);
   // Our own requireAdmin text, which never carries arguments; the page and the re-subscribe logic key on it.
-  if (/^admin token rejected$/.test(message) || /Error: admin token rejected$/.test(message.split("\n")[0] ?? "")) return new Error("admin token rejected");
+  // The Convex client wraps it as "[CONVEX Q(name)] [Request ID: …] Server Error\nUncaught Error: admin token rejected …"; match that line wherever it is.
+  if (/^admin token rejected$/.test(message) || /^(?:Uncaught )?Error: admin token rejected\b/m.test(message)) return new Error("admin token rejected");
   const code = (error as NodeJS.ErrnoException)?.code;
   if (code === "ENOENT" || code === "EACCES" || code === "EISDIR" || /admin token file is empty/.test(message)) return new Error("request failed (the admin token is not available on the server)");
   const kind = /ArgumentValidationError|Validator/.test(message) ? "the server refused the call's arguments" : /\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|fetch failed|WebSocket)\b/i.exec(message)?.[1] ?? "details withheld";

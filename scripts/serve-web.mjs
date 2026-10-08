@@ -45,7 +45,8 @@ export async function listenWeb(server, config, log = (line) => console.log(line
       // another starter may be about to replace this socket. Fail loudly rather than serve a path
       // that is no longer ours.
       if (!(await held())) {
-        await new Promise((resolve) => server.close(resolve));
+        // Not close(): closing a pipe server unlinks its path, which is now the other starter's socket.
+        // The listener is left bound to its orphaned inode; the caller exits the process on this error.
         throw new Error(`web config: start lock for ${config.socket} was taken over during startup; refusing to serve`);
       }
     });
@@ -164,12 +165,19 @@ export function webListener(config, root, log = (line) => console.log(line)) {
     throw new Error('web config: proxy mode (adminTokenFile) needs allowedClients and publicHosts');
   }
   if (config.socket !== undefined && (typeof config.socket !== 'string' || !config.socket.startsWith('/'))) throw new Error('web config: socket must be an absolute path');
+  // The device lock is only as good as the hop that sets X-Forwarded-For. Over TCP any local process can
+  // forge it, so proxy mode must listen on the mode-600 socket; TCP is for development only.
+  if (config.devTcp !== undefined && typeof config.devTcp !== 'boolean') throw new Error('web config: devTcp must be true or false');
+  if (!config.socket && config.devAllowLoopback !== true && config.devTcp !== true) throw new Error('web config: proxy mode (adminTokenFile) needs socket; TCP is only allowed with devAllowLoopback: true or devTcp: true (development)');
   const backend = convexWebBackend({ convexUrl: config.convexUrl, adminTokenFile: config.adminTokenFile, log });
   const server = localWebServer({
     backend, environment: config.environment, mode: 'proxy', root, log,
     ...(config.allowedClients ? { allowedClients: config.allowedClients } : {}),
     ...(config.devAllowLoopback ? { devAllowLoopback: true } : {}),
     ...(config.publicHosts ? { publicHosts: config.publicHosts } : {}),
+    // Over a unix socket, tailscale serve sends `Host: localhost` and the public name in X-Forwarded-Host;
+    // the socket's mode 600 is what makes that header trustworthy.
+    ...(config.socket ? { trustForwardedHost: true } : {}),
   });
   const close = server.close.bind(server);
   // Open /api/watch streams would keep close() from ever finishing; end them once the listener is shut.

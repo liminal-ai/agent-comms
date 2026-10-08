@@ -35,7 +35,7 @@ test('web service starts through the deployed current directory link' + (lowerDr
     const tokenFile = join(dir, 'admin-token');
     await writeFile(tokenFile, 'bundled-admin-token');
     const config = join(dir, 'config.json');
-    await writeFile(config, JSON.stringify({ environment: 'staging', convexUrl: 'https://staging.example.test', port: 0, adminTokenFile: tokenFile, allowedClients: ['100.100.0.1'], publicHosts: ['comms.example.test:8464'] }));
+    await writeFile(config, JSON.stringify({ environment: 'staging', convexUrl: 'https://staging.example.test', port: 0, adminTokenFile: tokenFile, allowedClients: ['100.100.0.1'], publicHosts: ['comms.example.test:8464'], devTcp: true }));
     const entry = join(dir, 'current/serve-web.mjs');
     child = spawn(process.execPath, [lowerDrive ? entry[0].toLowerCase() + entry.slice(1) : entry, config], { stdio: ['ignore', 'pipe', 'pipe'] });
     const result = await Promise.race([
@@ -163,10 +163,23 @@ test('web service starts through the deployed current directory link' + (lowerDr
         assert.equal((await stat(sock)).mode & 0o777, 0o600);
         assert.equal(process.umask(), process.umask(), 'the parent umask is untouched');
         const viaSock = await new Promise((resolve, reject) => {
-          request({ socketPath: sock, path: '/runtime-config.json', headers: { host: 'comms.example.test:8464', 'x-forwarded-for': '100.100.0.1' } }, (res) => { let b = ''; res.on('data', (c) => (b += c)); res.on('end', () => resolve({ status: res.statusCode, body: b })); }).on('error', reject).end();
+          // Exactly what tailscale serve sends for a unix: target: Host is rewritten to localhost, the public name travels in X-Forwarded-Host.
+          request({ socketPath: sock, path: '/runtime-config.json', headers: { host: 'localhost', 'x-forwarded-host': 'comms.example.test:8464', 'x-forwarded-for': '100.100.0.1', 'x-forwarded-proto': 'https' } }, (res) => { let b = ''; res.on('data', (c) => (b += c)); res.on('end', () => resolve({ status: res.statusCode, body: b })); }).on('error', reject).end();
         });
         assert.equal(viaSock.status, 200);
         assert.deepEqual(JSON.parse(viaSock.body), { environment: 'staging', mode: 'proxy' });
+        const overSock = (path, headers, method = 'GET', body) => new Promise((resolve, reject) => {
+          const req = request({ socketPath: sock, path, method, headers }, (res) => { let b = ''; res.on('data', (c) => (b += c)); res.on('end', () => resolve({ status: res.statusCode, body: b })); });
+          req.on('error', reject); req.end(body);
+        });
+        const serveHeaders = { host: 'localhost', 'x-forwarded-host': 'comms.example.test:8464', 'x-forwarded-for': '100.100.0.1', 'x-forwarded-proto': 'https' };
+        // A browser POST through serve passes the Host and Origin checks (the route is a 404 so no backend is contacted).
+        const api = await overSock('/api/nope', { ...serveHeaders, origin: 'https://comms.example.test:8464', 'content-type': 'application/json' }, 'POST', '{}');
+        assert.equal(api.status, 404, `Host and Origin accepted (got ${api.status} ${api.body})`);
+        assert.equal((await overSock('/api/nope', { ...serveHeaders, origin: 'https://attacker.example', 'content-type': 'application/json' }, 'POST', '{}')).status, 403, 'cross-origin against the forwarded name');
+        assert.equal((await overSock('/runtime-config.json', { ...serveHeaders, 'x-forwarded-host': 'attacker.example:8464' })).status, 403, 'a foreign forwarded host');
+        assert.equal((await overSock('/runtime-config.json', { host: 'comms.example.test:8464', 'x-forwarded-for': '100.100.0.1' })).status, 403, 'no X-Forwarded-Host: not through serve');
+        assert.equal((await overSock('/runtime-config.json', { ...serveHeaders, 'x-forwarded-for': '100.100.0.9' })).status, 403, 'unlisted client');
       } finally {
         const stopped = once(sockChild, 'exit'); sockChild.kill(); await stopped;
       }
@@ -227,7 +240,9 @@ test('one web build serves each environment config at runtime, without leaking o
     await writeFile(tokenFile, 'released-admin-token');
     assert.throws(() => webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile }, dir, () => {}), /needs allowedClients and publicHosts/);
     assert.throws(() => webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile, devAllowLoopback: true }, dir, () => {}), /needs allowedClients and publicHosts/, 'the dev flag never lifts the requirement');
-    const proxy = webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile, allowedClients: ['100.100.0.1'], publicHosts: ['comms.example.test:8461'] }, dir, () => {}); servers.push(proxy);
+    // The device lock needs the socket hop: a proxy config on TCP is refused unless it's explicitly a development listener.
+    assert.throws(() => webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile, allowedClients: ['100.100.0.1'], publicHosts: ['comms.example.test:8461'] }, dir, () => {}), /needs socket; TCP is only allowed with devAllowLoopback: true or devTcp: true/);
+    const proxy = webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile, allowedClients: ['100.100.0.1'], publicHosts: ['comms.example.test:8461'], devTcp: true }, dir, () => {}); servers.push(proxy);
     await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
     const pport = proxy.address().port;
     const config = (await getAs(pport, { host: 'comms.example.test:8461', 'x-forwarded-for': '100.100.0.1' })).body;
@@ -236,7 +251,7 @@ test('one web build serves each environment config at runtime, without leaking o
     assert.equal((await getAs(pport, { host: 'comms.example.test:8461' })).status, 403, 'no forwarded client');
     assert.deepEqual(JSON.parse(config), { environment: 'prod', mode: 'proxy' });
     // close() finishes even with a watch stream held open by a client that never hangs up.
-    const held = webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile, allowedClients: ['127.0.0.1'], publicHosts: ['comms.example.test:8461'] }, dir, () => {});
+    const held = webListener({ environment: 'prod', convexUrl: 'https://prod.example.test', adminTokenFile: tokenFile, allowedClients: ['127.0.0.1'], publicHosts: ['comms.example.test:8461'], devTcp: true }, dir, () => {});
     await new Promise(resolve => held.listen(0, '127.0.0.1', resolve));
     const hport = held.address().port;
     const stream = await new Promise((resolve, reject) => {

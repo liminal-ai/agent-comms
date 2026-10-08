@@ -42,6 +42,19 @@ async function listen(server: ReturnType<typeof localWebServer>) {
 
 const post = (port: number, path: string, body: unknown, headers: Record<string, string> = {}) =>
   fetch(`http://127.0.0.1:${port}${path}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+/** A request with an explicit Host and headers (fetch won't set Host). Resolves to status and body. */
+const raw = (port: number, path: string, headers: Record<string, string | string[]>, method = "GET", body?: string) =>
+  new Promise<{ status: number; body: string }>((resolve, reject) => {
+    const req = request({ host: "127.0.0.1", port, path, method, headers: { ...(body ? { "content-type": "application/json" } : {}), ...headers } }, (res) => {
+      let b = "";
+      res.on("data", (c) => (b += c));
+      res.on("end", () => resolve({ status: res.statusCode!, body: b }));
+    });
+    req.on("error", reject);
+    req.end(body);
+  });
+/** The keys every proxy-mode server must name; development tests use loopback with the dev flag. */
+const devProxy: { publicHosts: string[]; allowedClients: string[]; devAllowLoopback: true } = { publicHosts: ["comms.example.test:8461", "lim-builder.tailb30114.ts.net:8461"], allowedClients: ["100.100.0.1"], devAllowLoopback: true };
 
 describe("the Convex proxy backend", () => {
   it("adds the admin token from its file to every call, replacing whatever the page sent, and re-reads it", async () => {
@@ -148,7 +161,7 @@ describe("the Convex proxy backend", () => {
       throw new Error(`ArgumentValidationError: Object contains extra field \`bogus\` that is not in the validator.\n\nObject: ${JSON.stringify(args)}`);
     };
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile(token), client });
-    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", log: () => {} }));
+    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", ...devProxy, log: () => {} }));
     const r = await post(port, "/api/call", { kind: "mutation", name: "inbox:markRead", args: { bogus: 1 } });
     const text = await r.text();
     expect(r.status).toBe(400);
@@ -164,7 +177,7 @@ describe("the Convex proxy backend", () => {
     const { client } = fakeClient();
     const path = join(mkdtempSync(join(tmpdir(), "comms-proxy-")), "secret-dir", "admin-token");
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: path, client });
-    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", log: () => {} }));
+    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", ...devProxy, log: () => {} }));
     const r = await post(port, "/api/call", { kind: "query", name: "directory:list", args: {} });
     const text = await r.text();
     expect(text).not.toContain("secret-dir");
@@ -179,10 +192,10 @@ describe("the Convex proxy backend", () => {
     const { client } = fakeClient();
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("t"), client });
     const publicHosts = ["lim-builder.tailb30114.ts.net:8461"];
-    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", publicHosts, log: () => {} }));
-    const dev = await listen(localWebServer({ backend, environment: "dev", mode: "proxy", publicHosts, devAllowLoopback: true, log: () => {} }));
-    const withHost = (p: number, host: string) =>
-      new Promise<number>((resolve, reject) => request({ host: "127.0.0.1", port: p, path: "/runtime-config.json", headers: { host } }, (res) => resolve(res.statusCode!)).on("error", reject).end());
+    const allowedClients = ["100.100.0.1"];
+    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", publicHosts, allowedClients, log: () => {} }));
+    const dev = await listen(localWebServer({ backend, environment: "dev", mode: "proxy", publicHosts, allowedClients, devAllowLoopback: true, log: () => {} }));
+    const withHost = (p: number, host: string) => raw(p, "/runtime-config.json", { host, "x-forwarded-for": "100.100.0.1" }).then((r) => r.status);
     expect(await withHost(port, "lim-builder.tailb30114.ts.net:8461")).toBe(200);
     expect(await withHost(port, "LIM-BUILDER.tailb30114.ts.net:8461")).toBe(200);
     expect(await withHost(port, "attacker.example:8461")).toBe(403);
@@ -197,7 +210,7 @@ describe("the web API in proxy mode", () => {
     const { client, calls } = fakeClient();
     const token = "super-secret-admin-token";
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile(token), client });
-    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", log: () => {} }));
+    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", ...devProxy, log: () => {} }));
     const config = await (await fetch(`http://127.0.0.1:${port}/runtime-config.json`)).json();
     expect(config).toEqual({ environment: "prod", mode: "proxy" });
     expect(JSON.stringify(config)).not.toContain(token);
@@ -223,12 +236,11 @@ describe("the web API in proxy mode", () => {
     const { client } = fakeClient();
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("t"), client });
     const allowedClients = ["100.100.0.1", "fd7a:115c:a1e0::1"];
-    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients, log: () => {} }));
-    const get = (xff?: string | string[]) => {
-      const headers: Record<string, string> = {};
-      if (typeof xff === "string") headers["x-forwarded-for"] = xff;
-      return fetch(`http://127.0.0.1:${port}/runtime-config.json`, { headers: xff === undefined ? {} : Array.isArray(xff) ? [["x-forwarded-for", xff[0]!], ["x-forwarded-for", xff[1]!]] : headers }).then((r) => r.status);
-    };
+    const publicHosts = ["comms.example.test:8461"];
+    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients, publicHosts, log: () => {} }));
+    const get = (xff?: string | string[]) => raw(port, "/runtime-config.json", { host: publicHosts[0]!, ...(xff === undefined ? {} : { "x-forwarded-for": xff }) }).then((r) => r.status);
+    const post = (p: number, path: string, body: unknown, headers: Record<string, string> = {}) =>
+      raw(p, path, { host: publicHosts[0]!, ...headers }, "POST", JSON.stringify(body)).then((r) => ({ status: r.status, json: async () => JSON.parse(r.body) }));
     expect(await get("100.100.0.1")).toBe(200);
     expect(await get("FD7A:115C:A1E0::1")).toBe(200);
     expect(await get("100.100.0.2")).toBe(403); // a sandbox host
@@ -248,11 +260,12 @@ describe("the web API in proxy mode", () => {
     const { client } = fakeClient();
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("t"), client });
     const allowedClients = ["100.100.0.1"];
-    const prod = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients, log: () => {} }));
-    const prodOff = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients, devAllowLoopback: false, log: () => {} }));
-    const dev = await listen(localWebServer({ backend, environment: "dev", mode: "proxy", allowedClients, devAllowLoopback: true, log: () => {} }));
-    expect((await fetch(`http://127.0.0.1:${prod}/healthz`)).status).toBe(403);
-    expect((await fetch(`http://127.0.0.1:${prodOff}/healthz`)).status).toBe(403);
+    const publicHosts = ["comms.example.test:8461"];
+    const prod = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients, publicHosts, log: () => {} }));
+    const prodOff = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients, publicHosts, devAllowLoopback: false, log: () => {} }));
+    const dev = await listen(localWebServer({ backend, environment: "dev", mode: "proxy", allowedClients, publicHosts, devAllowLoopback: true, log: () => {} }));
+    expect((await raw(prod, "/healthz", { host: publicHosts[0]! })).status).toBe(403);
+    expect((await raw(prodOff, "/healthz", { host: publicHosts[0]! })).status).toBe(403);
     expect((await fetch(`http://127.0.0.1:${dev}/healthz`)).status).toBe(200);
     expect((await fetch(`http://127.0.0.1:${dev}/healthz`, { headers: { "x-forwarded-for": "100.100.0.2" } })).status).toBe(403); // a forwarded excluded client is still refused in dev
   });
@@ -260,7 +273,35 @@ describe("the web API in proxy mode", () => {
   it("refuses an allowedClients entry that isn't an IP", () => {
     const { client } = fakeClient();
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("t"), client });
-    expect(() => localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients: ["lim-builder"], log: () => {} })).toThrow(/not an IP address/);
+    expect(() => localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients: ["lim-builder"], publicHosts: ["comms.example.test:8461"], log: () => {} })).toThrow(/not an IP address/);
+  });
+
+  it("proxy mode can't be built without publicHosts and allowedClients", () => {
+    const { client } = fakeClient();
+    const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("t"), client });
+    expect(() => localWebServer({ backend, environment: "prod", mode: "proxy", log: () => {} })).toThrow(/needs publicHosts and allowedClients/);
+    expect(() => localWebServer({ backend, environment: "prod", mode: "proxy", publicHosts: ["h:1"], log: () => {} })).toThrow(/needs publicHosts and allowedClients/);
+    expect(() => localWebServer({ backend, environment: "prod", mode: "proxy", allowedClients: ["100.100.0.1"], log: () => {} })).toThrow(/needs publicHosts and allowedClients/);
+    expect(() => localWebServer({ backend, environment: "prod", mode: "local", adminToken: "t", trustForwardedHost: true, log: () => {} })).toThrow(/only for proxy mode/);
+  });
+
+  it("behind tailscale serve over a unix socket (Host: localhost, X-Forwarded-Host set), the forwarded host is what's checked", async () => {
+    const { client } = fakeClient();
+    const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: tokenFile("t"), client });
+    const publicHosts = ["lim-builder.tailb30114.ts.net:8461"];
+    const port = await listen(localWebServer({ backend, environment: "prod", mode: "proxy", publicHosts, allowedClients: ["100.100.0.1"], trustForwardedHost: true, log: () => {} }));
+    const serve = { host: "localhost", "x-forwarded-host": publicHosts[0]!, "x-forwarded-for": "100.100.0.1", "x-forwarded-proto": "https" };
+    expect((await raw(port, "/runtime-config.json", serve)).status).toBe(200);
+    expect((await raw(port, "/", serve)).status).not.toBe(403);
+    const call = { kind: "query", name: "directory:list", args: {} };
+    expect((await raw(port, "/api/call", { ...serve, origin: `https://${publicHosts[0]}` }, "POST", JSON.stringify(call))).status).toBe(200);
+    expect((await raw(port, "/api/call", { ...serve, origin: "https://attacker.example" }, "POST", JSON.stringify(call))).status).toBe(403); // cross-origin against the forwarded name
+    expect((await raw(port, "/runtime-config.json", { ...serve, "x-forwarded-host": "attacker.example:8461" })).status).toBe(403);
+    expect((await raw(port, "/runtime-config.json", { ...serve, "x-forwarded-host": `${publicHosts[0]}, attacker.example` })).status).toBe(403);
+    expect((await raw(port, "/runtime-config.json", { ...serve, "x-forwarded-host": [publicHosts[0]!, "attacker.example"] })).status).toBe(403);
+    const { "x-forwarded-host": _dropped, ...withoutForwarded } = serve;
+    expect((await raw(port, "/runtime-config.json", withoutForwarded)).status).toBe(403); // Host: localhost alone is not a public name
+    expect((await raw(port, "/runtime-config.json", { ...withoutForwarded, host: publicHosts[0]! })).status).toBe(403); // the Host header is not consulted in socket mode
   });
 
   it("local mode still needs its token", () => {
