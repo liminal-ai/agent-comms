@@ -17,3 +17,5 @@ export interface WebConfig {
 export function webServer(config: WebConfig, root: string): Server;
 /** Proxy mode when `adminTokenFile` is set (the page calls /api/call and /api/watch here); it refuses to start without `allowedClients` and `publicHosts`. Static otherwise. */
 export function webListener(config: WebConfig, root: string, log?: (line: string) => void): Server;
+/** Listens on `config.socket` (mode 600; a stale socket is replaced, any other file is an error) or on 127.0.0.1:`config.port`, and logs the address. */
+export function listenWeb(server: Server, config: WebConfig & { port?: number }, log?: (line: string) => void): Promise<Server>;

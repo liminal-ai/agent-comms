@@ -46,6 +46,13 @@ test('web service starts through the deployed current directory link' + (lowerDr
     const port = /127.0.0.1:(\d+)/.exec(result)[1];
     const served = (await getAs(port, { host: 'comms.example.test:8464', 'x-forwarded-for': '100.100.0.1' })).body;
     if (process.platform !== 'win32') {
+      // A regular file at the socket path is never deleted; the listener refuses to start instead.
+      const { listenWeb } = await import('./serve-web.mjs');
+      const notASocket = join(dir, 'precious.txt');
+      await writeFile(notASocket, 'keep me');
+      await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: notASocket }, () => {}), /not a socket/);
+      const { readFile: readBack } = await import('node:fs/promises');
+      assert.equal(await readBack(notASocket, 'utf8'), 'keep me');
       // Deployed shape: a mode-600 unix socket for the serve hop.
       const sock = join(dir, 'web.sock');
       const sockConfig = join(dir, 'config-sock.json');

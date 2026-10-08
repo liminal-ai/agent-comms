@@ -97,20 +97,31 @@ export function convexWebBackend(options: ConvexBackendOptions): WebBackend & { 
       let stopped = false;
       // A subscription carries the token it started with. If the token is rotated while a page is
       // open, the query is refused once; re-subscribe with the file's current token, then give up.
-      const open = (retried: boolean) =>
+      // Each rotation gets one retry: the flag clears once the refreshed query delivers a value.
+      let retried = false;
+      const open = () =>
         withToken(args).then((full) => {
           if (stopped) return;
-          stop = client.onUpdate(ref(name) as FunctionReference<"query">, full, onValue, (error) => {
-            if (!retried && /admin token rejected/.test(error.message)) {
-              stop?.();
-              stop = undefined;
-              void open(true);
-              return;
-            }
-            onError(scrubbed(error));
-          });
+          stop = client.onUpdate(
+            ref(name) as FunctionReference<"query">,
+            full,
+            (value) => {
+              retried = false;
+              onValue(value);
+            },
+            (error) => {
+              if (!retried && /admin token rejected/.test(error.message)) {
+                retried = true;
+                stop?.();
+                stop = undefined;
+                void open();
+                return;
+              }
+              onError(scrubbed(error));
+            },
+          );
         }).catch((error: unknown) => onError(scrubbed(error))); // token loading and a synchronous onUpdate throw alike
-      void open(false);
+      void open();
       return () => {
         stopped = true;
         stop?.();

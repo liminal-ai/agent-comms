@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { expand, loadConfig, verifyT3Binding } from "@agent-comms/connector/config";
 import { startConvexConnector } from "@agent-comms/connector/convex";
-import { webListener } from "../../../scripts/serve-web.mjs";
+import { listenWeb, webListener } from "../../../scripts/serve-web.mjs";
 import { type LocalConfig, loadServiceConfig } from "./config.ts";
 import { ADMIN_TOKEN_FILE, credential } from "./data.ts";
 import { startLocal } from "./local.ts";
@@ -70,13 +70,13 @@ async function run() {
     const connector = await startConvexConnector(connectorConfig, log);
     let web: ReturnType<typeof webListener> | undefined;
     if (config.web) {
-      const webConfig = JSON.parse(readFileSync(config.web, "utf8")) as { environment?: string; convexUrl?: string; port?: number; adminTokenFile?: string };
-      if (!webConfig.environment || !webConfig.convexUrl || !Number.isInteger(webConfig.port)) throw new Error("web config requires environment, convexUrl and port");
+      const webConfig = JSON.parse(readFileSync(config.web, "utf8")) as { environment?: string; convexUrl?: string; port?: number; socket?: string; adminTokenFile?: string };
+      if (!webConfig.environment || !webConfig.convexUrl || (!webConfig.socket && !Number.isInteger(webConfig.port))) throw new Error("web config requires environment, convexUrl and port (or socket)");
       if (!["http:", "https:"].includes(new URL(webConfig.convexUrl).protocol)) throw new Error("Invalid public Convex URL");
       const root = webRoot();
       if (!root) throw new Error("no built web view beside this service");
       web = webListener(webConfig as { environment: string; convexUrl: string; adminTokenFile?: string }, root, log);
-      web.listen(webConfig.port, "127.0.0.1", () => log(`Comms ${webConfig.environment} web: 127.0.0.1:${webConfig.port}`));
+      await listenWeb(web, webConfig as { environment: string; convexUrl: string; port?: number; socket?: string; adminTokenFile?: string }, log);
     }
     onStop(async () => {
       web?.close();

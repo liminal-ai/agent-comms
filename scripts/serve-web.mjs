@@ -5,11 +5,31 @@
 // `allowedClients` (proxy mode) limits who is served to the tailnet addresses tailscale serve reports
 // in X-Forwarded-For; `devAllowLoopback: true` lets header-less loopback requests through in development.
 import { createServer } from 'node:http';
-import { chmod, readFile, realpath, rm } from 'node:fs/promises';
+import { chmod, lstat, readFile, realpath, rm } from 'node:fs/promises';
 import { basename, resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localWebServer } from '../packages/service/src/web.ts';
 import { convexWebBackend } from '../packages/service/src/convex-backend.ts';
+
+/**
+ * Starts the listener where the config says: a unix socket (`socket`, created mode 600, so only this
+ * user and root, which tailscaled is, can open it: the proxy hop can't be forged by another local
+ * account), or 127.0.0.1:`port`. A stale socket at the path is replaced; anything else there is an error.
+ */
+export async function listenWeb(server, config, log = (line) => console.log(line)) {
+  if (config.socket) {
+    const existing = await lstat(config.socket).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
+    if (existing && !existing.isSocket()) throw new Error(`web config: socket path ${config.socket} exists and is not a socket; refusing to replace it`);
+    if (existing) await rm(config.socket);
+    await new Promise((resolve, reject) => server.once('error', reject).listen(config.socket, resolve));
+    await chmod(config.socket, 0o600);
+    log(`Comms ${config.environment} web: unix:${config.socket}${config.adminTokenFile ? ' (proxy mode)' : ''}`);
+  } else {
+    await new Promise((resolve, reject) => server.once('error', reject).listen(config.port, '127.0.0.1', resolve));
+    log(`Comms ${config.environment} web: 127.0.0.1:${server.address().port}${config.adminTokenFile ? ' (proxy mode)' : ''}`);
+  }
+  return server;
+}
 
 /** The listener for a web config: proxy mode when it names an admin token file, static otherwise. */
 export function webListener(config, root, log = (line) => console.log(line)) {
@@ -72,16 +92,5 @@ if (process.argv[1] && basename(fileURLToPath(import.meta.url)) === 'serve-web.m
   if (!config.environment || !config.convexUrl || (!config.socket && !Number.isInteger(config.port))) throw new Error('web config requires environment, convexUrl and port (or socket)');
   if (!['http:', 'https:'].includes(new URL(config.convexUrl).protocol)) throw new Error('Invalid public Convex URL');
   const root = fileURLToPath(new URL('./web', import.meta.url));
-  const server = webListener(config, root);
-  if (config.socket) {
-    // A unix socket only the service's user (and root, which tailscaled is) can open: the proxy hop
-    // can't be forged by another local account, so X-Forwarded-For can be trusted.
-    await rm(config.socket, { force: true });
-    server.listen(config.socket, async () => {
-      await chmod(config.socket, 0o600);
-      console.log(`Comms ${config.environment} web: unix:${config.socket} (proxy mode)`);
-    });
-  } else {
-    server.listen(config.port, '127.0.0.1', () => console.log(`Comms ${config.environment} web: 127.0.0.1:${server.address().port}${config.adminTokenFile ? ' (proxy mode)' : ''}`));
-  }
+  await listenWeb(webListener(config, root), config, (line) => console.log(line));
 }

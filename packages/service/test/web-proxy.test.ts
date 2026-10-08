@@ -11,7 +11,7 @@ afterEach(() => {
   for (const s of servers.splice(0)) s.close();
 });
 
-function fakeClient() {
+function fakeClient(opts: { silent?: boolean } = {}) {
   const calls: { kind: string; name: unknown; args: Record<string, unknown> }[] = [];
   const subs: { args: Record<string, unknown>; push: (v: unknown) => void; stopped: boolean; onError?: (e: Error) => void }[] = [];
   const client: ConvexLike = {
@@ -20,7 +20,7 @@ function fakeClient() {
     onUpdate: (_ref, args, onValue, onError) => {
       const sub = { args, push: onValue, stopped: false, onError };
       subs.push(sub);
-      queueMicrotask(() => onValue({ n: 1 }));
+      if (!opts.silent) queueMicrotask(() => onValue({ n: 1 }));
       return () => (sub.stopped = true);
     },
     close: async () => {},
@@ -63,7 +63,7 @@ describe("the Convex proxy backend", () => {
   });
 
   it("re-subscribes a live query with the file's current token after a rotation refuses the old one", async () => {
-    const { client, subs } = fakeClient();
+    const { client, subs } = fakeClient({ silent: true }); // values are pushed by hand below
     const file = tokenFile("before");
     const backend = convexWebBackend({ convexUrl: "https://x.convex.cloud", adminTokenFile: file, client });
     const errors: string[] = [];
@@ -81,6 +81,13 @@ describe("the Convex proxy backend", () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(errors).toEqual(["admin token rejected"]);
     expect(subs.length).toBe(2);
+    // A second rotation, after the refreshed query delivered a value, gets its own retry.
+    subs[1]!.push({ n: 2 });
+    writeFileSync(file, "third");
+    subs[1]!.onError!(new Error("admin token rejected"));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(subs[2]!.args.adminToken).toBe("third");
+    expect(errors).toEqual(["admin token rejected"]);
   });
 
   it("a subscription that fails to start reports a scrubbed error instead of an unhandled rejection", async () => {
