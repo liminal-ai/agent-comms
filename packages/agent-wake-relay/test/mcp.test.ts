@@ -475,6 +475,37 @@ describe("event delivery", () => {
     }
   });
 
+  it("a subscriber found revoked stays excluded while its removal can't be saved, even if access can't be checked later", async () => {
+    const good = await receiver(chatgpt());
+    const bad = await receiver(chatgpt());
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const store = new SubscriptionStore(join(dir, "state.json"));
+    let access: "allowed" | "denied" | "unknown" = "allowed";
+    const h = new EventHub({ targets: [{ participant: "dot", event: "comms.delivery.dot" }], store, post: guardedPost(loopback), urlPolicy: loopback, log: () => {}, sleep: async () => {}, authorize: async (p) => (p === "user_bad" ? access : "allowed") });
+    try {
+      await h.subscribe("user_good", sub(good.url, newSecret()));
+      await h.subscribe("user_bad", sub(bad.url, newSecret()));
+      const writer = store as unknown as { write: (subs: unknown) => Promise<void> };
+      const realWrite = writer.write.bind(store);
+      writer.write = async () => {
+        throw Object.assign(new Error("EACCES"), { code: "EACCES" });
+      };
+      access = "denied";
+      await h.waker("dot")(["d1"]);
+      assert.equal(bad.seen.length, 1, "revoked: only its verification ever arrived");
+      access = "unknown"; // the access check is down now, and the state file still can't be written
+      await h.waker("dot")(["d2"]);
+      assert.equal(bad.seen.length, 1, "still excluded: the revocation is remembered");
+      assert.equal(good.seen.length, 3);
+      writer.write = realWrite; // the state file is writable again
+      await h.waker("dot")(["d3"]);
+      assert.equal(store.active().map((s) => s.principal).sort().join(","), "user_good", "the removal finally landed");
+    } finally {
+      good.close();
+      bad.close();
+    }
+  });
+
   it("a wake still reaches live subscribers when an expired one can't be pruned from an unwritable store", async () => {
     const live = await receiver(chatgpt());
     const stale = await receiver(chatgpt());

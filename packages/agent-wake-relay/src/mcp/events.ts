@@ -106,6 +106,8 @@ export class EventHub {
   private readonly maxTtlMs: number;
   /** (principal, url) → when its callback last passed verification. */
   private readonly verified = new Map<string, number>();
+  /** Subscriptions whose subscriber was found revoked but whose removal couldn't be saved yet: never delivered to, whatever a later access check says, until the removal lands or a fresh subscribe replaces them. */
+  private readonly revoked = new Set<string>();
   private readonly o: EventHubOptions;
 
   constructor(o: EventHubOptions) {
@@ -216,6 +218,7 @@ export class EventHub {
       if (!underLimit()) throw new RpcError(RESOURCE_EXHAUSTED, "too many subscriptions", { limit: "subscriptions", max: MAX_PER_PRINCIPAL });
       rotate();
     });
+    this.revoked.delete(id); // a fresh, authenticated subscribe replaces whatever was owed on the old entry
     this.o.log(`mcp: ${existing ? "refreshed" : "new"} subscription ${id} to ${t.event} (callback host ${hostOf(url)}) until ${new Date(sub.expiresAt).toISOString()}`);
     return { id, refreshBefore: new Date(sub.expiresAt).toISOString(), cursor: null, truncated: false };
   }
@@ -325,12 +328,19 @@ export class EventHub {
       if (this.o.authorize) {
         const allowed: Subscription[] = [];
         for (const s of subs) {
-          // Only a definite "no" drops it; if access can't be checked right now, deliver anyway.
-          if ((await this.o.authorize(s.principal)) === "denied") {
-            // Excluded from this wake either way; persisting the removal is bookkeeping.
-            await this.o.store.delete(s.id).then(
-              () => this.o.log(`mcp: dropped subscription ${s.id}: its subscriber is no longer allowed`),
-              (error: unknown) => this.o.log(`mcp: subscription ${s.id} is no longer allowed; could not save its removal (${(error as NodeJS.ErrnoException)?.code ?? "error"})`),
+          // Only a definite "no" drops it; if access can't be checked right now, deliver anyway,
+          // unless it was already found revoked and only its removal is still owed.
+          if (this.revoked.has(s.id) || (await this.o.authorize(s.principal)) === "denied") {
+            // Excluded from this wake either way; persisting the removal is bookkeeping, remembered until it lands.
+            await this.o.store.delete(s.id, s).then(
+              () => {
+                this.revoked.delete(s.id);
+                this.o.log(`mcp: dropped subscription ${s.id}: its subscriber is no longer allowed`);
+              },
+              (error: unknown) => {
+                this.revoked.add(s.id);
+                this.o.log(`mcp: subscription ${s.id} is no longer allowed; could not save its removal (${(error as NodeJS.ErrnoException)?.code ?? "error"})`);
+              },
             );
           } else allowed.push(s);
         }
