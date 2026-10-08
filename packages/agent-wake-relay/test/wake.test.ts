@@ -36,7 +36,7 @@ class FakeTimers implements Timers {
 
 const d = (id: string, recipient = "grok"): WorkDelivery => ({ id, recipient, state: "delivered", createdAt: 0 });
 
-function setup(opts: { fail?: number; renudgeMs?: number; terminal?: number } = {}) {
+function setup(opts: { fail?: number; renudgeMs?: number; terminal?: number; wakeOn?: "all" | "requests" } = {}) {
   const timers = new FakeTimers();
   const wakes: string[][] = [];
   const logs: string[] = [];
@@ -47,6 +47,7 @@ function setup(opts: { fail?: number; renudgeMs?: number; terminal?: number } = 
     timers,
     log: (l) => logs.push(l),
     renudgeMs: opts.renudgeMs ?? 0,
+    ...(opts.wakeOn ? { wakeOn: opts.wakeOn } : {}),
     wake: async (ids) => {
       if (failures > 0) {
         failures--;
@@ -74,6 +75,28 @@ describe("coordinator", () => {
     c.update([d("a"), d("b")]);
     await timers.advance(60_000);
     assert.equal(wakes.length, 1, "no new delivery, no new wake");
+  });
+
+  it("with wakeOn requests, only deliveries that expect an answer wake the agent; answers and notices never do", async () => {
+    // An agent kept around to answer direct questions (the retained Grok Bot copies in the agent move): a question
+    // from the new agent wakes it, nothing else does, including the renudge and the owed-handoff paths.
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeOn: "requests" });
+    c.update([{ ...d("fyi"), collect: false }, { ...d("ans"), state: "pending", collect: false }]);
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [], "an answer and a notice are not woken for");
+    c.update([{ ...d("fyi"), collect: false }, { ...d("q"), state: "pending", collect: true }]);
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["q"]], "a request is");
+    c.update([{ ...d("q"), state: "delivered", collect: true }]); // handed over; fyi gone meanwhile
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["q"], ["q"]], "the handoff is a fresh wake for the request only; the vanished notice is not owed");
+    c.update([]);
+    await timers.advance(60 * 60_000);
+    assert.equal(wakes.length, 2, "nothing more");
+    const all = setup({ renudgeMs: 0 });
+    all.c.update([{ ...d("fyi"), collect: false }]);
+    await all.timers.advance(2_000);
+    assert.deepEqual(all.wakes, [["fyi"]], "default wakeOn all still wakes for a notice");
   });
 
   it("wakes for what's already outstanding when it starts", async () => {
@@ -1289,6 +1312,9 @@ describe("config", () => {
     const c = parseConfig({ convexUrl: "https://x.convex.cloud", targets: [target] });
     assert.equal(c.targets[0]!.renudgeMs, 10 * 60_000);
     assert.equal(parseConfig({ convexUrl: "https://x.convex.cloud", targets: [{ ...target, renudgeAfter: "0" }] }).targets[0]!.renudgeMs, 0);
+    assert.equal(c.targets[0]!.wakeOn, "all");
+    assert.equal(parseConfig({ convexUrl: "https://x.convex.cloud", targets: [{ ...target, wakeOn: "requests" }] }).targets[0]!.wakeOn, "requests");
+    assert.throws(() => parseConfig({ convexUrl: "https://x.convex.cloud", targets: [{ ...target, wakeOn: "fyi" }] }), /wakeOn/);
     assert.throws(() => parseConfig({ convexUrl: "https://x.convex.cloud", targets: [{ ...target, machineSecretFile: join(dir, "nope") }] }), ConfigError);
     assert.throws(() => parseConfig({ convexUrl: "https://x.convex.cloud", targets: [{ ...target, waker: { kind: "email" } }] }), /waker.kind/);
     assert.throws(() => parseConfig({ convexUrl: "https://x.convex.cloud", targets: [target, target] }), /listed twice/);

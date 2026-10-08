@@ -82,6 +82,7 @@ for (const t of config.targets) {
     wake: makeWaker(t.participant, t.waker, { events }),
     log,
     renudgeMs: t.renudgeMs,
+    wakeOn: t.wakeOn,
     ...(t.waker.kind === "mcp-events" && events
       ? {
           forget: (ids: string[]) => events.forget(t.participant, ids),

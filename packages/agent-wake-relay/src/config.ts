@@ -18,6 +18,11 @@ export interface TargetConfigFile {
   waker: WakerConfig;
   /** Wake again if a delivery is still outstanding this long after the last wake (ms or `<n>s|m|h`). Default 10m; 0 turns it off. */
   renudgeAfter?: number | string;
+  /**
+   * What wakes the agent. `all` (default): every delivery. `requests`: only deliveries that expect an answer
+   * (`collect`), so an agent kept around to answer direct questions is never woken by answers or FYIs.
+   */
+  wakeOn?: "all" | "requests";
 }
 
 /** The MCP server ChatGPT connects to for the `mcp-events` waker. */
@@ -53,6 +58,7 @@ export interface Target {
   machineSecretFile: string;
   waker: WakerConfig;
   renudgeMs: number;
+  wakeOn: "all" | "requests";
 }
 
 export interface McpConfig {
@@ -110,6 +116,12 @@ function durationValue(value: number | string | undefined, what: string, fallbac
   return ms;
 }
 
+function wakeOn(v: unknown, at: string): "all" | "requests" {
+  if (v === undefined || v === "all") return "all";
+  if (v === "requests") return "requests";
+  throw new ConfigError(`${at}: expected "all" or "requests"`);
+}
+
 export function parseConfig(raw: unknown): WakeConfig {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new ConfigError("expected a JSON object");
   const c = raw as Partial<WakeConfigFile>;
@@ -149,6 +161,7 @@ export function parseConfig(raw: unknown): WakeConfig {
       machineSecretFile: file(t.machineSecretFile, `${at}.machineSecretFile`),
       waker,
       renudgeMs: duration(t.renudgeAfter, `${at}.renudgeAfter`, 10 * 60_000, MAX_TIMER_MS),
+      wakeOn: wakeOn(t.wakeOn, `${at}.wakeOn`),
     };
   });
   const mcp = c.mcp === undefined ? undefined : parseMcp(c.mcp);

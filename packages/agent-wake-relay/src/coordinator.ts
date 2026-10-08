@@ -9,6 +9,8 @@ export interface WorkDelivery {
   recipient: string;
   state: string;
   createdAt: number;
+  /** True for a request (the agent is expected to answer); false for an answer or a notice. */
+  collect?: boolean;
   /** A claimed delivery's lease; while it's live the agent is working on it and isn't woken again. */
   claim?: { leaseExpiresAt: number };
 }
@@ -72,6 +74,8 @@ export interface CoordinatorOptions {
   retryMs?: number;
   /** Wake again if a delivery is still outstanding this long after its last wake. Default 10 min; 0 turns it off. */
   renudgeMs?: number;
+  /** `requests`: only deliveries with `collect` wake the agent; answers and notices are ignored entirely. Default `all`. */
+  wakeOn?: "all" | "requests";
 }
 
 export class Coordinator {
@@ -128,7 +132,7 @@ export class Coordinator {
   private lastFailure: { message: string; at: number; repeats: number } | null = null;
 
   constructor(options: CoordinatorOptions) {
-    this.o = { coalesceMs: 2_000, retryMs: 30_000, renudgeMs: 10 * 60_000, timers: realTimers, ...options };
+    this.o = { coalesceMs: 2_000, retryMs: 30_000, renudgeMs: 10 * 60_000, wakeOn: "all", timers: realTimers, ...options };
   }
 
   /** Feed each new value of the work subscription. */
@@ -136,7 +140,8 @@ export class Coordinator {
   private readonly latest = new Map<string, WorkDelivery>();
 
   update(deliveries: WorkDelivery[]): void {
-    const mine = deliveries.filter((d) => d.recipient === this.o.participant);
+    // With wakeOn "requests", an answer or notice is as if it weren't there: never woken for, never owed.
+    const mine = deliveries.filter((d) => d.recipient === this.o.participant && (this.o.wakeOn === "all" || d.collect === true));
     this.latest.clear();
     for (const d of mine) this.latest.set(d.id, d);
     const ids = new Set(mine.map((d) => d.id));
