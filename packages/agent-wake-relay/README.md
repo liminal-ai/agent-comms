@@ -82,6 +82,8 @@ There's one tool, `get_profile` (read-only, marked `openai/profile`), which retu
 }
 ```
 
+A target can also set `"wakeOn": "requests"`: only deliveries that expect an answer (requests) wake that agent; answers and notices are ignored entirely, never owed and never renudged. Use it for an agent kept around to answer direct questions, such as a superseded copy that must not be woken by ordinary traffic. Default `"all"`.
+
 With an `mcp-events` target, add the `mcp` section (only `listen.port`, `publicBaseUrl`, `issuer`, an allowlist and `stateFile` are required; `jwksUrl` defaults to `<issuer>/oauth2/jwks`):
 
 ```json
