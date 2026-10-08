@@ -240,15 +240,21 @@ export class Coordinator {
 
   /** Handoffs to delivered that landed while a wake was out get their own wake, whatever became of that wake. */
   private wakeAgainForHandoffs(): void {
+    this.wakeAgainFor([...this.transitioned]);
+    this.transitioned.clear();
+  }
+
+  /** Those of `handoffs` still outstanding are due a wake of their own after the coalesce delay. */
+  private wakeAgainFor(handoffs: string[]): void {
     let again = 0;
-    for (const id of this.transitioned) {
+    for (const id of handoffs) {
+      this.transitioned.delete(id);
       if (!this.outstanding.has(id)) continue;
       this.outstanding.set(id, 0);
       this.stateAtWake.set(id, "delivered");
       this.handedOver.add(id);
       again++;
     }
-    this.transitioned.clear();
     // An owed handoff that landed while a wake built before it was out: the next wake carries it. That wake going
     // out clears the mark (fire()), so a callback that refuses it for good isn't retried every coalesce delay: the
     // debt stays owed and a subscriber re-arm or a later wake for anything carries it, as for any owed id.
@@ -367,6 +373,14 @@ export class Coordinator {
         this.o.forget?.(accepted);
         this.o.log(`@${this.o.participant}: woke for ${accepted.length} delivery(s) ${accepted.join(",")}; the rest of the wake failed`);
       }
+      // A handoff that landed while the wake was out, for an id whose event was accepted: its own wake follows after
+      // the coalesce delay, not after the retry backoff of the events that failed.
+      this.wakeAgainFor(accepted.filter((id) => this.transitioned.has(id)));
+      // An id handed over and gone while the wake was out: the retry would resend the same event, which a receiver
+      // that processed it and only lost the response would dedupe, so the waker forgets it and the retry's event
+      // for it is a new one.
+      const stale = ids.filter((id) => this.owedAfterWake.has(id) && !accepted.includes(id)); // accepted ones are forgotten above
+      if (stale.length) this.o.forget?.(stale);
       const rest = ids.filter((id) => !accepted.includes(id));
       if (!rest.length) {
         // Everything in it landed after all (a refusal only for events already settled): nothing to retry.

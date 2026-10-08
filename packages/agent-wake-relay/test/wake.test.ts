@@ -489,6 +489,61 @@ describe("coordinator", () => {
     assert.equal(wakes.length, 2, "then the live lease holds a's renudges");
   });
 
+  it("an id handed over and gone while its wake is out is forgotten by the waker when that wake fails, so the retry's event is new (#27 review)", async () => {
+    // A receiver that processed the first event and only lost the response would dedupe a retry of the same event.
+    const timers = new FakeTimers();
+    const forgotten: string[][] = [];
+    const wakes: string[][] = [];
+    let release: (e: Error) => void = () => {};
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 0,
+      forget: (ids) => forgotten.push(ids),
+      wake: async (ids) => {
+        wakes.push(ids);
+        if (wakes.length === 1) await new Promise<void>((_, reject) => (release = reject));
+      },
+    });
+    c.update([{ ...d("b"), state: "pending" }]);
+    await timers.advance(2_000); // the wake is out
+    c.update([d("b")]); // handed over while it is out
+    c.update([]); // and gone
+    release(new Error("socket hang up")); // the response was lost
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(forgotten, [["b"]], "the waker drops the event it may have got through, so the retry mints a new one");
+    await timers.advance(30_000);
+    assert.deepEqual(wakes, [["b"], ["b"]], "the retry carries b");
+    await timers.advance(60 * 60_000);
+    assert.equal(wakes.length, 2);
+  });
+
+  it("a handoff that lands while a multi-event wake is out, for an id whose event was accepted, is woken for after the coalesce delay, not the retry backoff (#27 review)", async () => {
+    const timers = new FakeTimers();
+    const wakes: string[][] = [];
+    let release: (e: Error) => void = () => {};
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 10 * 60_000,
+      wake: async (ids) => {
+        wakes.push(ids);
+        if (wakes.length === 1) await new Promise<void>((_, reject) => (release = reject));
+      },
+    });
+    const lease = () => ({ leaseExpiresAt: timers.now() + 60_000 });
+    c.update([{ ...d("a"), state: "pending" }, { ...d("b"), state: "pending" }]);
+    await timers.advance(2_000); // the wake for [a, b] is out
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }, { ...d("b"), state: "pending" }]); // a handed over while it is out
+    release(Object.assign(new Error("HTTP 500"), { accepted: ["a"] })); // a's event (built from pending) accepted; b's refused
+    await new Promise((r) => setImmediate(r));
+    await timers.advance(2_001);
+    assert.equal(wakes.length, 2, "a's post-handoff wake went out after the coalesce delay");
+    assert.ok(wakes[1]!.includes("a"), `and carried a: ${JSON.stringify(wakes[1])}`);
+  });
+
   it("a newcomer whose event is accepted on a retry of a failing wake isn't woken for again by the next retry (#27 review)", async () => {
     // The race Codex and Macroscope found on fc4e5cd: b's event keeps failing; a is handed over and joins the retry
     // as its own event, which is accepted (after the handoff). The next retry must not treat a as unpaid.

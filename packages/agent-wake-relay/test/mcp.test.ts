@@ -870,6 +870,29 @@ describe("event delivery", () => {
     }
   });
 
+  it("an id forgotten out of a kept pending event gets a new event on the retry, while the kept event is resent unchanged", async () => {
+    let status = 500;
+    const r = await receiver(chatgpt(() => status));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const wake = h.waker("dot");
+      await assert.rejects(wake(["d1", "d2"]), /HTTP 500/);
+      const first = JSON.parse(r.seen[1]!.body) as { eventId: string };
+      h.forget("dot", ["d1"]); // the coordinator: d1 was handed over and gone while the wake was out
+      status = 200;
+      await wake(["d1", "d2"]); // the retry still carries d1 (owed)
+      const retried = r.seen.slice(4).map((e) => JSON.parse(e.body) as { eventId: string; data: { deliveryIds: string[] } });
+      assert.equal(retried.length, 2, "two events on the retry");
+      const kept = retried.find((e) => e.eventId === first.eventId);
+      const fresh = retried.find((e) => e.eventId !== first.eventId);
+      assert.deepEqual(kept?.data.deliveryIds, ["d1", "d2"], "the kept event is resent unchanged, for the receiver's dedupe");
+      assert.deepEqual(fresh?.data.deliveryIds, ["d1"], "and d1 gets a new event the receiver can't have seen");
+    } finally {
+      r.close();
+    }
+  });
+
   it("succeeds when one of several subscriptions accepts", async () => {
     const good = await receiver(chatgpt());
     const bad = await receiver(chatgpt(() => 400));

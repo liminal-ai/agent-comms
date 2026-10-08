@@ -396,7 +396,8 @@ export class EventHub {
       // Deliveries forgotten while this wake was being prepared are settled before anything is published.
       const current = new Set(deliveryIds.filter((id) => !forgotten.has(id)));
       const attempts = (this.attempts.get(participant) ?? []).filter((a) => a.ids.some((id) => current.has(id)));
-      const covered = new Set(attempts.flatMap((a) => a.ids));
+      // An id settled out of a kept attempt (forgotten, then outstanding again) gets a new event rather than the old one.
+      const covered = new Set(attempts.flatMap((a) => a.ids.filter((id) => !a.settled.has(id))));
       for (const ids of this.chunk(participant, t.event, [...current].filter((id) => !covered.has(id)).sort())) {
         const event = this.event(t.event, randomId("evt"), participant, ids);
         attempts.push({ eventId: event.eventId, ids, event, body: JSON.stringify(event), state: "pending", refused: new Set(), settled: new Set() });
