@@ -24,7 +24,7 @@ export async function listenWeb(server, config, log = (line) => console.log(line
     if (typeof lockWaitMs !== 'number' || !Number.isFinite(lockWaitMs) || lockWaitMs < 0) throw new Error('web config: lockWaitMs must be a non-negative number of milliseconds');
     // Starters take turns under a lock, so the probe, the removal of a stale socket and the bind
     // happen with no other starter in between, and a live socket keeps its path throughout.
-    await withStartLock(config.socket, lockWaitMs, async () => {
+    await withStartLock(config.socket, lockWaitMs, async (held) => {
       // Looked at under the lock, so it can't have changed under us by the time we act on it.
       const existing = await lstat(config.socket).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
       if (existing && !existing.isSocket()) throw new Error(`web config: socket path ${config.socket} exists and is not a socket; refusing to replace it`);
@@ -41,6 +41,13 @@ export async function listenWeb(server, config, log = (line) => console.log(line
         process.umask(umask);
       }
       await chmod(config.socket, 0o600);
+      // Belt and braces: if the lock was displaced under us (only possible through a reclaim race),
+      // another starter may be about to replace this socket. Fail loudly rather than serve a path
+      // that is no longer ours.
+      if (!(await held())) {
+        await new Promise((resolve) => server.close(resolve));
+        throw new Error(`web config: start lock for ${config.socket} was taken over during startup; refusing to serve`);
+      }
     });
     log(`Comms ${config.environment} web: unix:${config.socket}${config.adminTokenFile ? ' (proxy mode)' : ''}`);
   } else {
@@ -65,6 +72,7 @@ async function withStartLock(socket, waitMs, fn) {
   const deadline = Date.now() + waitMs;
   const mine = `${lock}.${process.pid}.${randomBytes(4).toString('hex')}.pid`;
   await writeFile(mine, String(process.pid), { mode: 0o600 });
+  const { ino: mineIno, dev: mineDev } = await lstat(mine);
   const claim = (path) => link(mine, path).then(() => true, (error) => { if (error.code === 'EEXIST') return false; throw error; });
   const inspect = async (path) => {
     const st = await lstat(path).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
@@ -112,9 +120,14 @@ async function withStartLock(socket, waitMs, fn) {
     await rm(mine, { force: true });
   }
   try {
-    return await fn();
+    return await fn(held);
   } finally {
-    await rm(lock, { force: true });
+    if (await held()) await rm(lock, { force: true });
+  }
+
+  async function held() {
+    const st = await lstat(lock).catch(() => null);
+    return st !== null && st.ino === mineIno && st.dev === mineDev;
   }
 }
 
