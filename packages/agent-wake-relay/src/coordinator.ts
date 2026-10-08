@@ -159,7 +159,12 @@ export class Coordinator {
   private async fire(): Promise<void> {
     if (this.inFlight) return this.schedule(this.o.coalesceMs);
     const ids = this.due();
-    if (!ids.length) return;
+    if (!ids.length) {
+      // Nothing to wake for after all (the delivery that asked for this went away): the renudge this
+      // wake pre-empted still has to be reinstalled for whatever remains outstanding.
+      this.scheduleRenudge();
+      return;
+    }
     this.inFlight = true;
     this.inFlightStates = new Map(ids.map((id) => [id, this.stateAtWake.get(id) ?? ""]));
     try {

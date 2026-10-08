@@ -247,6 +247,20 @@ describe("coordinator", () => {
     assert.ok(logs.some((l) => /retrying every 30s/.test(l)));
   });
 
+  it("a renudge pre-empted by a wake that turns out empty is reinstalled", async () => {
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+    c.update([d("a")]);
+    await timers.advance(2_000);
+    assert.deepEqual(wakes, [["a"]]);
+    await timers.advance(5 * 60_000);
+    c.update([d("a"), d("b")]); // a fresh delivery: a coalesced wake is scheduled, the renudge timer cleared
+    c.update([d("a")]); // and it's gone again before that wake fires
+    await timers.advance(2_000);
+    assert.equal(wakes.length, 1, "nothing was due for the coalesced wake");
+    await timers.advance(5 * 60_000);
+    assert.deepEqual(wakes, [["a"], ["a"]], "a was still renudged on time");
+  });
+
   it("a terminal wake failure isn't retried every 30 s; the renudge tries again later", async () => {
     const { timers, wakes, logs, c } = setup({ terminal: 1, renudgeMs: 10 * 60_000 });
     c.update([d("a")]);
