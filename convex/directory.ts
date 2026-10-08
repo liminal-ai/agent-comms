@@ -48,7 +48,12 @@ export const registerMachine = mutation({
       .query("machines")
       .withIndex("by_machineId", (q) => q.eq("machineId", args.machineId))
       .unique();
-    if (existing) await ctx.db.patch(existing._id, { secretHash });
+    if (existing) {
+      if (existing.watchSecretHash && existing.watchSecretHash === secretHash) {
+        fail("bad_request", "the connector secret must differ from the watch secret");
+      }
+      await ctx.db.patch(existing._id, { secretHash });
+    }
     else await ctx.db.insert("machines", { machineId: args.machineId, secretHash, createdAt: Date.now() });
     return { machineId: args.machineId };
   },

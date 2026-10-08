@@ -126,7 +126,12 @@ export class Coordinator {
       if (this.outstanding.get(d.id) === 0) {
         const started = this.inFlightStates?.get(d.id);
         if (started !== undefined && started !== "delivered" && d.state === "delivered") this.transitioned.add(d.id);
-        else this.stateAtWake.set(d.id, d.state);
+        else {
+          const prev = this.stateAtWake.get(d.id);
+          this.stateAtWake.set(d.id, d.state);
+          // A delivery that flips to delivered while still at 0 (never woken) must schedule a wake.
+          if (d.state === "delivered" && prev !== "delivered") fresh++;
+        }
         continue;
       }
       // Machines with a connector (grok-box) hand items over one at a time; a request that was still
@@ -280,6 +285,9 @@ export class Coordinator {
       if (this.failures >= RETRY_GIVE_UP) {
         // Enough: the webhook has been failing for a while. Nothing more goes out until a delivery changes or a renudge is due.
         this.gaveUp = true;
+        // Anchor future renudges to now so an already-due step doesn't immediately undo the give-up,
+        // and so never-woken deliveries aren't abandoned with `at === 0`.
+        for (const id of ids) if (this.outstanding.has(id)) this.outstanding.set(id, now);
         this.o.log(`@${this.o.participant}: wake for ${ids.join(",")} has failed ${this.failures} times in a row; giving up until something changes`);
       } else this.schedule(delay);
     } finally {
