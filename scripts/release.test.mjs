@@ -126,6 +126,12 @@ test('web service starts through the deployed current directory link' + (lowerDr
       await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /not a regular file/);
       await rm(`${locked}.lock`);
       await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: join(dir, 'w.sock'), lockWaitMs: '200' }, () => {}), /lockWaitMs must be a non-negative number/);
+      // "-1" is not a pid (kill(-1, 0) would succeed for the wrong reason); it is malformed and ages out.
+      await rm(`${locked}.lock`, { force: true });
+      await writeFile(`${locked}.lock`, '-1');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const afterNegative = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {});
+      try { assert.ok(afterNegative.listening, 'a lock holding -1 is reclaimed as malformed'); } finally { await stop(afterNegative); }
       await writeFile(`${locked}.lock`, String(process.pid));
       await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /another instance is starting/);
       await rm(`${locked}.lock`);

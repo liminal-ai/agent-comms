@@ -70,7 +70,10 @@ async function withStartLock(socket, waitMs, fn) {
     const st = await lstat(path).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
     if (st === null) return null;
     if (!st.isFile()) throw new Error(`web config: lock path ${path} is not a regular file; refusing to use it`);
-    const holder = Number((await readFile(path, 'utf8').catch(() => '')).trim());
+    // Only canonical positive-integer text counts as a pid; anything else ("", "-1", garbage) is a
+    // malformed lock and goes through the age-based recovery. (kill(-1, 0) would probe every process.)
+    const text = (await readFile(path, 'utf8').catch(() => '')).trim();
+    const holder = /^[1-9]\d{0,9}$/.test(text) ? Number(text) : 0;
     const stale = (holder && !processAlive(holder)) || (!holder && Date.now() - st.mtimeMs >= waitMs);
     return { st, holder, stale };
   };
