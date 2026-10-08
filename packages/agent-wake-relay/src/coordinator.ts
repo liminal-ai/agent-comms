@@ -35,6 +35,8 @@ const realTimers: Timers = {
 };
 
 export interface CoordinatorOptions {
+  /** Called with the ids of deliveries that are no longer outstanding, so a waker can drop what it kept for them. */
+  forget?: (ids: string[]) => void;
   participant: string;
   wake: WakeFn;
   log: (line: string) => void;
@@ -48,7 +50,7 @@ export interface CoordinatorOptions {
 }
 
 export class Coordinator {
-  private readonly o: Required<Omit<CoordinatorOptions, "timers">> & { timers: Timers };
+  private readonly o: Required<Omit<CoordinatorOptions, "timers" | "forget">> & { timers: Timers; forget?: (ids: string[]) => void };
   /** Outstanding deliveries for the participant → when they were last woken for (0 = not yet). */
   /** Delivery id -> when it was last woken for (0 = never). */
   private readonly outstanding = new Map<string, number>();
@@ -72,11 +74,14 @@ export class Coordinator {
   update(deliveries: WorkDelivery[]): void {
     const mine = deliveries.filter((d) => d.recipient === this.o.participant);
     const ids = new Set(mine.map((d) => d.id));
+    const gone: string[] = [];
     for (const id of [...this.outstanding.keys()]) {
       if (ids.has(id)) continue;
       this.outstanding.delete(id);
       this.stateAtWake.delete(id);
+      gone.push(id);
     }
+    if (gone.length) this.o.forget?.(gone);
     let fresh = 0;
     for (const d of mine) {
       if (!this.outstanding.has(d.id)) {

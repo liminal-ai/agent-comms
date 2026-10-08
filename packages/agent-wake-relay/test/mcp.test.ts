@@ -626,6 +626,49 @@ describe("event delivery", () => {
     }
   });
 
+  it("pending attempts are dropped once the coordinator says their deliveries are gone", async () => {
+    const r = await receiver(chatgpt(() => 500));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const wake = h.waker("dot");
+      await assert.rejects(wake(["d1", "d2"]), /HTTP 500/);
+      const attempts = (h as unknown as { attempts: Map<string, unknown[]> }).attempts;
+      assert.equal(attempts.get("dot")?.length, 1, "the failed attempt is kept for a retry");
+      h.forget("dot", ["d1"]);
+      assert.equal(attempts.get("dot")?.length, 1, "still owed: d2 is outstanding");
+      h.forget("dot", ["d2"]);
+      assert.equal(attempts.has("dot"), false, "nothing left to retry, nothing kept");
+    } finally {
+      r.close();
+    }
+  });
+
+  it("a subscriber found revoked whose subscription then expires is no longer remembered", async () => {
+    const bad = await receiver(chatgpt());
+    let now = Date.now();
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const store = new SubscriptionStore(join(dir, "state.json"), () => now);
+    const h = new EventHub({ targets: [{ participant: "dot", event: "comms.delivery.dot" }], store, post: guardedPost(loopback), urlPolicy: loopback, log: () => {}, sleep: async () => {}, now: () => now, authorize: async () => "denied" });
+    try {
+      await h.subscribe("user_bad", { ...sub(bad.url, newSecret()), ttlMs: 60_000 });
+      const writer = store as unknown as { write: (subs: unknown) => Promise<void> };
+      const realWrite = writer.write.bind(store);
+      writer.write = async () => {
+        throw Object.assign(new Error("EACCES"), { code: "EACCES" });
+      };
+      await h.waker("dot")(["d1"]).catch(() => {});
+      const revoked = (h as unknown as { revoked: Set<string> }).revoked;
+      assert.equal(revoked.size, 1, "the unsaved revocation is remembered");
+      writer.write = realWrite;
+      now += 120_000; // the subscription expires and the next wake prunes it
+      await h.waker("dot")(["d2"]).catch(() => {});
+      assert.equal(revoked.size, 0, "no subscription, no tombstone");
+    } finally {
+      bad.close();
+    }
+  });
+
   it("a retry of a split wake resends only the batches that didn't settle", async () => {
     let calls = 0;
     // First wake: batch 1 accepted, batch 2 fails transiently (all its attempts). Second wake: everything accepted.

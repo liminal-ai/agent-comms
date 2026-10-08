@@ -60,6 +60,8 @@ const MAX_BODY = 256 * 1024;
 interface Attempt {
   eventId: string;
   ids: string[];
+  /** Deliveries of this attempt the coordinator has since reported as no longer outstanding. */
+  settled: Set<string>;
   /** Built once; a retry posts exactly these bytes (timestamp included) under the same id. */
   event: Event;
   body: string;
@@ -231,6 +233,7 @@ export class EventHub {
     if (!isPlainObject(d) || typeof d.url !== "string") throw new RpcError(INVALID_PARAMS, "delivery.url is required");
     const id = subscriptionId(principal, d.url, t.event, args);
     if (await this.o.store.delete(id)) this.o.log(`mcp: unsubscribed ${id} from ${t.event}`);
+    this.revoked.delete(id);
   }
 
   private recentlyVerified(principal: string, url: string): number | undefined {
@@ -316,6 +319,18 @@ export class EventHub {
     return last;
   }
 
+  /** Deliveries that are no longer outstanding: whatever was kept to retry them is dropped, so a backlog that was answered meanwhile doesn't linger. */
+  forget(participant: string, ids: string[]): void {
+    const kept: Attempt[] = [];
+    for (const a of this.attempts.get(participant) ?? []) {
+      for (const id of ids) a.settled.add(id);
+      // The event itself is kept byte-for-byte while any of its deliveries is outstanding; only once all are settled does it go.
+      if (a.ids.some((id) => !a.settled.has(id))) kept.push(a);
+    }
+    if (kept.length) this.attempts.set(participant, kept);
+    else this.attempts.delete(participant);
+  }
+
   /** The WakeFn for one participant: an event to every live subscription; resolves if at least one accepted it. */
   waker(participant: string): WakeFn {
     const t = this.o.targets.find((x) => x.participant === participant);
@@ -324,6 +339,8 @@ export class EventHub {
       // Dropping expired entries is bookkeeping; a state file that can't be written right now
       // doesn't hold up a wake that live subscribers are waiting for.
       await this.o.store.pruneExpired().catch((error: unknown) => this.o.log(`mcp: could not save the removal of expired subscriptions (${(error as NodeJS.ErrnoException)?.code ?? "error"})`));
+      // A remembered revocation is only owed while its subscription still exists; one that expired or was unsubscribed meanwhile is settled.
+      for (const id of this.revoked) if (!this.o.store.get(id)) this.revoked.delete(id);
       let subs = this.o.store.active(t.event);
       if (this.o.authorize) {
         const allowed: Subscription[] = [];
@@ -357,7 +374,7 @@ export class EventHub {
       const covered = new Set(attempts.flatMap((a) => a.ids));
       for (const ids of this.chunk(participant, t.event, deliveryIds.filter((id) => !covered.has(id)).sort())) {
         const event = this.event(t.event, randomId("evt"), participant, ids);
-        attempts.push({ eventId: event.eventId, ids, event, body: JSON.stringify(event), state: "pending", refused: new Set() });
+        attempts.push({ eventId: event.eventId, ids, event, body: JSON.stringify(event), state: "pending", refused: new Set(), settled: new Set() });
       }
       this.attempts.set(participant, attempts);
       const failures: string[] = [];

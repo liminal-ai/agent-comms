@@ -72,7 +72,13 @@ const client = new ConvexClient(config.convexUrl, {
 const coordinators: Coordinator[] = [];
 for (const t of config.targets) {
   const machine = { id: t.machine, secret: readFileSync(t.machineSecretFile, "utf8").trim() };
-  const c = new Coordinator({ participant: t.participant, wake: makeWaker(t.participant, t.waker, { events }), log, renudgeMs: t.renudgeMs });
+  const c = new Coordinator({
+    participant: t.participant,
+    wake: makeWaker(t.participant, t.waker, { events }),
+    log,
+    renudgeMs: t.renudgeMs,
+    ...(t.waker.kind === "mcp-events" && events ? { forget: (ids: string[]) => events.forget(t.participant, ids) } : {}),
+  });
   coordinators.push(c);
   client.onUpdate(
     anyApi.connector!.work!,

@@ -261,6 +261,18 @@ describe("coordinator", () => {
     assert.deepEqual(wakes, [["a"], ["a"]], "a was still renudged on time");
   });
 
+  it("tells the waker which deliveries are no longer outstanding", async () => {
+    const timers = new FakeTimers();
+    const forgotten: string[][] = [];
+    const c = new Coordinator({ participant: "grok", timers, log: () => {}, renudgeMs: 0, wake: async () => {}, forget: (ids) => forgotten.push(ids) });
+    c.update([d("a"), d("b"), d("c")]);
+    await timers.advance(2_000);
+    c.update([d("b")]);
+    assert.deepEqual(forgotten, [["a", "c"]]);
+    c.update([]);
+    assert.deepEqual(forgotten, [["a", "c"], ["b"]]);
+  });
+
   it("a terminal wake failure isn't retried every 30 s; the renudge tries again later", async () => {
     const { timers, wakes, logs, c } = setup({ terminal: 1, renudgeMs: 10 * 60_000 });
     c.update([d("a")]);
