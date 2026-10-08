@@ -48,7 +48,6 @@ export function subscriptionId(principal: string, url: string, event: string, ar
 
 export class SubscriptionStore {
   private readonly subs = new Map<string, Subscription>();
-  private writing: Promise<void> = Promise.resolve();
   private readonly path: string;
   private readonly now: () => number;
 
@@ -82,7 +81,7 @@ export class SubscriptionStore {
     return [...this.subs.values()].filter((s) => s.expiresAt > now && (event === undefined || s.event === event));
   }
 
-  /** Mutations run one at a time, each with its own save, so a rollback only ever sees the state it started from. */
+  /** Mutations and direct saves run one at a time, each save writing the state as it is at its turn, so a rollback only ever sees the state it started from and a save queued ahead of a mutation never carries that mutation. */
   private ops: Promise<unknown> = Promise.resolve();
   private serialized<T>(op: () => Promise<T>): Promise<T> {
     const next = this.ops.then(op, op);
@@ -98,7 +97,7 @@ export class SubscriptionStore {
       const previous = this.subs.get(sub.id);
       this.subs.set(sub.id, sub);
       try {
-        await this.save();
+        await this.write();
       } catch (error) {
         if (previous) this.subs.set(sub.id, previous);
         else this.subs.delete(sub.id);
@@ -113,7 +112,7 @@ export class SubscriptionStore {
       if (!previous) return false;
       this.subs.delete(id);
       try {
-        await this.save();
+        await this.write();
       } catch (error) {
         this.subs.set(id, previous);
         throw error;
@@ -135,16 +134,16 @@ export class SubscriptionStore {
     return changed;
   }
 
-  /** Writes are serialized; each one writes the whole current state. */
+  /** Persists the current state at its turn in the queue (after any mutation already queued, before any queued later). */
   save(): Promise<void> {
-    const next = this.writing.then(async () => {
-      const tmp = `${this.path}.${process.pid}.tmp`;
-      const body = `${JSON.stringify({ version: 1, subscriptions: [...this.subs.values()] }, null, 2)}\n`;
-      await writeFile(tmp, body, { mode: 0o600 });
-      await chmod(tmp, 0o600);
-      await rename(tmp, this.path);
-    });
-    this.writing = next.catch(() => {});
-    return next;
+    return this.serialized(() => this.write());
+  }
+
+  private async write(): Promise<void> {
+    const tmp = `${this.path}.${process.pid}.tmp`;
+    const body = `${JSON.stringify({ version: 1, subscriptions: [...this.subs.values()] }, null, 2)}\n`;
+    await writeFile(tmp, body, { mode: 0o600 });
+    await chmod(tmp, 0o600);
+    await rename(tmp, this.path);
   }
 }

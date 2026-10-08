@@ -10,7 +10,7 @@ import { parseConfig } from "../src/config.ts";
 import { Authenticator, type UserLookup } from "../src/mcp/auth.ts";
 import { EventHub, RpcError } from "../src/mcp/events.ts";
 import { createMcpServer, PROTOCOL_VERSION } from "../src/mcp/server.ts";
-import { canonicalJson, SubscriptionStore, subscriptionId } from "../src/mcp/store.ts";
+import { canonicalJson, type Subscription, SubscriptionStore, subscriptionId } from "../src/mcp/store.ts";
 import { BlockedUrlError, guardedPost, isPublicAddress, parseSecret, sign, urlProblem } from "../src/mcp/webhook.ts";
 
 const loopback = { allowHttp: true, allowPrivate: true };
@@ -61,7 +61,7 @@ function verifies(r: Received, secret: string): boolean {
 
 /** Every save from now on fails as if the state file's directory were read-only (portable: a directory chmod doesn't bite on Windows). */
 function unwritable(store: SubscriptionStore): void {
-  store.save = async () => {
+  (store as unknown as { write: () => Promise<void> }).write = async () => {
     throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
   };
 }
@@ -498,6 +498,22 @@ describe("event delivery", () => {
     }
   });
 
+  it("a save queued ahead of a failing put never persists that put's subscription", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const path = join(dir, "state.json");
+    const store = new SubscriptionStore(path);
+    const good = { ...sub("https://a.example/hook", newSecret()), id: "good", principal: "user_1", createdAt: 1, expiresAt: Number.MAX_SAFE_INTEGER } as unknown as Subscription;
+    await store.put(good);
+    // Its write fails (a BigInt can't be serialized), after the direct save was queued but before it ran.
+    const bad = { ...good, id: "bad", createdAt: 1n } as unknown as Subscription;
+    const direct = store.save();
+    await assert.rejects(store.put(bad), /BigInt/);
+    await direct;
+    const onDisk = JSON.parse(await readFile(path, "utf8")) as { subscriptions: { id: string }[] };
+    assert.deepEqual(onDisk.subscriptions.map((s) => s.id), ["good"], "the failed put is on neither the map nor the disk");
+    assert.equal(store.get("bad"), undefined);
+  });
+
   it("overlapping refreshes keep the secret granted just before as the rotation fallback", async () => {
     const r = await receiver(chatgpt());
     const { h, store } = await hub();
@@ -902,9 +918,10 @@ describe("subscription store", () => {
     const base = { principal: "u", url: "https://example.com/h", event: "comms.delivery.dot", arguments: "{}", createdAt: 0, verifiedAt: 0, expiresAt: Date.now() + 60_000 };
     const first = { ...base, id: "sub_x", secret: "whsec_first" } as unknown as Parameters<typeof store.put>[0];
     const second = { ...base, id: "sub_x", secret: "whsec_second" } as unknown as Parameters<typeof store.put>[0];
-    const realSave = store.save.bind(store);
+    const writer = store as unknown as { write: () => Promise<void> };
+    const realWrite = writer.write.bind(store);
     let fail = true;
-    store.save = () => (fail ? ((fail = false), Promise.reject(new Error("ENOSPC"))) : realSave());
+    writer.write = () => (fail ? ((fail = false), Promise.reject(new Error("ENOSPC"))) : realWrite());
     const a = store.put(first);
     const b = store.put(second);
     await assert.rejects(a);
