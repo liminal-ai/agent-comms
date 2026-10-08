@@ -690,6 +690,30 @@ describe("event delivery", () => {
     }
   });
 
+  it("a subscription that refused an event for good gets it again once refreshed", async () => {
+    let statusA = 404;
+    const a = await receiver(chatgpt(() => statusA));
+    const b = await receiver(chatgpt(() => 500));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_a", sub(a.url, newSecret()));
+      await h.subscribe("user_b", sub(b.url, newSecret()));
+      const wake = h.waker("dot");
+      await assert.rejects(wake(["d1"]), /HTTP 500/); // a refused for good (404), b keeps failing
+      assert.equal(a.seen.length, 2, "verification, then one refused post");
+      await assert.rejects(wake(["d1"]), /HTTP 500/);
+      assert.equal(a.seen.length, 2, "not posted to the refusing subscription again");
+      statusA = 200;
+      await h.subscribe("user_a", sub(a.url, newSecret())); // the callback is repaired and refreshed (same key)
+      await wake(["d1"]);
+      assert.equal(a.seen.at(-1)!.headers["x-mcp-subscription-id"], a.seen[1]!.headers["x-mcp-subscription-id"], "same subscription id");
+      assert.equal(JSON.parse(a.seen.at(-1)!.body).eventId, JSON.parse(a.seen[1]!.body).eventId, "the pending event, same id, reached the repaired callback");
+    } finally {
+      a.close();
+      b.close();
+    }
+  });
+
   it("a retry of a split wake resends only the batches that didn't settle", async () => {
     let calls = 0;
     // First wake: batch 1 accepted, batch 2 fails transiently (all its attempts). Second wake: everything accepted.

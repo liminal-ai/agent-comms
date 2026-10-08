@@ -66,8 +66,9 @@ interface Attempt {
   event: Event;
   body: string;
   state: "pending" | "accepted" | "terminal";
-  /** Subscriptions that refused this event for good (410/413); never sent this event again. */
-  refused: Set<string>;
+  /** Subscription objects that refused this event for good; never sent this event again. A refresh publishes a new object, which is tried. */
+  /** Subscription objects (not ids) that refused this event for good; a refreshed subscription is a new object. */
+  refused: Set<Subscription>;
 }
 
 interface Event {
@@ -402,7 +403,8 @@ export class EventHub {
       for (const a of attempts) {
         if (a.state !== "pending") continue;
         const { event, body } = a;
-        const targets = subs.filter((s) => !a.refused.has(s.id));
+        // A refusal is tied to the subscription object that refused; a refresh publishes a new object and is tried again.
+        const targets = subs.filter((s) => !a.refused.has(s));
         const results = await Promise.all(targets.map((s) => this.deliver(s.id, event, body).then((r) => ({ s, r }))));
         const now = this.now();
         let ok = false;
@@ -417,7 +419,7 @@ export class EventHub {
             continue;
           }
           // A refusal deliver() classified as final (any non-retryable 4xx, a blocked URL, a gone subscription) is never posted to it again.
-          if (r.terminal) a.refused.add(s.id);
+          if (r.terminal) a.refused.add(s);
           else allTerminal = false;
           failures.push(`${hostOf(sub.url)} ${r.status ? `HTTP ${r.status}` : r.reason}`);
           sub.failedSince ??= now;
