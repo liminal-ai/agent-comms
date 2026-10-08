@@ -192,15 +192,27 @@ export class EventHub {
       verifiedAt,
       ...(existing?.lastDeliveryAt ? { lastDeliveryAt: existing.lastDeliveryAt } : {}),
     };
-    if (existing && existing.secret !== secret) {
-      sub.previousSecret = existing.secret;
-      sub.previousSecretUntil = now + ROTATION_GRACE_MS;
-    } else if (existing?.previousSecret && (existing.previousSecretUntil ?? 0) > now) {
-      sub.previousSecret = existing.previousSecret;
-      sub.previousSecretUntil = existing.previousSecretUntil!;
-    }
+    // Rotation state is derived inside the serialized write, from the subscription as it is then,
+    // so overlapping refreshes can't drop the secret the one before granted.
+    const rotate = () => {
+      const current = this.o.store.get(id);
+      delete sub.previousSecret;
+      delete sub.previousSecretUntil;
+      if (current) {
+        sub.createdAt = current.createdAt;
+        if (current.lastDeliveryAt) sub.lastDeliveryAt = current.lastDeliveryAt;
+        if (current.secret !== secret) {
+          sub.previousSecret = current.secret;
+          sub.previousSecretUntil = now + ROTATION_GRACE_MS;
+        } else if (current.previousSecret && (current.previousSecretUntil ?? 0) > now) {
+          sub.previousSecret = current.previousSecret;
+          sub.previousSecretUntil = current.previousSecretUntil!;
+        }
+      }
+    };
     await this.o.store.put(sub, () => {
       if (!underLimit()) throw new RpcError(RESOURCE_EXHAUSTED, "too many subscriptions", { limit: "subscriptions", max: MAX_PER_PRINCIPAL });
+      rotate();
     });
     this.o.log(`mcp: ${existing ? "refreshed" : "new"} subscription ${id} to ${t.event} (callback host ${hostOf(url)}) until ${new Date(sub.expiresAt).toISOString()}`);
     return { id, refreshBefore: new Date(sub.expiresAt).toISOString(), cursor: null, truncated: false };

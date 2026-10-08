@@ -247,6 +247,21 @@ describe("webhook waker", () => {
       server.close();
     }
   });
+  it("won't send the bearer key over plain http off this machine", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-"));
+    await writeFile(join(dir, "key"), "k");
+    let hits = 0;
+    const wake = webhookWaker("grok", { kind: "webhook", urlFile: join(dir, "url"), bearerKeyFile: join(dir, "key") }, async () => (hits++, new Response("{}")));
+    await writeFile(join(dir, "url"), "http://10.0.0.5/hook");
+    await assert.rejects(wake(["a"]), /must be https/);
+    assert.equal(hits, 0, "nothing was sent");
+    await writeFile(join(dir, "url"), "https://example.com/hook");
+    await wake(["a"]);
+    await writeFile(join(dir, "url"), "http://127.0.0.1:9/hook");
+    await wake(["a"]);
+    assert.equal(hits, 2);
+  });
+
   it("refuses to follow a redirect", async () => {
     const dir = await mkdtemp(join(tmpdir(), "wake-"));
     let hits = 0;

@@ -45,9 +45,20 @@ async function secret(path: string, what: string): Promise<string> {
 export function webhookWaker(participant: string, config: WebhookWaker, request: typeof fetch = fetch): WakeFn {
   return async (deliveryIds) => {
     const headers: Record<string, string> = { "content-type": "application/json", "user-agent": "agent-comms-agent-wake-relay" };
-    if (config.bearerKeyFile) headers.authorization = `Bearer ${await secret(config.bearerKeyFile, "bearer key")}`;
+    const url = await secret(config.urlFile, "webhook URL");
+    if (config.bearerKeyFile) {
+      // The key would cross the network in cleartext over plain http; only this machine may see it that way.
+      let parsed: URL;
+      try {
+        parsed = new URL(url);
+      } catch {
+        throw new Error("webhook URL file doesn't hold a URL");
+      }
+      if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLoopback(parsed.hostname))) throw new Error("webhook URL must be https (or http to localhost) when a bearer key is configured");
+      headers.authorization = `Bearer ${await secret(config.bearerKeyFile, "bearer key")}`;
+    }
     // A fetch failure's message can carry the URL, which is a secret here; report only the error code.
-    const res = await request(await secret(config.urlFile, "webhook URL"), {
+    const res = await request(url, {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -84,4 +95,9 @@ export function makeWaker(participant: string, config: WakerConfig, deps: WakerD
       if (!deps.events) throw new Error(`@${participant}: the mcp-events waker needs the config's mcp section`);
       return deps.events.waker(participant);
   }
+}
+
+function isLoopback(hostname: string): boolean {
+  const h = hostname.replace(/^\[|\]$/g, "");
+  return h === "localhost" || h === "::1" || /^127\.\d+\.\d+\.\d+$/.test(h);
 }

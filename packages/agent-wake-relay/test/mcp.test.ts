@@ -469,6 +469,24 @@ describe("event delivery", () => {
     }
   });
 
+  it("overlapping refreshes keep the secret granted just before as the rotation fallback", async () => {
+    const r = await receiver(chatgpt());
+    const { h, store } = await hub();
+    try {
+      const first = newSecret();
+      const second = newSecret();
+      const third = newSecret();
+      const { id } = await h.subscribe("user_1", sub(r.url, first));
+      // Two refreshes race: both read the subscription while it still holds `first`.
+      await Promise.all([h.subscribe("user_1", sub(r.url, second)), h.subscribe("user_1", sub(r.url, third))]);
+      const final = store.get(id)!;
+      assert.equal(final.secret, third);
+      assert.equal(final.previousSecret, second, "the secret granted immediately before, not the stale snapshot");
+    } finally {
+      r.close();
+    }
+  });
+
   it("the subscription limit holds under concurrent subscribes", async () => {
     const r = await receiver(chatgpt());
     const { h, store } = await hub();
