@@ -127,6 +127,9 @@ export class Coordinator {
     if (gone.length) this.o.forget?.(gone);
     for (const d of mine) {
       if (!this.outstanding.has(d.id)) {
+        // If a never-woken delivery reappears in the work list, it is no longer "owed":
+        // drop it from `owed` to keep the sets disjoint and avoid duplicate wakes.
+        this.owed.delete(d.id);
         this.outstanding.set(d.id, 0);
         this.stateAtWake.set(d.id, d.state);
         fresh++;
