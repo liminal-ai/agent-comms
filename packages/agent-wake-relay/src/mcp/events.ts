@@ -60,6 +60,9 @@ const MAX_BODY = 256 * 1024;
 interface Attempt {
   eventId: string;
   ids: string[];
+  /** Built once; a retry posts exactly these bytes (timestamp included) under the same id. */
+  event: Event;
+  body: string;
   state: "pending" | "accepted" | "terminal";
   /** Subscriptions that refused this event for good (410/413); never sent this event again. */
   refused: Set<string>;
@@ -169,7 +172,11 @@ export class EventHub {
     const id = subscriptionId(principal, url, t.event, args);
     const now = this.now();
     const existing = this.o.store.get(id);
-    const underLimit = () => this.o.store.get(id) !== undefined || this.o.store.active().filter((s) => s.principal === principal).length < MAX_PER_PRINCIPAL;
+    const underLimit = () => {
+      this.o.store.prune(); // expired entries don't count, and don't linger in memory or the state file
+      const live = this.o.store.get(id);
+      return (live !== undefined && live.expiresAt > this.now()) || this.o.store.active().filter((s) => s.principal === principal).length < MAX_PER_PRINCIPAL;
+    };
     // Checked here for a quick answer, and again inside the store's serialized insert, where it can't race.
     if (!underLimit()) throw new RpcError(RESOURCE_EXHAUSTED, "too many subscriptions", { limit: "subscriptions", max: MAX_PER_PRINCIPAL });
     const verifiedAt = this.recentlyVerified(principal, url) ?? (await this.verify(principal, id, url, secret));
@@ -300,8 +307,11 @@ export class EventHub {
         for (const s of subs) {
           // Only a definite "no" drops it; if access can't be checked right now, deliver anyway.
           if ((await this.o.authorize(s.principal)) === "denied") {
-            await this.o.store.delete(s.id);
-            this.o.log(`mcp: dropped subscription ${s.id}: its subscriber is no longer allowed`);
+            // Excluded from this wake either way; persisting the removal is bookkeeping.
+            await this.o.store.delete(s.id).then(
+              () => this.o.log(`mcp: dropped subscription ${s.id}: its subscriber is no longer allowed`),
+              (error: unknown) => this.o.log(`mcp: subscription ${s.id} is no longer allowed; could not save its removal (${(error as NodeJS.ErrnoException)?.code ?? "error"})`),
+            );
           } else allowed.push(s);
         }
         subs = allowed;
@@ -315,13 +325,15 @@ export class EventHub {
       const current = new Set(deliveryIds);
       const attempts = (this.attempts.get(participant) ?? []).filter((a) => a.ids.some((id) => current.has(id)));
       const covered = new Set(attempts.flatMap((a) => a.ids));
-      for (const ids of this.chunk(participant, t.event, deliveryIds.filter((id) => !covered.has(id)).sort())) attempts.push({ eventId: randomId("evt"), ids, state: "pending", refused: new Set() });
+      for (const ids of this.chunk(participant, t.event, deliveryIds.filter((id) => !covered.has(id)).sort())) {
+        const event = this.event(t.event, randomId("evt"), participant, ids);
+        attempts.push({ eventId: event.eventId, ids, event, body: JSON.stringify(event), state: "pending", refused: new Set() });
+      }
       this.attempts.set(participant, attempts);
       const failures: string[] = [];
       for (const a of attempts) {
         if (a.state !== "pending") continue;
-        const event = this.event(t.event, a.eventId, participant, a.ids);
-        const body = JSON.stringify(event);
+        const { event, body } = a;
         const targets = subs.filter((s) => !a.refused.has(s.id));
         const results = await Promise.all(targets.map((s) => this.deliver(s.id, event, body).then((r) => ({ s, r }))));
         const now = this.now();

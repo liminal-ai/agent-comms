@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHmac, randomBytes } from "node:crypto";
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +10,7 @@ import { parseConfig } from "../src/config.ts";
 import { Authenticator, type UserLookup } from "../src/mcp/auth.ts";
 import { EventHub, RpcError } from "../src/mcp/events.ts";
 import { createMcpServer, PROTOCOL_VERSION } from "../src/mcp/server.ts";
-import { canonicalJson, SubscriptionStore } from "../src/mcp/store.ts";
+import { canonicalJson, SubscriptionStore, subscriptionId } from "../src/mcp/store.ts";
 import { BlockedUrlError, guardedPost, isPublicAddress, parseSecret, sign, urlProblem } from "../src/mcp/webhook.ts";
 
 const loopback = { allowHttp: true, allowPrivate: true };
@@ -345,6 +345,7 @@ describe("event delivery", () => {
         const retried = events.filter((e) => e.eventId === first);
         assert.ok(retried.length >= 4, "the first event was retried under its own id");
         for (const e of retried) assert.deepEqual(e.data.deliveryIds, ["m"], "its body never changes");
+        assert.equal(new Set(r.seen.slice(1).filter((e) => JSON.parse(e.body).eventId === first).map((e) => e.body)).size, 1, "byte-identical body, timestamp included, on every retry");
         const fresh = events.filter((e) => e.eventId !== first);
         assert.equal(fresh.length, 1, `${newcomer}: one new event for the newcomer`);
         assert.deepEqual(fresh[0]!.data.deliveryIds, [newcomer]);
@@ -423,6 +424,48 @@ describe("event delivery", () => {
       for (const e of r.seen.slice(sent)) assert.ok(!before.has(JSON.parse(e.body).eventId), "fresh ids after a settled wake");
     } finally {
       r.close();
+    }
+  });
+
+  it("expired subscriptions are pruned before the cap is applied, and refreshing an expired one counts against it", async () => {
+    let now = Date.now();
+    const r = await receiver(chatgpt());
+    const { h, store } = await hub({ now: () => now });
+    try {
+      const subscribe = (i: number) => h.subscribe("user_1", sub(`${r.url}?n=${i}`, newSecret(), { ttlMs: 60_000 }));
+      for (let i = 0; i < 20; i++) await subscribe(i);
+      await assert.rejects(subscribe(20), (e: RpcError) => e.code === -32013);
+      now += 61_000; // all 20 expire, without any wake running prune
+      for (let i = 100; i < 120; i++) await subscribe(i);
+      assert.equal(store.active().length, 20);
+      assert.equal(store.get(subscriptionId("user_1", `${r.url}?n=0`, "comms.delivery.dot", "{}")), undefined, "expired entries are gone from the store, not just uncounted");
+      // Refreshing an expired subscription is a new live one: it doesn't slip past the cap.
+      await assert.rejects(subscribe(0), (e: RpcError) => e.code === -32013);
+    } finally {
+      r.close();
+    }
+  });
+
+  it("a denied subscription that can't be removed from an unwritable store is still excluded, and the others get the wake", async () => {
+    const good = await receiver(chatgpt());
+    const bad = await receiver(chatgpt());
+    const dir = await mkdtemp(join(tmpdir(), "wake-mcp-"));
+    const path = join(dir, "state.json");
+    const store = new SubscriptionStore(path);
+    const logs: string[] = [];
+    const h = new EventHub({ targets: [{ participant: "dot", event: "comms.delivery.dot" }], store, post: guardedPost(loopback), urlPolicy: loopback, log: (l) => logs.push(l), sleep: async () => {}, authorize: async (p) => (p === "user_bad" ? "denied" : "allowed") });
+    try {
+      await h.subscribe("user_good", sub(good.url, newSecret()));
+      await h.subscribe("user_bad", sub(bad.url, newSecret()));
+      await chmod(dir, 0o500); // the state file can't be rewritten now
+      await h.waker("dot")(["d1"]);
+      assert.equal(good.seen.length, 2, "the allowed subscriber got the event");
+      assert.equal(bad.seen.length, 1, "the denied one got only its verification");
+      assert.ok(logs.some((l) => /could not save its removal/.test(l)));
+    } finally {
+      await chmod(dir, 0o700);
+      good.close();
+      bad.close();
     }
   });
 
