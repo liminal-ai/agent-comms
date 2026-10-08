@@ -1,7 +1,7 @@
 import { privateFixture } from '../packages/windows-pipe/test/private-fixture.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm, mkdir, copyFile, symlink } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, mkdir, copyFile, symlink, stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { request } from 'node:http';
 import { once } from 'node:events';
@@ -92,6 +92,12 @@ test('web service starts through the deployed current directory link' + (lowerDr
       await writeFile(`${locked}.lock`, '999999999');
       const afterStale = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked }, () => {});
       try { assert.ok(afterStale.listening, 'a stale lock does not block startup'); } finally { await stop(afterStale); }
+      // A lock without a valid pid (starter killed mid-acquire) is reclaimed once it has sat untouched for the wait period.
+      await writeFile(`${locked}.lock`, '');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const afterEmpty = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {});
+      try { assert.ok(afterEmpty.listening, 'an empty lock does not block startup forever'); } finally { await stop(afterEmpty); }
+      assert.equal(await stat(`${locked}.lock`).then(() => true, () => false), false, 'the lock is released after startup');
       await writeFile(`${locked}.lock`, String(process.pid));
       await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /another instance is starting/);
       await rm(`${locked}.lock`);

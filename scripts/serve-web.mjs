@@ -7,7 +7,7 @@
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { connect } from 'node:net';
-import { chmod, lstat, open, readFile, realpath, rename, rm } from 'node:fs/promises';
+import { chmod, link, lstat, open, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localWebServer } from '../packages/service/src/web.ts';
@@ -54,24 +54,27 @@ export async function listenWeb(server, config, log = (line) => console.log(line
 async function withStartLock(socket, waitMs, fn) {
   const lock = `${socket}.lock`;
   const deadline = Date.now() + waitMs;
-  for (;;) {
-    try {
-      const handle = await open(lock, 'wx', 0o600);
-      await handle.writeFile(String(process.pid));
-      await handle.close();
-      break;
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
+  // The pid is written to a private file first and published by link(): the lock either exists
+  // with the pid inside or not at all, so a starter killed mid-acquire leaves nothing half-written.
+  const mine = `${lock}.${process.pid}.${randomBytes(4).toString('hex')}.pid`;
+  await writeFile(mine, String(process.pid), { mode: 0o600 });
+  try {
+    for (;;) {
+      const acquired = await link(mine, lock).then(() => true, (error) => { if (error.code === 'EEXIST') return false; throw error; });
+      if (acquired) break;
+      const holder = Number((await readFile(lock, 'utf8').catch(() => '')).trim());
+      const age = Date.now() - (await stat(lock).then((s) => s.mtimeMs, () => Date.now()));
+      // Stale: its pid is gone, or it never got a valid pid and nobody has touched it for the wait period.
+      if ((holder && !processAlive(holder)) || (!holder && age >= waitMs)) {
+        const taken = `${lock}.${process.pid}.${randomBytes(4).toString('hex')}.stale`;
+        await rename(lock, taken).then(() => rm(taken, { force: true }), () => {});
+        continue;
+      }
+      if (Date.now() >= deadline) throw new Error(`web config: another instance is starting on ${socket} (lock ${lock} held by pid ${holder || 'unknown'})`);
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    const holder = Number((await readFile(lock, 'utf8').catch(() => '')).trim());
-    if (holder && !processAlive(holder)) {
-      // Take the stale lock by renaming it (atomic: only one contender gets it), then drop it.
-      const taken = `${lock}.${process.pid}.${randomBytes(4).toString('hex')}.stale`;
-      await rename(lock, taken).then(() => rm(taken, { force: true }), () => {});
-      continue;
-    }
-    if (Date.now() >= deadline) throw new Error(`web config: another instance is starting on ${socket} (lock ${lock} held by pid ${holder || 'unknown'})`);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+  } finally {
+    await rm(mine, { force: true });
   }
   try {
     return await fn();
