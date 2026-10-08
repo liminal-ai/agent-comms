@@ -406,6 +406,35 @@ describe("coordinator", () => {
     assert.equal(wakes.length, 3);
   });
 
+  it("a handoff still in the work list whose event was accepted before it isn't paid by the retry either (#27 review)", async () => {
+    const timers = new FakeTimers();
+    const wakes: string[][] = [];
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 10 * 60_000,
+      wake: async (ids) => {
+        wakes.push(ids);
+        if (wakes.length === 1) throw new Error("HTTP 500"); // a's event accepted, b's refused
+        if (wakes.length === 2) return { acceptedBefore: ["a"] }; // the retry resent only b's
+      },
+    });
+    const lease = () => ({ leaseExpiresAt: timers.now() + 60_000 });
+    c.update([{ ...d("a"), state: "pending" }, { ...d("b"), state: "pending" }]);
+    await timers.advance(2_000);
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }, { ...d("b"), state: "pending" }]); // a handed over during the retry delay
+    await timers.advance(2_001);
+    assert.deepEqual(wakes, [["a", "b"], ["a", "b"]], "the handoff pulled the retry forward; it carried the same set");
+    await timers.advance(2_001);
+    assert.deepEqual(wakes, [["a", "b"], ["a", "b"], ["a"]], "a's event in the retry predated its handoff, so it gets a wake built after it");
+    for (let i = 0; i < 40; i++) {
+      await timers.advance(30_000);
+      c.update([{ ...d("a"), state: "delivered", claim: lease() }]); // b was answered; a's run goes on under its renewed claim
+    }
+    assert.equal(wakes.length, 3, "then the live lease holds a's renudges");
+  });
+
   it("a handoff that lands during a failing pre-handoff wake is carried by the retry despite the live claim (#27 review)", async () => {
     const { timers, wakes, c, lease, fail } = failingFirstWake();
     c.update([{ ...d("a"), state: "pending" }]);

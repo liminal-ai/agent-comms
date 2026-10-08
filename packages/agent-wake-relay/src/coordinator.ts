@@ -349,7 +349,12 @@ export class Coordinator {
       const outcome = await this.o.wake(ids, { wakeId });
       const notSentNow = new Set(outcome?.acceptedBefore ?? []);
       for (const id of builtAfter) if (!notSentNow.has(id)) this.owedAfterWake.delete(id);
+      // A handoff this wake was to carry whose event, accepted on an earlier attempt, wasn't sent again: nothing
+      // built after the handoff reached the agent, so it is treated like a handoff that landed while the wake was
+      // out and gets a wake of its own (a new event).
+      const unpaid = ids.filter((id) => notSentNow.has(id) && this.handedOver.has(id));
       this.spent(ids, this.o.timers.now(), true);
+      for (const id of unpaid) this.transitioned.add(id);
       this.failures = 0;
       this.gaveUp = false;
       this.wakeId = null;
