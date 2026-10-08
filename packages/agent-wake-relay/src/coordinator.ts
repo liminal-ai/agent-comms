@@ -115,6 +115,8 @@ export class Coordinator {
    * settle them, since its event predates the inbox item. Cleared when a wake built after the handoff lands for them.
    */
   private readonly owedAfterWake = new Set<string>();
+  /** Owed handoffs that are due one follow-up wake of their own; consumed when it is scheduled. */
+  private readonly followUp = new Set<string>();
   /** The last failure logged, so a wake that keeps failing the same way is logged every 5 min, not every retry. */
   private lastFailure: { message: string; at: number; repeats: number } | null = null;
 
@@ -142,7 +144,10 @@ export class Coordinator {
       // A handoff noted during an in-flight wake (`transitioned`) counts as having seen it taken.
       if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && this.stateAtWake.get(id) !== "pending")) {
         this.owed.add(id);
-        if (this.transitioned.has(id)) this.owedAfterWake.add(id);
+        if (this.transitioned.has(id)) {
+          this.owedAfterWake.add(id);
+          this.followUp.add(id);
+        }
         if (!this.inFlightStates?.has(id)) fresh++;
       }
       this.outstanding.delete(id);
@@ -249,8 +254,11 @@ export class Coordinator {
       again++;
     }
     this.transitioned.clear();
-    // An owed handoff that landed while a wake built before it was out: the next wake carries it.
-    for (const id of this.owedAfterWake) if (this.owed.has(id)) again++;
+    // An owed handoff that landed while a wake built before it was out gets one wake of its own. The obligation is
+    // consumed here; the debt itself (owedAfterWake, owed) stays until a wake lands, so a callback that refuses for
+    // good isn't retried every coalesce delay: the renudge or a subscriber re-arm carries it, as for any owed id.
+    for (const id of this.followUp) if (this.owed.has(id)) again++;
+    this.followUp.clear();
     if (again) {
       // Something new to wake for: a give-up no longer applies.
       this.failures = 0;
@@ -348,7 +356,10 @@ export class Coordinator {
     try {
       const outcome = await this.o.wake(ids, { wakeId });
       const notSentNow = new Set(outcome?.acceptedBefore ?? []);
-      for (const id of builtAfter) if (!notSentNow.has(id)) this.owedAfterWake.delete(id);
+      for (const id of builtAfter) {
+        if (notSentNow.has(id)) this.followUp.add(id); // not sent again by this wake: due a wake of its own (a new event)
+        else this.owedAfterWake.delete(id);
+      }
       // A handoff this wake was to carry whose event, accepted on an earlier attempt, wasn't sent again: nothing
       // built after the handoff reached the agent, so it is treated like a handoff that landed while the wake was
       // out and gets a wake of its own (a new event).

@@ -375,6 +375,36 @@ describe("coordinator", () => {
     return { timers, wakes, c, lease, fail: (e: Error) => release(e) };
   };
 
+  it("an owed handoff whose wake is refused for good gets one follow-up, not a retry every coalesce delay (#27 review)", async () => {
+    const timers = new FakeTimers();
+    let release: (e: Error) => void = () => {};
+    let calls = 0;
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 0,
+      wake: async () => {
+        calls++;
+        if (calls === 1) await new Promise<void>((_, reject) => (release = reject));
+        throw new TerminalWakeError("HTTP 410");
+      },
+    });
+    c.update([{ ...d("b"), state: "pending" }]);
+    await timers.advance(2_000); // the wake is out
+    c.update([d("b")]); // handed over while it is out
+    c.update([]); // and gone: owed
+    release(new TerminalWakeError("HTTP 410"));
+    await new Promise((r) => setImmediate(r));
+    await timers.advance(2_001);
+    assert.equal(calls, 2, "the handoff got its one follow-up wake, refused too");
+    await timers.advance(60 * 60_000);
+    assert.equal(calls, 2, "no more: the debt stands, but nothing is retried on its own");
+    c.subscriberAvailable(); // the callback was repaired
+    await timers.advance(2_001);
+    assert.equal(calls, 3, "the re-arm carries it");
+  });
+
   it("an owed handoff that landed during a failing wake outlives a retry of that same wake (#27 review)", async () => {
     // The MCP waker keeps a retried wake's accepted events and doesn't send them again, so an id accepted before its
     // handoff gets nothing built after it from the retry; it reports those ids, and the debt survives that landing.
