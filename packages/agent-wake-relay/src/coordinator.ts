@@ -118,7 +118,8 @@ export class Coordinator {
       // inbox and is still owed one wake. One that vanishes while still `pending` was never handed over (the participant
       // was paused, or the message withdrawn), so nothing is owed. If a wake carrying it is out, that wake's outcome
       // settles it: success clears the debt, a failed one retries with it.
-      if (this.outstanding.get(id) === 0 && this.stateAtWake.get(id) !== "pending") {
+      // A handoff noted during an in-flight wake (`transitioned`) counts as having seen it taken.
+      if (this.outstanding.get(id) === 0 && (this.stateAtWake.get(id) !== "pending" || this.transitioned.has(id))) {
         this.owed.add(id);
         if (!this.inFlightStates?.has(id)) fresh++;
       }
@@ -127,7 +128,7 @@ export class Coordinator {
       this.transitioned.delete(id);
       this.wakes.delete(id);
       this.exhausted.delete(id);
-      this.unreached.delete(id);
+      if (!this.owed.has(id)) this.unreached.delete(id);
       gone.push(id);
     }
     if (gone.length) this.o.forget?.(gone);
@@ -232,6 +233,10 @@ export class Coordinator {
   subscriberAvailable(): void {
     let n = 0;
     for (const id of this.unreached) {
+      if (this.owed.has(id)) {
+        n++; // still owed: the next wake carries it
+        continue;
+      }
       if (!this.outstanding.has(id)) continue;
       this.outstanding.set(id, 0);
       this.wakes.delete(id);
@@ -346,9 +351,12 @@ export class Coordinator {
    */
   private spent(ids: string[], now: number, landed: boolean): void {
     for (const id of ids) {
-      this.owed.delete(id);
-      if (landed) this.unreached.delete(id);
-      else this.unreached.add(id);
+      // An owed delivery (handed over, gone from the list) is only settled by a wake that lands: an attempt given up
+      // on or refused keeps the debt, so a later wake for anything, or a subscriber connecting, carries it again.
+      if (landed) {
+        this.owed.delete(id);
+        this.unreached.delete(id);
+      } else this.unreached.add(id);
       if (!this.outstanding.has(id)) continue;
       this.outstanding.set(id, now);
       this.wakes.set(id, (this.wakes.get(id) ?? 0) + 1);

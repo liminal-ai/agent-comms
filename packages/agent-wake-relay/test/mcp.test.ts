@@ -46,7 +46,13 @@ async function receiver(respond: (r: Received) => { status: number; body?: strin
 /** Answers verification by echoing the challenge, events with `eventStatus()`. */
 function chatgpt(eventStatus: () => number = () => 200) {
   return (r: Received) => {
-    const body = JSON.parse(r.body);
+    let body: { type?: string; challenge?: string };
+    try {
+      body = JSON.parse(r.body);
+    } catch {
+      // An empty or truncated body (the client aborted mid-request): not a callback; never throw inside the server.
+      return { status: 400, body: JSON.stringify({ error: "unparsable body" }) };
+    }
     if (body.type === "verification") return { status: 200, body: JSON.stringify({ challenge: body.challenge }) };
     return { status: eventStatus() };
   };
