@@ -428,6 +428,14 @@ describe("event delivery", () => {
       assert.equal(store.get(id), undefined, "the subscription is gone");
       const attempts = (made.h as unknown as { attempts: Map<string, { state: string }[]> }).attempts.get("dot") ?? [];
       assert.ok(attempts.every((a) => a.state !== "pending"), "nothing is left pending for a retry");
+      // Observable form of the same thing: a pending attempt would be resent with the next wake. A replacement at the
+      // same key gets only the new delivery's event, not d1's again.
+      await made.h.subscribe("user_1", sub(r.url, newSecret()));
+      await made.h.waker("dot")(["d2"]);
+      assert.equal(r.seen.length, 3, "the replacement got exactly one more post");
+      const last = JSON.parse(r.seen[2]!.body);
+      assert.notEqual(last.type, "verification", "the cached verification was reused");
+      assert.ok(!JSON.stringify(last).includes("d1"), "d1's wake had landed: it isn't resent to the replacement");
     } finally {
       r.close();
     }
