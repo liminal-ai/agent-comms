@@ -544,6 +544,32 @@ describe("coordinator", () => {
     assert.ok(wakes[1]!.includes("a"), `and carried a: ${JSON.stringify(wakes[1])}`);
   });
 
+  it("a handoff noted between a failed wake and its retry makes the waker forget the id, so the handoff wake is a new event (#27 review)", async () => {
+    // The failed wake may have been processed with its response lost; the retry would be deduped and count as landed.
+    const timers = new FakeTimers();
+    const forgotten: string[][] = [];
+    const wakes: string[][] = [];
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 10 * 60_000,
+      forget: (ids) => forgotten.push(ids),
+      wake: async (ids) => {
+        wakes.push(ids);
+        if (wakes.length === 1) throw new Error("socket hang up");
+      },
+    });
+    const lease = () => ({ leaseExpiresAt: timers.now() + 60_000 });
+    c.update([{ ...d("a"), state: "pending" }]);
+    await timers.advance(2_000); // the wake fails with a lost response; a retry is due in 30 s
+    c.update([{ ...d("a"), state: "delivered", claim: lease() }]); // handed over during the retry delay
+    assert.deepEqual(forgotten, [["a"]], "the retained event is dropped for a before the handoff wake");
+    await timers.advance(2_001);
+    assert.deepEqual(wakes, [["a"], ["a"]], "the handoff wake went out after the coalesce delay");
+    assert.equal(forgotten.length, 1, "a handoff with no retry pending forgets nothing");
+  });
+
   it("a newcomer whose event is accepted on a retry of a failing wake isn't woken for again by the next retry (#27 review)", async () => {
     // The race Codex and Macroscope found on fc4e5cd: b's event keeps failing; a is handed over and joins the retry
     // as its own event, which is accepted (after the handoff). The next retry must not treat a as unpaid.

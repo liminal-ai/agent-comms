@@ -182,6 +182,7 @@ export class Coordinator {
             this.handedOver.add(d.id);
             // The wake this schedules covers the handoff; one noted during an earlier, failed wake is the same handoff.
             this.transitioned.delete(d.id);
+            this.freshEventFor(d.id);
             fresh++;
           }
         }
@@ -199,6 +200,7 @@ export class Coordinator {
         this.outstanding.set(d.id, 0);
         this.stateAtWake.set(d.id, d.state);
         this.handedOver.add(d.id);
+        this.freshEventFor(d.id);
         fresh++;
       }
     }
@@ -236,6 +238,16 @@ export class Coordinator {
       this.timer = null;
       void this.fire();
     }, wait);
+  }
+
+  /**
+   * A handoff noted between a failed wake and its retry: the retry would resend the retained event for this id,
+   * which a receiver that processed it and only lost the response would dedupe, so the waker forgets the id and
+   * the wake for the handoff is a new event. Never while a wake is out: a forget during its preparation would drop
+   * the id from it; a handoff then is noted in `transitioned` and gets its own wake after that wake ends.
+   */
+  private freshEventFor(id: string): void {
+    if (this.wakeId !== null && !this.inFlight) this.o.forget?.([id]);
   }
 
   /** Handoffs to delivered that landed while a wake was out get their own wake, whatever became of that wake. */
