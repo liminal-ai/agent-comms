@@ -109,6 +109,17 @@ test('web service starts through the deployed current directory link' + (lowerDr
       } finally {
         await chmodDir(roDir, 0o700);
       }
+      // A reclaim guard left by a dead reclaimer doesn't block reclaiming a stale lock.
+      await writeFile(`${locked}.lock`, '999999999');
+      await writeFile(`${locked}.lock.reclaim`, '999999998');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const afterGuard = await listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {});
+      try { assert.ok(afterGuard.listening, 'a stale guard is reclaimed too'); } finally { await stop(afterGuard); }
+      // A guard held by a live reclaimer makes us wait, then refuse.
+      await writeFile(`${locked}.lock`, '999999999');
+      await writeFile(`${locked}.lock.reclaim`, String(process.pid));
+      await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /another instance is starting/);
+      await rm(`${locked}.lock.reclaim`); await rm(`${locked}.lock`);
       await writeFile(`${locked}.lock`, String(process.pid));
       await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /another instance is starting/);
       await rm(`${locked}.lock`);

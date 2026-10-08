@@ -7,7 +7,7 @@
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { connect } from 'node:net';
-import { chmod, link, lstat, open, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, link, lstat, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localWebServer } from '../packages/service/src/web.ts';
@@ -49,40 +49,51 @@ export async function listenWeb(server, config, log = (line) => console.log(line
 }
 
 /**
- * Runs fn holding `<socket>.lock`, created exclusively with this pid inside. A lock whose pid is gone
- * is stale and is taken over; one held by a live process is waited on for up to waitMs, then refused.
+ * Runs fn holding `<socket>.lock`. The lock is created by link() from a private file holding this
+ * pid, so it exists with the pid inside or not at all. A lock whose pid is gone (or that never got
+ * a pid and has sat untouched for waitMs) is stale. Stale locks are removed only by the holder of a
+ * second, short-lived guard (`<lock>.reclaim`): while the guard is held nobody else removes the lock,
+ * and nobody can create it while it exists (link() refuses), so a stat-then-unlink under the guard
+ * acts on exactly the entry that was inspected. One held by a live process is waited on for up to
+ * waitMs, then startup refuses.
  */
 async function withStartLock(socket, waitMs, fn) {
   const lock = `${socket}.lock`;
+  const guard = `${lock}.reclaim`;
   const deadline = Date.now() + waitMs;
-  // The pid is written to a private file first and published by link(): the lock either exists
-  // with the pid inside or not at all, so a starter killed mid-acquire leaves nothing half-written.
   const mine = `${lock}.${process.pid}.${randomBytes(4).toString('hex')}.pid`;
   await writeFile(mine, String(process.pid), { mode: 0o600 });
+  const claim = (path) => link(mine, path).then(() => true, (error) => { if (error.code === 'EEXIST') return false; throw error; });
+  const inspect = async (path) => {
+    const st = await stat(path).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
+    if (st === null) return null;
+    const holder = Number((await readFile(path, 'utf8').catch(() => '')).trim());
+    const stale = (holder && !processAlive(holder)) || (!holder && Date.now() - st.mtimeMs >= waitMs);
+    return { st, holder, stale };
+  };
   try {
     for (;;) {
-      const acquired = await link(mine, lock).then(() => true, (error) => { if (error.code === 'EEXIST') return false; throw error; });
-      if (acquired) break;
-      const seen = await stat(lock).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
-      if (seen === null) continue; // gone between our link() and now: try the link again
-      const holder = Number((await readFile(lock, 'utf8').catch(() => '')).trim());
-      // Stale: its pid is gone, or it never got a valid pid and nobody has touched it for the wait period.
-      if ((holder && !processAlive(holder)) || (!holder && Date.now() - seen.mtimeMs >= waitMs)) {
-        // Reclaim only the entry we inspected: if another starter replaced it meanwhile, the inode
-        // differs and we leave the new holder alone. ENOENT means someone else reclaimed it first.
-        const taken = `${lock}.${process.pid}.${randomBytes(4).toString('hex')}.stale`;
-        const now = await stat(lock).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
-        if (now !== null && now.ino === seen.ino && now.dev === seen.dev) {
-          const reclaimed = await rename(lock, taken).then(() => true, (error) => { if (error.code === 'ENOENT') return false; throw error; });
-          if (reclaimed) {
-            const got = await stat(taken);
-            if (got.ino === seen.ino) { await rm(taken, { force: true }); continue; }
-            // We moved a lock that had just been replaced; put it back for its owner.
-            await rename(taken, lock).catch(() => {});
+      if (await claim(lock)) break;
+      const seen = await inspect(lock);
+      if (seen === null) continue; // gone between our link() and now: try again
+      if (seen.stale) {
+        if (await claim(guard)) {
+          try {
+            // Under the guard the lock can't be replaced (link() refuses while it exists) or removed by
+            // anyone else, so this is the same entry we classified; re-check and remove it.
+            const again = await inspect(lock);
+            if (again !== null && again.st.ino === seen.st.ino && again.st.dev === seen.st.dev && again.stale) await rm(lock, { force: true });
+          } finally {
+            await rm(guard, { force: true });
           }
+          continue;
         }
+        // Someone else is reclaiming. A guard whose reclaimer died (dead pid, and older than the
+        // wait period, which a live reclaim never reaches) is itself stale and is removed.
+        const g = await inspect(guard);
+        if (g !== null && g.stale && Date.now() - g.st.mtimeMs >= waitMs) await rm(guard, { force: true });
       }
-      if (Date.now() >= deadline) throw new Error(`web config: another instance is starting on ${socket} (lock ${lock} held by pid ${holder || 'unknown'})`);
+      if (Date.now() >= deadline) throw new Error(`web config: another instance is starting on ${socket} (lock ${lock} held by pid ${seen.holder || 'unknown'})`);
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   } finally {
