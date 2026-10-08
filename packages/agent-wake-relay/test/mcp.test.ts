@@ -958,6 +958,76 @@ describe("event delivery", () => {
     }
   });
 
+  it("a failed wake reports the ids whose events were accepted, and forgetting them makes the next wake for them a new event", async () => {
+    let posts = 0;
+    // The first event is accepted; the second is refused through deliver()'s three same-id tries; then everything is accepted.
+    const r = await receiver(chatgpt(() => (++posts >= 2 && posts <= 4 ? 500 : 200)));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const ids = Array.from({ length: 6_000 }, (_, i) => `j97${String(i).padStart(5, "0")}${"x".repeat(40)}`); // two events' worth
+      const wake = h.waker("dot");
+      const failure = await wake(ids).then(
+        () => assert.fail("expected a rejection"),
+        (e: Error & { accepted?: string[] }) => e,
+      );
+      assert.match(failure.message, /HTTP 500/);
+      const sent = r.seen.slice(1).map((e) => JSON.parse(e.body) as { eventId: string; data: { deliveryIds: string[] } });
+      assert.equal(sent.length, 4, "two events on the first attempt, the second tried three times");
+      assert.deepEqual([...(failure.accepted ?? [])].sort(), [...sent[0]!.data.deliveryIds].sort(), "the accepted event's ids are reported");
+      h.forget("dot", failure.accepted ?? []); // the coordinator settles them: the hub drops the accepted event
+      await wake(sent[1]!.data.deliveryIds); // the retry, for what is still outstanding
+      assert.equal(r.seen.length, 6, "the retry resent the refused event only");
+      assert.equal(JSON.parse(r.seen[5]!.body).eventId, sent[1]!.eventId, "unchanged");
+      await wake(sent[0]!.data.deliveryIds.slice(0, 3)); // a later wake for some of the settled ids (a handoff, say)
+      assert.notEqual(JSON.parse(r.seen[6]!.body).eventId, sent[0]!.eventId, "is a new event, not the accepted one again");
+    } finally {
+      r.close();
+    }
+  });
+
+  it("retiring an id out of a kept pending event sends one fresh event for all its ids on the retry (one run, not two)", async () => {
+    let status = 500;
+    const r = await receiver(chatgpt(() => status));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const wake = h.waker("dot");
+      await assert.rejects(wake(["d1", "d2"]), /HTTP 500/); // a genuine failure
+      const first = JSON.parse(r.seen[1]!.body) as { eventId: string };
+      h.retire("dot", ["d1"]); // the coordinator: d1 was handed over while that wake was out
+      status = 200;
+      await wake(["d1", "d2"]); // the retry still carries d1 (owed) and d2
+      const retried = r.seen.slice(4).map((e) => JSON.parse(e.body) as { eventId: string; data: { deliveryIds: string[] } });
+      assert.equal(retried.length, 1, "exactly one event on the retry");
+      assert.notEqual(retried[0]!.eventId, first.eventId, "a fresh one");
+      assert.deepEqual(retried[0]!.data.deliveryIds, ["d1", "d2"], "carrying both, so the receiver starts one run that reads both");
+    } finally {
+      r.close();
+    }
+  });
+
+  it("a plain forget keeps a pending event with its remaining ids, resent unchanged on the retry (#18)", async () => {
+    let status = 500;
+    const r = await receiver(chatgpt(() => status));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const wake = h.waker("dot");
+      await assert.rejects(wake(["d1", "d2"]), /HTTP 500/);
+      const first = JSON.parse(r.seen[1]!.body) as { eventId: string };
+      h.forget("dot", ["d1"]); // d1 was answered meanwhile: no longer outstanding
+      status = 200;
+      await wake(["d2"]);
+      const retried = r.seen.slice(4).map((e) => JSON.parse(e.body) as { eventId: string; data: { deliveryIds: string[] } });
+      assert.equal(retried.length, 1);
+      assert.equal(retried[0]!.eventId, first.eventId, "the kept event, same id, for the receiver's dedupe");
+      assert.deepEqual(retried[0]!.data.deliveryIds, ["d1", "d2"], "and the same body");
+    } finally {
+      r.close();
+    }
+  });
+
   it("succeeds when one of several subscriptions accepts", async () => {
     const good = await receiver(chatgpt());
     const bad = await receiver(chatgpt(() => 400));

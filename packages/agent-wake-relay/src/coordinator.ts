@@ -18,6 +18,14 @@ export interface WorkDelivery {
  * delivery set (a receiver can dedupe) and changes when the set changes.
  */
 export type WakeFn = (deliveryIds: string[], info?: { wakeId: string }) => Promise<void>;
+/**
+ * A failed wake may still have landed for some of its ids: a waker that sends several events (MCP Events splits a
+ * wake into one event per newcomer set or size chunk) reports the ids of the events that were accepted. Those count
+ * as woken for right away; only the rest are retried.
+ */
+export interface WakeFailure extends Error {
+  accepted?: string[];
+}
 
 /** Renudges after the first wake: the k-th renudge waits this many times `renudgeMs`. Then it stops. */
 export const RENUDGE_STEPS = [1, 3, 12];
@@ -49,6 +57,11 @@ const realTimers: Timers = {
 export interface CoordinatorOptions {
   /** Called with the ids of deliveries that are no longer outstanding, so a waker can drop what it kept for them. */
   forget?: (ids: string[]) => void;
+  /**
+   * Called with ids whose next wake must be a new event (a handoff landed after the kept one was built): a waker
+   * drops whatever it kept for them, including a kept event's other ids, so that one fresh event covers them all.
+   */
+  retire?: (ids: string[]) => void;
   participant: string;
   wake: WakeFn;
   log: (line: string) => void;
@@ -62,7 +75,11 @@ export interface CoordinatorOptions {
 }
 
 export class Coordinator {
-  private readonly o: Required<Omit<CoordinatorOptions, "timers" | "forget">> & { timers: Timers; forget?: (ids: string[]) => void };
+  private readonly o: Required<Omit<CoordinatorOptions, "timers" | "forget" | "retire">> & {
+    timers: Timers;
+    forget?: (ids: string[]) => void;
+    retire?: (ids: string[]) => void;
+  };
   /** Outstanding deliveries for the participant → when they were last woken for (0 = not yet). */
   /** Delivery id -> when it was last woken for (0 = never). */
   private readonly outstanding = new Map<string, number>();
@@ -96,6 +113,17 @@ export class Coordinator {
   /** For the wake in flight: each id's state when it started, and the ids that reached `delivered` since. */
   private inFlightStates: Map<string, string> | null = null;
   private readonly transitioned = new Set<string>();
+  /**
+   * Handoffs to `delivered` the relay saw and hasn't landed a wake for. A collectable request keeps its claim after
+   * the handoff (the dispatcher renews the lease while it awaits the answer), so the lease must not hold this wake
+   * back; it holds back repeat wakes after one landed, which would start a second run.
+   */
+  private readonly handedOver = new Set<string>();
+  /**
+   * Owed handoffs that landed while a wake built from their `pending` state was out: that wake landing doesn't
+   * settle them, since its event predates the inbox item. Cleared when a wake built after the handoff goes out.
+   */
+  private readonly owedAfterWake = new Set<string>();
   /** The last failure logged, so a wake that keeps failing the same way is logged every 5 min, not every retry. */
   private lastFailure: { message: string; at: number; repeats: number } | null = null;
 
@@ -113,6 +141,7 @@ export class Coordinator {
     for (const d of mine) this.latest.set(d.id, d);
     const ids = new Set(mine.map((d) => d.id));
     const gone: string[] = [];
+    const handoffs: string[] = [];
     let fresh = 0;
     for (const id of [...this.outstanding.keys()]) {
       if (ids.has(id)) continue;
@@ -123,9 +152,11 @@ export class Coordinator {
       // A handoff noted during an in-flight wake (`transitioned`) counts as having seen it taken.
       if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && this.stateAtWake.get(id) !== "pending")) {
         this.owed.add(id);
+        if (this.transitioned.has(id)) this.owedAfterWake.add(id);
         if (!this.inFlightStates?.has(id)) fresh++;
       }
       this.outstanding.delete(id);
+      this.handedOver.delete(id);
       this.stateAtWake.delete(id);
       this.transitioned.delete(id);
       this.wakes.delete(id);
@@ -157,7 +188,13 @@ export class Coordinator {
           const prev = this.stateAtWake.get(d.id);
           this.stateAtWake.set(d.id, d.state);
           // A delivery that flips to delivered while still at 0 (never woken) must schedule a wake.
-          if (d.state === "delivered" && prev !== "delivered") fresh++;
+          if (d.state === "delivered" && prev !== "delivered") {
+            this.handedOver.add(d.id);
+            // The wake this schedules covers the handoff; one noted during an earlier, failed wake is the same handoff.
+            this.transitioned.delete(d.id);
+            handoffs.push(d.id);
+            fresh++;
+          }
         }
         continue;
       }
@@ -172,9 +209,12 @@ export class Coordinator {
         }
         this.outstanding.set(d.id, 0);
         this.stateAtWake.set(d.id, d.state);
+        this.handedOver.add(d.id);
+        handoffs.push(d.id);
         fresh++;
       }
     }
+    this.freshEventFor(handoffs);
     if (this.first) {
       this.first = false;
       this.o.log(`@${this.o.participant}: watching; ${mine.length} outstanding at start`);
@@ -211,22 +251,53 @@ export class Coordinator {
     }, wait);
   }
 
+  /**
+   * Handoffs noted between a failed wake and its retry: the retry would resend the retained event for these ids,
+   * which a receiver that processed it and only lost the response would dedupe, so the waker retires it and
+   * the wake for the handoff is a new event, with a new wake id. Never while a wake is out: a forget during its preparation would drop
+   * the id from it; a handoff then is noted in `transitioned` and gets its own wake after that wake ends.
+   */
+  private freshEventFor(ids: string[]): void {
+    if (!ids.length || this.wakeId === null || this.inFlight) return;
+    this.o.retire?.(ids);
+    // The webhook waker sends the wake id itself for the receiver's dedupe: the handoff wake gets a new one.
+    this.wakeId = null;
+  }
+
   /** Handoffs to delivered that landed while a wake was out get their own wake, whatever became of that wake. */
   private wakeAgainForHandoffs(): void {
-    let again = 0;
-    for (const id of this.transitioned) {
+    const handoffs = [...this.transitioned];
+    this.transitioned.clear();
+    // An owed handoff that landed while a wake built before it was out: the next wake carries it. That wake going
+    // out clears the mark (fire()), so a callback that refuses it for good isn't retried every coalesce delay: the
+    // debt stays owed and a subscriber re-arm or a later wake for anything carries it, as for any owed id.
+    const owed = [...this.owedAfterWake].filter((id) => this.owed.has(id));
+    // The wake is over. If it was given up on or refused, the waker may still hold its event and the wake id is
+    // still the failed one; either could let a receiver that processed an earlier attempt dedupe the handoff wake
+    // away, so both are dropped, as freshEventFor() does for a handoff noted between retries.
+    this.wakeAgainFor(handoffs, owed, true);
+  }
+
+  /** Those of `handoffs` still outstanding, and `owed`, are due a wake of their own after the coalesce delay. */
+  private wakeAgainFor(handoffs: string[], owed: string[], dropRetained: boolean): void {
+    const again: string[] = [...owed];
+    for (const id of handoffs) {
+      this.transitioned.delete(id);
       if (!this.outstanding.has(id)) continue;
       this.outstanding.set(id, 0);
       this.stateAtWake.set(id, "delivered");
-      again++;
+      this.handedOver.add(id);
+      again.push(id);
     }
-    this.transitioned.clear();
-    if (again) {
-      // Something new to wake for: a give-up no longer applies.
-      this.failures = 0;
-      this.gaveUp = false;
-      this.schedule(this.o.coalesceMs);
+    if (!again.length) return;
+    if (dropRetained && this.wakeId !== null) {
+      this.o.retire?.(again);
+      this.wakeId = null;
     }
+    // Something new to wake for: a give-up no longer applies.
+    this.failures = 0;
+    this.gaveUp = false;
+    this.schedule(this.o.coalesceMs);
   }
 
   /**
@@ -265,10 +336,20 @@ export class Coordinator {
     return step === undefined ? null : lastWakeAt + step * this.o.renudgeMs;
   }
 
-  /** A claimed delivery whose lease is live is being worked on; waking again would start a parallel run. */
+  /**
+   * A delivery under a live lease is being worked on; waking again would start a parallel run. A collectable
+   * request keeps its claim after `delivered` (the dispatcher renews it while it awaits the answer), so the state
+   * doesn't matter, only the lease. A handoff the relay saw and hasn't landed a wake for is exempt: one noted
+   * for the wake that follows (`handedOver`), or during a wake still out (`transitioned`, which a retry of that
+   * wake carries).
+   */
   private leased(id: string): boolean {
     const d = this.latest.get(id);
-    return d?.state === "claimed" && (d.claim?.leaseExpiresAt ?? 0) > this.o.timers.now();
+    return (d?.claim?.leaseExpiresAt ?? 0) > this.o.timers.now() && !this.handoffPending(id);
+  }
+
+  private handoffPending(id: string): boolean {
+    return this.handedOver.has(id) || this.transitioned.has(id);
   }
 
   /** Deliveries that were never woken for, or whose next renudge is due (and that aren't under a live lease). */
@@ -301,6 +382,9 @@ export class Coordinator {
     const key = [...ids].sort().join("\n");
     if (this.wakeId?.key !== key) this.wakeId = { key, id: `wake_${this.o.participant}_${++this.wakeSeq}_${this.o.timers.now().toString(36)}` };
     const wakeId = this.wakeId.id;
+    // This wake is built after any handoff noted so far, so it pays those debts when it lands; one noted while it
+    // is out is not paid by it (its event predates that handoff) and is carried by the next wake.
+    for (const id of ids) this.owedAfterWake.delete(id);
     try {
       await this.o.wake(ids, { wakeId });
       this.spent(ids, this.o.timers.now(), true);
@@ -313,10 +397,35 @@ export class Coordinator {
     } catch (error) {
       const message = (error as Error).message;
       const now = this.o.timers.now();
+      // Events the failed wake did get accepted are landed for their ids: settled now, like a wake of their own,
+      // and dropped by the waker so that anything later for them (a handoff that landed meanwhile, a renudge)
+      // is a new event rather than the one already accepted.
+      const accepted = [...new Set((error as WakeFailure).accepted ?? [])].filter((id) => ids.includes(id));
+      if (accepted.length) {
+        this.spent(accepted, now, true);
+        this.o.forget?.(accepted);
+        this.o.log(`@${this.o.participant}: woke for ${accepted.length} delivery(s) ${accepted.join(",")}; the rest of the wake failed`);
+      }
+      // A handoff that landed while the wake was out, for an id whose event was accepted: its own wake follows after
+      // the coalesce delay, not after the retry backoff of the events that failed (which keep their retry as is).
+      this.wakeAgainFor(accepted.filter((id) => this.transitioned.has(id)), [], false);
+      const rest = ids.filter((id) => !accepted.includes(id));
+      if (!rest.length) {
+        // Everything in it landed after all (a refusal only for events already settled): nothing to retry.
+        this.failures = 0;
+        this.gaveUp = false;
+        this.wakeId = null;
+        this.lastFailure = null;
+        this.inFlight = false;
+        this.inFlightStates = null;
+        this.wakeAgainForHandoffs();
+        this.scheduleRenudge();
+        return;
+      }
       if ((error as TerminalWakeError).terminal) {
         // Counts as this wake's attempt: no 30 s retry; the renudge (if on) gives it another go later.
-        this.spent(ids, now, false);
-        this.o.log(`@${this.o.participant}: wake rejected for ${ids.join(",")}: ${message}; not retrying${this.o.renudgeMs > 0 ? `, renudging in ${Math.round(this.o.renudgeMs / 60_000)} min` : ""}`);
+        this.spent(rest, now, false);
+        this.o.log(`@${this.o.participant}: wake rejected for ${rest.join(",")}: ${message}; not retrying${this.o.renudgeMs > 0 ? `, renudging in ${Math.round(this.o.renudgeMs / 60_000)} min` : ""}`);
         this.inFlight = false;
         this.inFlightStates = null;
         this.wakeAgainForHandoffs();
@@ -330,7 +439,7 @@ export class Coordinator {
       if (last && last.message === message && now - last.at < 10 * 60_000) last.repeats++;
       else {
         const again = last?.message === message && last.repeats ? ` (failed the same way ${last.repeats} more time(s) since the last report)` : "";
-        this.o.log(`@${this.o.participant}: wake failed for ${ids.join(",")}: ${message}${again}; retrying in ${Math.round(delay / 1000)}s`);
+        this.o.log(`@${this.o.participant}: wake failed for ${rest.join(",")}: ${message}${again}; retrying in ${Math.round(delay / 1000)}s`);
         this.lastFailure = { message, at: now, repeats: 0 };
       }
       if (this.failures >= RETRY_GIVE_UP) {
@@ -339,11 +448,18 @@ export class Coordinator {
         // The whole retry run counts as one wake: the next renudge step (if any is left) tries again later,
         // the steps widen as usual and then stop, so a callback that never answers gets a bounded number of
         // POSTs (RETRY_GIVE_UP per step) instead of a fresh run every time the first step comes due.
-        this.spent(ids, now, false);
-        this.o.log(`@${this.o.participant}: wake for ${ids.join(",")} has failed ${this.failures} times in a row; giving up until something changes`);
+        this.spent(rest, now, false);
+        this.o.log(`@${this.o.participant}: wake for ${rest.join(",")} has failed ${this.failures} times in a row; giving up until something changes`);
         // A handoff that landed during the failed run is something new: it gets its own wake.
         this.wakeAgainForHandoffs();
-      } else this.schedule(delay);
+      } else {
+        // An id handed over and gone while the wake was out: the retry would resend the same event, which a
+        // receiver that processed it and only lost the response would dedupe, so the waker forgets it and the
+        // retry's event for it is a new one. (A refusal or give-up drops it in wakeAgainForHandoffs instead.)
+        const stale = rest.filter((id) => this.owedAfterWake.has(id));
+        if (stale.length) this.o.retire?.(stale);
+        this.schedule(delay);
+      }
     } finally {
       this.inFlight = false;
       this.inFlightStates = null;
@@ -363,12 +479,16 @@ export class Coordinator {
       // An owed delivery (handed over, gone from the list) is only settled by a wake that lands: an attempt given up
       // on or refused keeps the debt, so a later wake for anything, or a subscriber connecting, carries it again.
       if (landed) {
-        if (this.owed.delete(id)) paid.push(id);
+        // A wake built before the handoff doesn't pay the debt (owedAfterWake): the next one does.
+        if (!this.owedAfterWake.has(id) && this.owed.delete(id)) paid.push(id);
         this.unreached.delete(id);
         this.rearmed.delete(id);
       } else if (this.outstanding.has(id) || this.owed.has(id)) this.unreached.add(id); // nothing to reach for an id that is gone
       if (!this.outstanding.has(id)) continue;
       this.outstanding.set(id, now);
+      // A handoff wake that never reached the agent (refused for good, given up on) leaves the inbox item unread
+      // and no run started: the renudge or a subscriber re-arm for it still bypasses the live lease.
+      if (landed) this.handedOver.delete(id);
       this.wakes.set(id, (this.wakes.get(id) ?? 0) + 1);
       if (this.o.renudgeMs > 0 && this.renudgeAt(id, now) === null && !this.exhausted.has(id)) {
         this.exhausted.add(id);
@@ -392,7 +512,7 @@ export class Coordinator {
     const now = this.o.timers.now();
     const nexts = [...this.outstanding].flatMap(([id, at]) => {
       const d = this.latest.get(id);
-      const lease = d?.state === "claimed" ? (d.claim?.leaseExpiresAt ?? 0) : 0;
+      const lease = this.handoffPending(id) ? 0 : (d?.claim?.leaseExpiresAt ?? 0);
       if (at === 0) return lease > now ? [lease] : [];
       const next = this.renudgeAt(id, at);
       if (next === null) return [];

@@ -6,7 +6,7 @@
 // answers them through its normal comms path.
 
 import { timingSafeEqual } from "node:crypto";
-import { TerminalWakeError, type WakeFn } from "../coordinator.ts";
+import { TerminalWakeError, type WakeFailure, type WakeFn } from "../coordinator.ts";
 import type { Access } from "./auth.ts";
 import { canonicalJson, subscriptionId, type Subscription, type SubscriptionStore } from "./store.ts";
 import { BlockedUrlError, failureReason, parseSecret, randomId, sign, urlProblem, type FailureReason, type Post, type UrlPolicy } from "./webhook.ts";
@@ -327,6 +327,26 @@ export class EventHub {
     return last;
   }
 
+  /**
+   * Deliveries whose next wake must be a new event: a handoff landed for them after the kept event was built, so a
+   * receiver that processed that event (its response lost) would dedupe a resend. A pending event holding any of
+   * them is dropped whole, so the next wake sends one fresh event for all its ids rather than the kept one plus a
+   * fresh one (two events, two runs). Deliberate trade-off: if the kept event had in fact been processed with its
+   * response lost, its other ids get a repeated run; that needs a lost response and a handoff in the same retry
+   * window, and the alternative is a lost wake for the handoff. An accepted event is settled as in forget().
+   */
+  retire(participant: string, ids: string[]): void {
+    const hit = new Set(ids);
+    const kept: Attempt[] = [];
+    for (const a of this.attempts.get(participant) ?? []) {
+      if (a.state === "pending" && a.ids.some((id) => hit.has(id))) continue;
+      for (const id of ids) a.settled.add(id);
+      if (a.ids.some((id) => !a.settled.has(id))) kept.push(a);
+    }
+    if (kept.length) this.attempts.set(participant, kept);
+    else this.attempts.delete(participant);
+  }
+
   /** Deliveries that are no longer outstanding: whatever was kept to retry them is dropped, so a backlog that was answered meanwhile doesn't linger. */
   forget(participant: string, ids: string[]): void {
     // A wake being prepared (pruning, access checks) hasn't published its attempts yet; what's
@@ -464,14 +484,19 @@ export class EventHub {
       });
       const pending = attempts.filter((a) => a.state === "pending").length;
       const terminal = attempts.filter((a) => a.state === "terminal").length;
+      // Events accepted (now or on an earlier attempt of this wake) are landed for their ids, whatever became of the rest.
+      // An id settled out of an accepted event (forgotten, then outstanding again with an event of its own) isn't
+      // landed by that older event; only its own counts.
+      const accepted = [...new Set(attempts.filter((a) => a.state === "accepted").flatMap((a) => a.ids.filter((id) => current.has(id) && !a.settled.has(id))))];
+      const failure = <E extends Error>(e: E): E & WakeFailure => Object.assign(e, { accepted });
       if (pending === 0) {
         // Every attempt settled: the next wake for this participant starts over.
         this.attempts.delete(participant);
-        if (terminal > 0) throw new TerminalWakeError(`${terminal === attempts.length ? "every event was" : terminal === 1 ? "one event was" : `${terminal} events were`} refused for good (${failures.join(", ")})`);
+        if (terminal > 0) throw failure(new TerminalWakeError(`${terminal === attempts.length ? "every event was" : terminal === 1 ? "one event was" : `${terminal} events were`} refused for good (${failures.join(", ")})`));
         if (failures.length) this.o.log(`@${participant}: ${attempts.length === 1 ? `event ${attempts[0]!.eventId}` : `${attempts.length} events`} not accepted by ${failures.join(", ")}`);
         return;
       }
-      throw new Error(`no subscriber accepted the event (${failures.join(", ") || "subscriptions went away"})`);
+      throw failure(new Error(`no subscriber accepted the event (${failures.join(", ") || "subscriptions went away"})`));
     }
   }
 
