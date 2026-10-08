@@ -27,7 +27,8 @@ interface Received {
 }
 
 /** A stand-in for ChatGPT's callback: records what arrives and answers through `respond`. */
-async function receiver(respond: (r: Received) => { status: number; body?: string }) {
+type Response = { status: number; body?: string };
+async function receiver(respond: (r: Received) => Response | Promise<Response>) {
   const seen: Received[] = [];
   const server = createServer((req, res) => {
     let body = "";
@@ -35,8 +36,8 @@ async function receiver(respond: (r: Received) => { status: number; body?: strin
     req.on("end", () => {
       const r = { headers: req.headers, body };
       seen.push(r);
-      const out = respond(r);
-      res.writeHead(out.status, { "content-type": "application/json" }).end(out.body ?? "{}");
+      // An async responder can finish other work (a store deletion) before the response goes out.
+      void Promise.resolve(respond(r)).then((out) => res.writeHead(out.status, { "content-type": "application/json" }).end(out.body ?? "{}"));
     });
   });
   const port = await listen(server);
@@ -409,12 +410,13 @@ describe("event delivery", () => {
 
   it("a subscription that vanishes while its event POST is in flight: a 2xx still counts as accepted (no second wake)", async () => {
     // ac80a5d: the receiver has the event once it answered 2xx, whatever happened to the store meanwhile.
+    // The deletion is awaited before the response, so the hub sees the subscription gone when it reads the result.
     let store!: SubscriptionStore;
     let id!: string;
-    const r = await receiver((req) => {
+    const r = await receiver(async (req) => {
       const body = JSON.parse(req.body);
       if (body.type === "verification") return { status: 200, body: JSON.stringify({ challenge: body.challenge }) };
-      void store.delete(id); // unsubscribed while the POST is being answered
+      await store.delete(id); // unsubscribed, and published, before the 2xx goes out
       return { status: 200 };
     });
     const made = await hub();
@@ -434,10 +436,10 @@ describe("event delivery", () => {
   it("a subscription that vanishes after refusing for good: the refusal is recorded against the posted object, so the attempt settles", async () => {
     let store!: SubscriptionStore;
     let id!: string;
-    const r = await receiver((req) => {
+    const r = await receiver(async (req) => {
       const body = JSON.parse(req.body);
       if (body.type === "verification") return { status: 200, body: JSON.stringify({ challenge: body.challenge }) };
-      void store.delete(id);
+      await store.delete(id); // gone, and published, before the 410 goes out
       return { status: 410 };
     });
     const made = await hub();
@@ -446,6 +448,7 @@ describe("event delivery", () => {
       ({ id } = await made.h.subscribe("user_1", sub(r.url, newSecret())));
       await assert.rejects(made.h.waker("dot")(["d1"]), /refused|no subscriber/);
       assert.equal(r.seen.length, 2, "posted once, not retried");
+      assert.equal(store.get(id), undefined, "the subscription is gone");
       const attempts = (made.h as unknown as { attempts: Map<string, { state: string }[]> }).attempts.get("dot") ?? [];
       assert.ok(attempts.every((a) => a.state !== "pending"), "the attempt is terminal, not left pending for a subscriber that no longer exists");
     } finally {
@@ -455,25 +458,29 @@ describe("event delivery", () => {
 
   it("a subscription that vanishes before anything was posted to it leaves the attempt pending for its replacement", async () => {
     // ac80a5d: "gone without a post" is not a refusal. deliver() re-reads the store before its first fetch, so a subscription
-    // that lapses between the hub listing the subscribers and posting (here: during the access check) is seen as gone with
-    // nothing posted, and the attempt stays pending for whoever takes that key next.
+    // deleted (and published) between the hub listing the subscribers and posting, here during the access check, is seen
+    // as gone with nothing posted, and the attempt stays pending for whoever takes that key next.
     const r = await receiver(chatgpt());
     let store!: SubscriptionStore;
     let id = "";
     const made = await hub({
       authorize: async () => {
-        if (id) store.get(id)!.expiresAt = 0; // lapses after being listed, before being posted to
+        if (id) {
+          await store.delete(id); // removed after being listed, before being posted to
+          id = "";
+        }
         return "allowed";
       },
     });
     store = made.store;
     try {
-      ({ id } = await made.h.subscribe("user_1", sub(r.url, newSecret())));
+      const first = await made.h.subscribe("user_1", sub(r.url, newSecret()));
+      id = first.id;
       await assert.rejects(made.h.waker("dot")(["d1"]), /gone|no subscriber accepted/);
       assert.equal(r.seen.length, 1, "only the verification: nothing was posted");
+      assert.equal(store.get(first.id), undefined, "the subscription is gone");
       const attempts = (made.h as unknown as { attempts: Map<string, { state: string }[]> }).attempts.get("dot") ?? [];
       assert.ok(attempts.some((a) => a.state === "pending"), "not terminal: nothing refused it, so a replacement subscription still gets it");
-      id = ""; // stop expiring
       await made.h.subscribe("user_1", sub(r.url, newSecret())); // the replacement takes the same key
       await made.h.waker("dot")(["d1"]);
       // The replacement reuses the cached verification for this callback, so: one verification, then the owed event.
@@ -487,11 +494,11 @@ describe("event delivery", () => {
   it("a subscription that vanishes between a retryable refusal and the retry: the refusal belongs to the posted object and settles the attempt", async () => {
     // ac80a5d: with no current subscription to attribute the outcome to, a post that did go out is still the record.
     let store!: SubscriptionStore;
-    let id = "";
-    const r = await receiver((req) => {
+    let id!: string;
+    const r = await receiver(async (req) => {
       const body = JSON.parse(req.body);
       if (body.type === "verification") return { status: 200, body: JSON.stringify({ challenge: body.challenge }) };
-      store.get(id)!.expiresAt = 0; // lapses after this (retryable) refusal, before the retry
+      await store.delete(id); // removed, and published, after this (retryable) refusal goes out and before the retry
       return { status: 503 };
     });
     const made = await hub();
@@ -500,6 +507,7 @@ describe("event delivery", () => {
       ({ id } = await made.h.subscribe("user_1", sub(r.url, newSecret())));
       await assert.rejects(made.h.waker("dot")(["d1"]), /gone|refused|no subscriber/);
       assert.equal(r.seen.length, 2, "posted once; the retry found the subscription gone and didn't post again");
+      assert.equal(store.get(id), undefined, "the subscription is gone");
       const attempts = (made.h as unknown as { attempts: Map<string, { state: string }[]> }).attempts.get("dot") ?? [];
       assert.ok(attempts.every((a) => a.state !== "pending"), "settled: the refusal was recorded against the object that was posted to");
     } finally {
