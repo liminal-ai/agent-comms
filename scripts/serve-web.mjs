@@ -65,8 +65,9 @@ async function withStartLock(socket, waitMs, fn) {
   await writeFile(mine, String(process.pid), { mode: 0o600 });
   const claim = (path) => link(mine, path).then(() => true, (error) => { if (error.code === 'EEXIST') return false; throw error; });
   const inspect = async (path) => {
-    const st = await stat(path).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
+    const st = await lstat(path).catch((error) => { if (error.code === 'ENOENT') return null; throw error; });
     if (st === null) return null;
+    if (!st.isFile()) throw new Error(`web config: lock path ${path} is not a regular file; refusing to use it`);
     const holder = Number((await readFile(path, 'utf8').catch(() => '')).trim());
     const stale = (holder && !processAlive(holder)) || (!holder && Date.now() - st.mtimeMs >= waitMs);
     return { st, holder, stale };
@@ -75,8 +76,8 @@ async function withStartLock(socket, waitMs, fn) {
     for (;;) {
       if (await claim(lock)) break;
       const seen = await inspect(lock);
-      if (seen === null) continue; // gone between our link() and now: try again
-      if (seen.stale) {
+      // seen === null: gone between our link() and now; the next round of the loop claims it.
+      if (seen !== null && seen.stale) {
         if (await claim(guard)) {
           try {
             // Under the guard the lock can't be replaced (link() refuses while it exists) or removed by
@@ -93,7 +94,7 @@ async function withStartLock(socket, waitMs, fn) {
         const g = await inspect(guard);
         if (g !== null && g.stale && Date.now() - g.st.mtimeMs >= waitMs) await rm(guard, { force: true });
       }
-      if (Date.now() >= deadline) throw new Error(`web config: another instance is starting on ${socket} (lock ${lock} held by pid ${seen.holder || 'unknown'})`);
+      if (Date.now() >= deadline) throw new Error(`web config: another instance is starting on ${socket} (lock ${lock} held by pid ${seen?.holder || 'unknown'})`);
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   } finally {
@@ -115,11 +116,15 @@ function processAlive(pid) {
   }
 }
 
+/** True if something accepts on the socket; false only when the endpoint is demonstrably abandoned (refused, or gone). Any other error is reported, never read as "stale". */
 function socketAnswers(path) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const probe = connect(path);
     probe.once('connect', () => { probe.destroy(); resolve(true); });
-    probe.once('error', () => resolve(false));
+    probe.once('error', (error) => {
+      if (error.code === 'ECONNREFUSED' || error.code === 'ENOENT') resolve(false);
+      else reject(new Error(`web config: could not probe socket ${path} (${error.code}); not replacing it`));
+    });
   });
 }
 

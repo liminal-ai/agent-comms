@@ -120,6 +120,11 @@ test('web service starts through the deployed current directory link' + (lowerDr
       await writeFile(`${locked}.lock.reclaim`, String(process.pid));
       await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /another instance is starting/);
       await rm(`${locked}.lock.reclaim`); await rm(`${locked}.lock`);
+      // A dangling symlink (or any non-regular entry) at the lock path is an error, not a spin.
+      await rm(`${locked}.lock`, { force: true });
+      await symlink(join(dir, 'nowhere'), `${locked}.lock`);
+      await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /not a regular file/);
+      await rm(`${locked}.lock`);
       await writeFile(`${locked}.lock`, String(process.pid));
       await assert.rejects(listenWeb(webServer({ environment: 'x', convexUrl: 'https://x.test' }, dir), { environment: 'x', socket: locked, lockWaitMs: 200 }, () => {}), /another instance is starting/);
       await rm(`${locked}.lock`);
