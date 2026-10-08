@@ -375,6 +375,37 @@ describe("coordinator", () => {
     return { timers, wakes, c, lease, fail: (e: Error) => release(e) };
   };
 
+  it("an owed handoff that landed during a failing wake outlives a retry of that same wake (#27 review)", async () => {
+    // The MCP waker keeps a retried wake's accepted events and doesn't send them again, so an id accepted before its
+    // handoff gets nothing built after it from the retry; it reports those ids, and the debt survives that landing.
+    const timers = new FakeTimers();
+    const wakes: string[][] = [];
+    let release: (e: Error) => void = () => {};
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 0,
+      wake: async (ids) => {
+        wakes.push(ids);
+        if (wakes.length === 1) await new Promise<void>((_, reject) => (release = reject));
+        if (wakes.length === 2) return { acceptedBefore: ["a"] }; // a's chunk was accepted on the first attempt; only b's was resent
+      },
+    });
+    c.update([{ ...d("a"), state: "pending" }, { ...d("b"), state: "pending" }]);
+    await timers.advance(2_000); // the wake for [a, b] is out
+    c.update([d("a"), { ...d("b"), state: "pending" }]); // a handed over while it is out
+    c.update([{ ...d("b"), state: "pending" }]); // and gone
+    release(new Error("HTTP 500")); // one chunk failed: the retry is the same wake, same id
+    await new Promise((r) => setImmediate(r));
+    await timers.advance(30_000);
+    assert.deepEqual(wakes, [["a", "b"], ["a", "b"]], "the retry carries the same set");
+    await timers.advance(2_001);
+    assert.deepEqual(wakes, [["a", "b"], ["a", "b"], ["a"]], "a's inbox item still gets a wake built after its handoff (the retry, whose event for a predates it, doesn't pay)");
+    await timers.advance(60 * 60_000);
+    assert.equal(wakes.length, 3);
+  });
+
   it("a handoff that lands during a failing pre-handoff wake is carried by the retry despite the live claim (#27 review)", async () => {
     const { timers, wakes, c, lease, fail } = failingFirstWake();
     c.update([{ ...d("a"), state: "pending" }]);

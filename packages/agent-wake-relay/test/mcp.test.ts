@@ -842,6 +842,28 @@ describe("event delivery", () => {
     }
   });
 
+  it("a landed retry reports the ids whose event was accepted on an earlier attempt and not sent again", async () => {
+    let posts = 0;
+    // The first event is accepted; the second is refused through deliver()'s three same-id tries; the retry is accepted.
+    const r = await receiver(chatgpt(() => (++posts >= 2 && posts <= 4 ? 500 : 200)));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const ids = Array.from({ length: 6_000 }, (_, i) => `j97${String(i).padStart(5, "0")}${"x".repeat(40)}`); // two events' worth
+      const wake = h.waker("dot");
+      await assert.rejects(wake(ids), /HTTP 500/);
+      const sent = r.seen.slice(1).map((e) => JSON.parse(e.body).data.deliveryIds as string[]);
+      assert.equal(sent.length, 4, "two events on the first attempt, the second tried three times");
+      const outcome = await wake(ids);
+      assert.equal(r.seen.length, 6, "the retry resent only the refused event");
+      assert.deepEqual(JSON.parse(r.seen[5]!.body).data.deliveryIds, sent[1], "and that one unchanged");
+      assert.deepEqual([...(outcome?.acceptedBefore ?? [])].sort(), [...sent[0]!].sort(), "the ids of the event accepted first time, not sent again");
+      assert.deepEqual(await wake(ids), { acceptedBefore: [] }, "the next wake for the set is new: nothing was accepted before it");
+    } finally {
+      r.close();
+    }
+  });
+
   it("succeeds when one of several subscriptions accepts", async () => {
     const good = await receiver(chatgpt());
     const bad = await receiver(chatgpt(() => 400));

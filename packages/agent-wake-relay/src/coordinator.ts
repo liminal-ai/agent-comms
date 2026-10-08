@@ -17,7 +17,15 @@ export interface WorkDelivery {
  * Wakes the agent. Rejects when the wake didn't land. `wakeId` is stable across retries of the same
  * delivery set (a receiver can dedupe) and changes when the set changes.
  */
-export type WakeFn = (deliveryIds: string[], info?: { wakeId: string }) => Promise<void>;
+export type WakeFn = (deliveryIds: string[], info?: { wakeId: string }) => Promise<void | WakeOutcome>;
+/** What a landed wake can report back. */
+export interface WakeOutcome {
+  /**
+   * Ids whose event was accepted on an earlier attempt of this same wake and so wasn't sent again now (the MCP
+   * waker keeps accepted events while a sibling is retried). Nothing built after a handoff reached the agent for them.
+   */
+  acceptedBefore?: string[];
+}
 
 /** Renudges after the first wake: the k-th renudge waits this many times `renudgeMs`. Then it stops. */
 export const RENUDGE_STEPS = [1, 3, 12];
@@ -104,7 +112,7 @@ export class Coordinator {
   private readonly handedOver = new Set<string>();
   /**
    * Owed handoffs that landed while a wake built from their `pending` state was out: that wake landing doesn't
-   * settle them, since its event predates the inbox item. Cleared when a wake built after the handoff goes out.
+   * settle them, since its event predates the inbox item. Cleared when a wake built after the handoff lands for them.
    */
   private readonly owedAfterWake = new Set<string>();
   /** The last failure logged, so a wake that keeps failing the same way is logged every 5 min, not every retry. */
@@ -330,12 +338,17 @@ export class Coordinator {
     }
     this.inFlight = true;
     this.inFlightStates = new Map(ids.map((id) => [id, this.stateAtWake.get(id) ?? ""]));
-    for (const id of ids) this.owedAfterWake.delete(id); // this wake is built after any handoff noted so far
     const key = [...ids].sort().join("\n");
     if (this.wakeId?.key !== key) this.wakeId = { key, id: `wake_${this.o.participant}_${++this.wakeSeq}_${this.o.timers.now().toString(36)}` };
     const wakeId = this.wakeId.id;
+    // Debts noted before this wake was built: it pays them when it lands, unless the waker reports the id as
+    // accepted on an earlier attempt and not sent again now (nothing built after its handoff reached the agent).
+    // A debt noted while this wake is out is not paid by it, since its event predates that handoff.
+    const builtAfter = ids.filter((id) => this.owedAfterWake.has(id));
     try {
-      await this.o.wake(ids, { wakeId });
+      const outcome = await this.o.wake(ids, { wakeId });
+      const notSentNow = new Set(outcome?.acceptedBefore ?? []);
+      for (const id of builtAfter) if (!notSentNow.has(id)) this.owedAfterWake.delete(id);
       this.spent(ids, this.o.timers.now(), true);
       this.failures = 0;
       this.gaveUp = false;
