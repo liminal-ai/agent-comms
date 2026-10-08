@@ -533,6 +533,37 @@ describe("event delivery", () => {
     }
   });
 
+  it("a day-long failure drop doesn't remove a refresh that lands first", async () => {
+    let status = 500;
+    const r = await receiver(chatgpt(() => status));
+    let now = Date.now();
+    const { h, store } = await hub({ now: () => now });
+    try {
+      const { id } = await h.subscribe("user_1", sub(r.url, newSecret()));
+      store.get(id)!.failedSince = now - 25 * 3_600_000; // failing for over a day
+      const writer = store as unknown as { write: (subs: unknown) => Promise<void> };
+      const realWrite = writer.write.bind(store);
+      let release!: () => void;
+      writer.write = async (subs) => {
+        writer.write = realWrite;
+        await new Promise<void>((res) => (release = res));
+        return realWrite(subs);
+      };
+      status = 200; // the callback is healthy again for the refresh's verification
+      const fresh = newSecret();
+      const refresh = h.subscribe("user_1", sub(r.url, fresh)); // its write is held open
+      await new Promise((res) => setImmediate(res));
+      status = 500;
+      const wake = h.waker("dot")(["d1"]).catch(() => {}); // fails, sees the old failedSince, queues the drop
+      await new Promise((res) => setTimeout(res, 50));
+      release();
+      await Promise.all([refresh, wake]);
+      assert.equal(store.get(id)?.secret, fresh, "the refreshed subscription survives; only the failed object was eligible to go");
+    } finally {
+      r.close();
+    }
+  });
+
   it("overlapping refreshes keep the secret granted just before as the rotation fallback", async () => {
     const r = await receiver(chatgpt());
     const { h, store } = await hub();

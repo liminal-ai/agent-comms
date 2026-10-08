@@ -103,9 +103,11 @@ export class SubscriptionStore {
     });
   }
 
-  delete(id: string): Promise<boolean> {
+  /** Removes a subscription. With `onlyIf`, removes it only if the store still holds that exact object: a refresh that landed meanwhile publishes a new one and is left alone. */
+  delete(id: string, onlyIf?: Subscription): Promise<boolean> {
     return this.serialized(async () => {
       if (!this.subs.has(id)) return false;
+      if (onlyIf !== undefined && this.subs.get(id) !== onlyIf) return false;
       const next = new Map(this.subs);
       next.delete(id);
       await this.write(next);

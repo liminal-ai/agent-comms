@@ -372,8 +372,9 @@ export class EventHub {
           failures.push(`${hostOf(sub.url)} ${r.status ? `HTTP ${r.status}` : r.reason}`);
           sub.failedSince ??= now;
           if (now - sub.failedSince >= DROP_AFTER_FAILING_MS) {
-            await this.o.store.delete(sub.id).catch(() => {});
-            this.o.log(`mcp: dropped subscription ${sub.id}: deliveries have failed for a day (a refresh from ChatGPT restores it)`);
+            // Only this failed entry goes; a refresh that lands first publishes a new object and keeps it.
+            const dropped = await this.o.store.delete(sub.id, sub).catch(() => false);
+            if (dropped) this.o.log(`mcp: dropped subscription ${sub.id}: deliveries have failed for a day (a refresh from ChatGPT restores it)`);
           }
         }
         if (ok) a.state = "accepted";
