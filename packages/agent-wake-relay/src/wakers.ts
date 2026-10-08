@@ -73,8 +73,8 @@ export function webhookWaker(participant: string, config: WebhookWaker, request:
       const code = cause?.code ?? (error as Error)?.name ?? "unknown";
       throw new Error(`webhook request failed (${code})`);
     });
-    // Drain the body; it can echo identifiers, so it isn't logged.
-    await res.text().catch(() => "");
+    // The body is never read: it can echo identifiers, and a misbehaving webhook could send gigabytes.
+    await res.body?.cancel().catch(() => {});
     if (!res.ok) throw new Error(`webhook answered HTTP ${res.status}`);
   };
 }

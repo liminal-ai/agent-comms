@@ -328,6 +328,26 @@ describe("webhook waker", () => {
     assert.equal(hits, 2);
   });
 
+  it("never buffers the webhook's response body", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-"));
+    await writeFile(join(dir, "url"), "https://example.com/hook");
+    let pulls = 0;
+    let cancelled = false;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls++;
+        controller.enqueue(new Uint8Array(1 << 20));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const wake = webhookWaker("grok", { kind: "webhook", urlFile: join(dir, "url") }, async () => new Response(endless, { status: 200 }));
+    await wake(["a"]);
+    assert.ok(cancelled, "the body was cancelled");
+    assert.ok(pulls <= 2, `the body was not drained (pulled ${pulls} chunks)`);
+  });
+
   it("refuses to follow a redirect", async () => {
     const dir = await mkdtemp(join(tmpdir(), "wake-"));
     let hits = 0;
