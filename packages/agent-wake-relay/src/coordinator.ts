@@ -367,7 +367,7 @@ export class Coordinator {
       // Events the failed wake did get accepted are landed for their ids: settled now, like a wake of their own,
       // and dropped by the waker so that anything later for them (a handoff that landed meanwhile, a renudge)
       // is a new event rather than the one already accepted.
-      const accepted = ((error as WakeFailure).accepted ?? []).filter((id) => ids.includes(id));
+      const accepted = [...new Set((error as WakeFailure).accepted ?? [])].filter((id) => ids.includes(id));
       if (accepted.length) {
         this.spent(accepted, now, true);
         this.o.forget?.(accepted);

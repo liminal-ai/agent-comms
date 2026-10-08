@@ -466,7 +466,9 @@ export class EventHub {
       const pending = attempts.filter((a) => a.state === "pending").length;
       const terminal = attempts.filter((a) => a.state === "terminal").length;
       // Events accepted (now or on an earlier attempt of this wake) are landed for their ids, whatever became of the rest.
-      const accepted = attempts.filter((a) => a.state === "accepted").flatMap((a) => a.ids.filter((id) => current.has(id)));
+      // An id settled out of an accepted event (forgotten, then outstanding again with an event of its own) isn't
+      // landed by that older event; only its own counts.
+      const accepted = [...new Set(attempts.filter((a) => a.state === "accepted").flatMap((a) => a.ids.filter((id) => current.has(id) && !a.settled.has(id))))];
       const failure = <E extends Error>(e: E): E & WakeFailure => Object.assign(e, { accepted });
       if (pending === 0) {
         // Every attempt settled: the next wake for this participant starts over.

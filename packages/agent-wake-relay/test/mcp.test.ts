@@ -893,6 +893,32 @@ describe("event delivery", () => {
     }
   });
 
+  it("an id settled out of a kept event isn't reported accepted when that event lands but its own new event fails", async () => {
+    let posts = 0;
+    const statuses: number[] = [];
+    const r = await receiver(chatgpt(() => statuses[posts++] ?? 200));
+    const { h } = await hub();
+    try {
+      await h.subscribe("user_1", sub(r.url, newSecret()));
+      const wake = h.waker("dot");
+      statuses.push(500, 500, 500); // the [d1, d2] event is refused through its three tries
+      await assert.rejects(wake(["d1", "d2"]), /HTTP 500/);
+      h.forget("dot", ["d1"]); // d1 was handed over and gone while that wake was out
+      // The retry: the kept [d1, d2] event is accepted; d1's own new event is refused three times.
+      const order: string[][] = [];
+      statuses.push(200, 500, 500, 500);
+      const failure = await wake(["d1", "d2"]).then(
+        () => assert.fail("expected a rejection"),
+        (e: Error & { accepted?: string[] }) => e,
+      );
+      for (const e of r.seen.slice(4)) order.push((JSON.parse(e.body) as { data: { deliveryIds: string[] } }).data.deliveryIds);
+      assert.deepEqual(order, [["d1", "d2"], ["d1"], ["d1"], ["d1"]], "kept event accepted first, then d1's new event refused");
+      assert.deepEqual(failure.accepted, ["d2"], "d2 landed; d1 did not, whatever the older event it was settled out of");
+    } finally {
+      r.close();
+    }
+  });
+
   it("succeeds when one of several subscriptions accepts", async () => {
     const good = await receiver(chatgpt());
     const bad = await receiver(chatgpt(() => 400));
