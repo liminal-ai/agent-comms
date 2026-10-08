@@ -9,10 +9,22 @@ export interface WorkDelivery {
   recipient: string;
   state: string;
   createdAt: number;
+  /** A claimed delivery's lease; while it's live the agent is working on it and isn't woken again. */
+  claim?: { leaseExpiresAt: number };
 }
 
-/** Wakes the agent. Rejects when the wake didn't land. */
-export type WakeFn = (deliveryIds: string[]) => Promise<void>;
+/**
+ * Wakes the agent. Rejects when the wake didn't land. `wakeId` is stable across retries of the same
+ * delivery set (a receiver can dedupe) and changes when the set changes.
+ */
+export type WakeFn = (deliveryIds: string[], info?: { wakeId: string }) => Promise<void>;
+
+/** Renudges after the first wake: the k-th renudge waits this many times `renudgeMs`. Then it stops. */
+export const RENUDGE_STEPS = [1, 3, 12];
+/** Failed-wake retries back off from `retryMs`, doubling, up to this many times `retryMs`. */
+export const RETRY_MAX_FACTOR = 10;
+/** After this many consecutive failed retries the wake is given up until something changes. */
+export const RETRY_GIVE_UP = 12;
 
 /** A wake the waker will never get through as-is (every callback answered 410/413, or the batch can't be sent). Not retried every 30 s; the renudge timer tries again later. */
 export class TerminalWakeError extends Error {
@@ -56,6 +68,16 @@ export class Coordinator {
   private readonly outstanding = new Map<string, number>();
   /** Delivery id -> the state seen at its last wake, so a later handoff to `delivered` wakes again. */
   private readonly stateAtWake = new Map<string, string>();
+  /** Delivery id -> how many wakes it has had (the first, plus renudges). */
+  private readonly wakes = new Map<string, number>();
+  /** Deliveries whose renudges are used up; logged once each. */
+  private readonly exhausted = new Set<string>();
+  /** Consecutive failed retries of the current wake; reset by success or by anything new to wake for. */
+  private failures = 0;
+  private gaveUp = false;
+  /** The wake id for the delivery set currently being woken for; reused while that set is retried. */
+  private wakeId: { key: string; id: string } | null = null;
+  private wakeSeq = 0;
   private first = true;
   private timer: unknown = null;
   private renudgeTimer: unknown = null;
@@ -71,8 +93,13 @@ export class Coordinator {
   }
 
   /** Feed each new value of the work subscription. */
+  /** The latest view of each outstanding delivery (state, lease). */
+  private readonly latest = new Map<string, WorkDelivery>();
+
   update(deliveries: WorkDelivery[]): void {
     const mine = deliveries.filter((d) => d.recipient === this.o.participant);
+    this.latest.clear();
+    for (const d of mine) this.latest.set(d.id, d);
     const ids = new Set(mine.map((d) => d.id));
     const gone: string[] = [];
     for (const id of [...this.outstanding.keys()]) {
@@ -80,6 +107,8 @@ export class Coordinator {
       this.outstanding.delete(id);
       this.stateAtWake.delete(id);
       this.transitioned.delete(id);
+      this.wakes.delete(id);
+      this.exhausted.delete(id);
       gone.push(id);
     }
     if (gone.length) this.o.forget?.(gone);
@@ -118,7 +147,12 @@ export class Coordinator {
       this.first = false;
       this.o.log(`@${this.o.participant}: watching; ${mine.length} outstanding at start`);
     }
-    if (fresh) this.schedule(this.o.coalesceMs);
+    if (fresh) {
+      // Something new to wake for: a give-up or a backed-off retry no longer applies to it.
+      this.failures = 0;
+      this.gaveUp = false;
+      this.schedule(this.o.coalesceMs);
+    }
     this.scheduleRenudge();
   }
 
@@ -158,12 +192,31 @@ export class Coordinator {
     if (again) this.schedule(this.o.coalesceMs);
   }
 
-  /** Deliveries that were never woken for, or whose last wake is older than renudgeMs. */
+  /** When the next renudge of a delivery is due, or null when it has none left (or renudging is off). */
+  private renudgeAt(id: string, lastWakeAt: number): number | null {
+    if (this.o.renudgeMs <= 0) return null;
+    const step = RENUDGE_STEPS[(this.wakes.get(id) ?? 1) - 1];
+    return step === undefined ? null : lastWakeAt + step * this.o.renudgeMs;
+  }
+
+  /** A claimed delivery whose lease is live is being worked on; waking again would start a parallel run. */
+  private leased(id: string): boolean {
+    const d = this.latest.get(id);
+    return d?.state === "claimed" && (d.claim?.leaseExpiresAt ?? 0) > this.o.timers.now();
+  }
+
+  /** Deliveries that were never woken for, or whose next renudge is due (and that aren't under a live lease). */
   private due(): string[] {
     const now = this.o.timers.now();
     const out: string[] = [];
     for (const [id, at] of this.outstanding) {
-      if (at === 0 || (this.o.renudgeMs > 0 && now - at >= this.o.renudgeMs)) out.push(id);
+      if (this.leased(id)) continue;
+      if (at === 0) {
+        out.push(id);
+        continue;
+      }
+      const next = this.renudgeAt(id, at);
+      if (next !== null && now >= next) out.push(id);
     }
     return out;
   }
@@ -179,10 +232,25 @@ export class Coordinator {
     }
     this.inFlight = true;
     this.inFlightStates = new Map(ids.map((id) => [id, this.stateAtWake.get(id) ?? ""]));
+    const key = [...ids].sort().join("\n");
+    if (this.wakeId?.key !== key) this.wakeId = { key, id: `wake_${this.o.participant}_${++this.wakeSeq}_${this.o.timers.now().toString(36)}` };
+    const wakeId = this.wakeId.id;
     try {
-      await this.o.wake(ids);
+      await this.o.wake(ids, { wakeId });
       const now = this.o.timers.now();
-      for (const id of ids) if (this.outstanding.has(id)) this.outstanding.set(id, now);
+      for (const id of ids) {
+        if (!this.outstanding.has(id)) continue;
+        this.outstanding.set(id, now);
+        this.wakes.set(id, (this.wakes.get(id) ?? 0) + 1);
+        // That was its last renudge: say so once. It is woken again only if it changes (a handoff) or a new delivery arrives.
+        if (this.o.renudgeMs > 0 && this.renudgeAt(id, now) === null && !this.exhausted.has(id)) {
+          this.exhausted.add(id);
+          this.o.log(`@${this.o.participant}: delivery ${id} is still outstanding after ${RENUDGE_STEPS.length} renudges; not waking for it again unless it changes`);
+        }
+      }
+      this.failures = 0;
+      this.gaveUp = false;
+      this.wakeId = null;
       this.lastFailure = null;
       this.o.log(`@${this.o.participant}: woke for ${ids.length} delivery(s) ${ids.join(",")}`);
       this.wakeAgainForHandoffs();
@@ -199,14 +267,21 @@ export class Coordinator {
         this.scheduleRenudge();
         return;
       }
+      this.failures++;
+      const delay = Math.min(this.o.retryMs * 2 ** (this.failures - 1), this.o.retryMs * RETRY_MAX_FACTOR);
       const last = this.lastFailure;
-      if (last && last.message === message && now - last.at < 5 * 60_000) last.repeats++;
+      // Reported again at most every 10 min (twice the retry cap), so a capped retry doesn't log every time.
+      if (last && last.message === message && now - last.at < 10 * 60_000) last.repeats++;
       else {
         const again = last?.message === message && last.repeats ? ` (failed the same way ${last.repeats} more time(s) since the last report)` : "";
-        this.o.log(`@${this.o.participant}: wake failed for ${ids.join(",")}: ${message}${again}; retrying every ${Math.round(this.o.retryMs / 1000)}s`);
+        this.o.log(`@${this.o.participant}: wake failed for ${ids.join(",")}: ${message}${again}; retrying in ${Math.round(delay / 1000)}s`);
         this.lastFailure = { message, at: now, repeats: 0 };
       }
-      this.schedule(this.o.retryMs);
+      if (this.failures >= RETRY_GIVE_UP) {
+        // Enough: the webhook has been failing for a while. Nothing more goes out until a delivery changes or a renudge is due.
+        this.gaveUp = true;
+        this.o.log(`@${this.o.participant}: wake for ${ids.join(",")} has failed ${this.failures} times in a row; giving up until something changes`);
+      } else this.schedule(delay);
     } finally {
       this.inFlight = false;
       this.inFlightStates = null;
@@ -220,15 +295,25 @@ export class Coordinator {
     // While a wake (or its retry) is already pending there is nothing to add: that wake covers whatever
     // is due, and an overdue renudge must not turn a 30 s retry into an immediate one.
     if (this.timer || this.o.renudgeMs <= 0) return;
-    const woken = [...this.outstanding.values()].filter((at) => at > 0);
-    if (!woken.length) return;
-    const next = Math.min(...woken) + this.o.renudgeMs - this.o.timers.now();
+    // A leased delivery's renudge waits for its lease to lapse, so the timer never spins on something it won't wake for.
+    const nexts = [...this.outstanding].flatMap(([id, at]) => {
+      if (at === 0) return [];
+      const next = this.renudgeAt(id, at);
+      if (next === null) return [];
+      const lease = this.latest.get(id)?.claim?.leaseExpiresAt ?? 0;
+      return [Math.max(next, this.latest.get(id)?.state === "claimed" ? lease : 0)];
+    });
+    if (!nexts.length) return;
+    const next = Math.min(...nexts) - this.o.timers.now();
     // Node fires a timer past its limit at once; wait in chunks and re-check what is actually due.
     this.renudgeTimer = this.o.timers.set(() => {
       this.renudgeTimer = null;
       if (this.timer) return;
-      if (this.due().length) this.schedule(0);
-      else this.scheduleRenudge();
+      if (this.due().length) {
+        this.failures = 0;
+        this.gaveUp = false;
+        this.schedule(0);
+      } else this.scheduleRenudge();
     }, Math.min(Math.max(0, next), MAX_TIMER_MS));
   }
 }

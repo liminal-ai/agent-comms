@@ -281,6 +281,8 @@ export default defineSchema({
     machineId: v.string(),
     /** SHA-256 of the connector secret, hex. The secret itself is never stored. */
     secretHash: v.string(),
+    /** SHA-256 of an optional watch secret: accepted only by `connector:work`, so a watcher (agent-wake-relay) never holds the power to act as the machine. */
+    watchSecretHash: v.optional(v.string()),
     lastSeenAt: v.optional(v.number()),
     createdAt: v.number(),
   }).index("by_machineId", ["machineId"]),

@@ -43,6 +43,28 @@ async function sameSecret(a: string, b: string): Promise<boolean> {
   return diff === 0;
 }
 
+/**
+ * Like requireMachine, but also accepts the machine's watch secret. Only `connector:work` uses it, so a
+ * holder of the watch secret can see what needs doing and nothing else (no send, claim, collect or ack as the machine).
+ */
+export async function requireWatcher(ctx: QueryCtx, auth: { id: string; secret: string }): Promise<Doc<"machines">> {
+  const machine = await ctx.db
+    .query("machines")
+    .withIndex("by_machineId", (q) => q.eq("machineId", auth.id))
+    .unique();
+  const presented = await sha256Hex(auth.secret);
+  const matches = (hash: string | undefined) => {
+    if (!hash) return false;
+    let diff = presented.length ^ hash.length;
+    for (let i = 0; i < presented.length; i++) diff |= presented.charCodeAt(i) ^ (hash.charCodeAt(i) ?? 0);
+    return diff === 0;
+  };
+  // Both compared every time, so a wrong secret costs the same whether or not a watch secret exists.
+  const ok = [matches(machine?.secretHash), matches(machine?.watchSecretHash)].some(Boolean);
+  if (!machine || !ok) throw new Error("machine credential rejected");
+  return machine;
+}
+
 export async function requireMachine(ctx: QueryCtx, auth: { id: string; secret: string }): Promise<Doc<"machines">> {
   const machine = await ctx.db
     .query("machines")

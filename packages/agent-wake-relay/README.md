@@ -8,7 +8,7 @@ Agents that live in someone else's sandbox (Grok Bot, ChatGPT, Muse) manage thei
 
 | Step | What happens |
 |---|---|
-| watch | For each target, subscribes to the connector's work query (`connector:work`) for the agent's machine, read-only with that machine's credential. |
+| watch | For each target, subscribes to the connector's work query (`connector:work`) for the agent's machine, with that machine's **watch secret** (`directory:setWatchSecret`): a credential `connector:work` accepts and nothing else does, so the relay can see what needs doing and can't send, claim, collect or ack as the machine. (A full connector secret works too, but then the relay holds the power to act as every watched agent; don't deploy it that way.) |
 | new delivery | Waits 2 s so a burst becomes one wake, then calls the target's waker. A delivery counts as new as soon as it appears in the work query, while still `pending`, because for a target without a connector of its own (Dot) the wake is what makes the agent's bridge claim and collect it. Where a connector does hand items to a bridge one at a time (grok-box), a delivery that was still `pending` at its wake is woken for again the moment it turns `delivered`. |
 | failure | A failed wake (error, redirect, or non-2xx) is retried every 30 s. Each event is pinned to its exact delivery ids and keeps its id across retries, so a receiver can dedupe; deliveries that arrived since go out as a new event with a fresh id. Events already accepted aren't resent until every event of the wake has settled. A wake where every event settled but some were refused for good (410, 413) isn't retried. (Ids are held in memory; a relay restart during a retry mints new ones.) A wake every subscriber refused for good (410, 413) isn't retried; the renudge covers it. A backlog too large for one 256 KiB event is sent as several. A wake that keeps failing the same way is logged every 5 min, not every retry. |
 | still outstanding | If a delivery is still there `renudgeAfter` (default 10 min, at most 24 days) after its last wake, it wakes again, in case the agent slept through the first. `0` turns this off. |
@@ -95,7 +95,7 @@ With an `mcp-events` target, add the `mcp` section (only `listen.port`, `publicB
   ],
   "mcp": {
     "listen": { "host": "127.0.0.1", "port": 18790 },
-    "publicBaseUrl": "https://lim-builder.tailb30114.ts.net:8443",
+    "publicBaseUrl": "https://lim-builder.tailb30114.ts.net",
     "issuer": "https://enthusiastic-roar-48-staging.authkit.app",
     "workosApiKeyFile": "~/lim/service/comms/prod/config/wake/workos-api.key",
     "allowedEmails": ["liminal.builder@gmail.com"],
@@ -104,13 +104,13 @@ With an `mcp-events` target, add the `mcp` section (only `listen.port`, `publicB
 }
 ```
 
-In AuthKit, `<publicBaseUrl>/mcp` must be a Resource Indicator (the default one, for clients that don't send `resource`), with CIMD (and DCR, for older clients) enabled. Make it public with Tailscale Funnel, e.g. `tailscale funnel --bg --https=8443 http://127.0.0.1:18790`. Funnel only serves ports 443, 8443 and 10000, and it opens the whole port: anything else served on that port becomes public too.
+In AuthKit, `<publicBaseUrl>/mcp` must be a Resource Indicator (the default one, for clients that don't send `resource`), with CIMD (and DCR, for older clients) enabled. Make it public with Tailscale Funnel, e.g. `tailscale funnel --bg --https=443 http://127.0.0.1:18790` (lim-builder uses :443; `publicBaseUrl` must match the port). Funnel only serves ports 443, 8443 and 10000, and it opens the whole port: anything else served on that port becomes public too, so check `tailscale serve status` shows only the relay's handler on it before and after.
 
 Keep every referenced file mode 600. Run it with `node agent-wake-relay.mjs <config.json>` (from the release) as a user service with `Restart=always`. A machine secret is read once at start; restart after rotating it.
 
 ## Limits
 
-- **It holds other machines' credentials.** It needs each target machine's secret to watch its work. They're only used for that read-only subscription, on the operator host.
+- **It holds a credential per watched machine.** Give it each machine's watch secret (`directory:setWatchSecret`), which only `connector:work` accepts: it can list work, not act. With a full connector secret instead, the relay process (which also serves the public endpoint) could act as every watched agent; don't. A secret is read once at start: after rotating one, restart the relay (a rejected credential makes it exit with status 3 so systemd restarts it, but the new secret must be in the file first).
 - **A wake isn't an answer.** If the agent wakes but doesn't answer, comms still shows the request unanswered, and the request times out as usual.
 - **MCP Events is ChatGPT-only and narrow.** ChatGPT supports it in Work chats (web, or desktop with Cloud) and dots, with webhook delivery only. Events can't be replayed (`cursor` is always `null`): one sent while nothing is subscribed is lost, but the coordinator keeps retrying until a subscription exists and re-nudges while the delivery is outstanding.
 - **The MCP endpoint is public.** Funnel exposes it to the internet; OAuth and the allowlist are what keep others out.

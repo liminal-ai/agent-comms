@@ -90,6 +90,8 @@ export class Authenticator {
       const { payload } = await jwtVerify(token, this.keys, {
         issuer: this.o.issuer,
         audience: this.o.resource,
+        algorithms: ["RS256"],
+        requiredClaims: ["exp", "sub"],
         currentDate: new Date(this.now()),
       });
       if (typeof payload.sub !== "string" || !payload.sub) throw new Error("token has no subject");

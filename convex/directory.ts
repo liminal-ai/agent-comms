@@ -17,6 +17,27 @@ export function notSystem(p: Doc<"participants">): void {
 }
 
 /** Create or rotate a machine's connector credential. Only the hash is stored. */
+/** Sets (or clears, with an empty string) a machine's watch secret: a credential that `connector:work` accepts and nothing else does. For agent-wake-relay. */
+export const setWatchSecret = mutation({
+  args: { adminToken: v.string(), machineId: v.string(), secret: v.string() },
+  handler: async (ctx, args) => {
+    await requireAdmin(args.adminToken);
+    const machine = await ctx.db
+      .query("machines")
+      .withIndex("by_machineId", (q) => q.eq("machineId", args.machineId))
+      .unique();
+    if (!machine) fail("bad_request", `machine ${args.machineId} isn't registered`);
+    if (args.secret === "") {
+      await ctx.db.patch(machine._id, { watchSecretHash: undefined });
+      return { machineId: args.machineId, watch: false };
+    }
+    if (args.secret.length < 16) fail("bad_request", "the watch secret must be at least 16 characters");
+    if ((await sha256Hex(args.secret)) === machine.secretHash) fail("bad_request", "the watch secret must differ from the connector secret");
+    await ctx.db.patch(machine._id, { watchSecretHash: await sha256Hex(args.secret) });
+    return { machineId: args.machineId, watch: true };
+  },
+});
+
 export const registerMachine = mutation({
   args: { adminToken: v.string(), machineId: v.string(), secret: v.string() },
   handler: async (ctx, args) => {

@@ -17,7 +17,7 @@ const UNSUPPORTED_PROTOCOL_VERSION = -32022;
 const METHOD_NOT_FOUND = -32601;
 
 export interface McpServerOptions {
-  /** Where clients reach this server, e.g. `https://lim-builder.tailb30114.ts.net:8443`. The MCP endpoint is `<this>/mcp`. */
+  /** Where clients reach this server, e.g. `https://lim-builder.tailb30114.ts.net` (Funnel on :443). The MCP endpoint is `<this>/mcp`. */
   publicBaseUrl: string;
   /** The authorization server's issuer, for protected-resource metadata and the metadata proxy. */
   issuer: string;
@@ -90,6 +90,11 @@ function readBody(req: IncomingMessage): Promise<string | null> {
 }
 
 export function createMcpServer(o: McpServerOptions): Server {
+  const refused = { count: 0 };
+  const sampler = setInterval(() => {
+    refused.count = 0;
+  }, 60_000);
+  sampler.unref();
   const base = o.publicBaseUrl.replace(/\/+$/, "");
   const origin = new URL(base).origin;
   const resource = resourceUrl(base);
@@ -146,7 +151,10 @@ export function createMcpServer(o: McpServerOptions): Server {
     if (req.headers.origin !== undefined && req.headers.origin !== origin) return json(res, 403, { error: "origin not allowed" });
     const auth = await o.auth.authenticate(req.headers.authorization);
     if (!auth.ok) {
-      o.log(`mcp: ${auth.status} for a request: ${auth.message}`);
+      // Sampled: a flood of strangers mustn't be able to fill the log. The first 20 per minute are logged, then one line per minute.
+      refused.count++;
+      if (refused.count <= 20) o.log(`mcp: ${auth.status} for a request: ${auth.message}`);
+      else if (refused.count === 21) o.log("mcp: further refused requests this minute are not logged");
       return json(res, auth.status, { error: auth.message }, auth.wwwAuthenticate ? { "www-authenticate": auth.wwwAuthenticate } : {});
     }
     const text = await readBody(req);

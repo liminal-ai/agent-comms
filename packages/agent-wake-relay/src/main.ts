@@ -32,8 +32,9 @@ let events: EventHub | undefined;
 let server: Server | undefined;
 if (config.mcp) {
   const m = config.mcp;
-  const store = new SubscriptionStore(m.stateFile);
+  const store = new SubscriptionStore(m.stateFile, Date.now, log);
   await store.load();
+  if (!["127.0.0.1", "::1", "localhost"].includes(m.host)) log(`mcp: WARNING listening on ${m.host}, not loopback; the endpoint is meant to sit behind tailscale funnel`);
   const auth = new Authenticator({
     issuer: m.issuer,
     resource: resourceUrl(m.publicBaseUrl),
@@ -85,7 +86,15 @@ for (const t of config.targets) {
     { machine },
     (res: { deliveries: WorkDelivery[] }) => c.update(res.deliveries),
     // The error can serialize the call's arguments, including the machine secret; log only its kind.
-    (error: Error) => log(`@${t.participant}: subscription error (${error.name || "Error"}; details withheld)`),
+    (error: Error) => {
+      // A rejected credential never recovers on its own (rotated or revoked secret, deleted machine): exit non-zero so
+      // systemd restarts the relay and the secret file is read again, instead of looking alive while waking no one.
+      if (/credential rejected/.test(error.message)) {
+        log(`@${t.participant}: the machine credential was rejected; exiting so the service restarts with the current secret file`);
+        process.exit(3);
+      }
+      log(`@${t.participant}: subscription error (${error.name || "Error"}; details withheld)`);
+    },
   );
 }
 log(`watching ${config.targets.map((t) => `@${t.participant}`).join(", ")}`);

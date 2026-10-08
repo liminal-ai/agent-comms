@@ -43,7 +43,7 @@ async function secret(path: string, what: string): Promise<string> {
 }
 
 export function webhookWaker(participant: string, config: WebhookWaker, request: typeof fetch = fetch): WakeFn {
-  return async (deliveryIds) => {
+  return async (deliveryIds, info) => {
     const headers: Record<string, string> = { "content-type": "application/json", "user-agent": "agent-comms-agent-wake-relay" };
     const url = await secret(config.urlFile, "webhook URL");
     // The URL itself may carry a secret, and so may the key; neither crosses the network in cleartext.
@@ -61,6 +61,8 @@ export function webhookWaker(participant: string, config: WebhookWaker, request:
       headers,
       body: JSON.stringify({
         event: "delivery",
+        // Stable across retries of the same delivery set: a routine that already ran for it can dedupe.
+        wakeId: info?.wakeId,
         participant,
         deliveryIds,
         note: "agent-comms: you have a delivery waiting. Check your comms inbox and answer it.",

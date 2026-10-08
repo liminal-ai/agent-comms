@@ -24,7 +24,7 @@ export interface TargetConfigFile {
 export interface McpConfigFile {
   /** Where to listen. Default host 127.0.0.1; Tailscale Funnel (or another proxy) makes it public. */
   listen: { host?: string; port: number };
-  /** The public https origin clients use, e.g. `https://lim-builder.tailb30114.ts.net:8443`. The MCP endpoint (and OAuth resource) is `<this>/mcp`. */
+  /** The public https origin clients use, e.g. `https://lim-builder.tailb30114.ts.net` (Funnel on :443). The MCP endpoint (and OAuth resource) is `<this>/mcp`. */
   publicBaseUrl: string;
   /** The OAuth authorization server (AuthKit domain), e.g. `https://<name>.authkit.app`. */
   issuer: string;

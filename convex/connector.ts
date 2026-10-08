@@ -11,21 +11,7 @@ import { clipAnswer, DEFAULT_READ_LIMIT, DEFAULT_WAIT_MS, MAX_WAIT_MS, OWNER_ALI
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query, type QueryCtx } from "./_generated/server";
-import {
-  actingAs,
-  advanceRead,
-  conversationRef,
-  envelope,
-  fail,
-  fullDelivery,
-  getOr,
-  membership,
-  participantByName,
-  ref,
-  requireMachine,
-  stateRef,
-  summary,
-} from "./lib/core";
+import { actingAs, advanceRead, conversationRef, envelope, fail, fullDelivery, getOr, membership, participantByName, ref, requireMachine, requireWatcher, stateRef, summary } from "./lib/core";
 import { machineSeen, nextPresence, profilePatch, registryEntry } from "./lib/registry";
 import { confirm, endResult, markPrinted, registerWait, requireWait, takeAnswer, touch, waitOn, waitShape } from "./lib/waits";
 import { applyAction, createReminder, listFor, mayChange, mayRead, recordFireAnswer, reminderDetail, reminderShape } from "./lib/reminders";
@@ -86,7 +72,8 @@ async function homedOn(ctx: QueryCtx, machine: Doc<"machines">) {
 export const work = query({
   args: { machine: machineAuth },
   handler: async (ctx, args) => {
-    const machine = await requireMachine(ctx, args.machine);
+    // The machine secret or its watch secret: a watcher may see the work list, and only that.
+    const machine = await requireWatcher(ctx, args.machine);
     const here = machine.machineId;
     type Row = Doc<"deliveries">;
     const seen = new Set<string>();

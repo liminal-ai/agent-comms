@@ -105,12 +105,13 @@ describe("coordinator", () => {
       },
     });
     c.update([d("a", "dot")]);
-    await timers.advance(2_000 + 4 * 30_000);
-    assert.equal(logs.filter((l) => l.includes("wake failed")).length, 1);
-    await timers.advance(3 * 60_000);
+    // Retries back off: 30 s, 60 s, 120 s, 240 s, then 300 s (the cap) each time.
+    await timers.advance(2_000 + 30_000 + 60_000 + 120_000);
+    assert.equal(logs.filter((l) => l.includes("wake failed")).length, 1, "one report for the first 5 min");
+    await timers.advance(240_000 + 300_000 + 300_000);
     const failed = logs.filter((l) => l.includes("wake failed"));
     assert.equal(failed.length, 2);
-    assert.match(failed[1]!, /failed the same way 9 more time\(s\)/);
+    assert.match(failed[1]!, /failed the same way \d+ more time\(s\)/);
     c.close();
   });
 
@@ -242,9 +243,9 @@ describe("coordinator", () => {
     await timers.advance(1_000);
     assert.equal(calls, 2);
     failing.o.wake = good;
-    await timers.advance(30_000);
+    await timers.advance(60_000); // the second retry waits 60 s (backoff)
     assert.equal(wakes.length, 2, "and the renudge gets through once the webhook recovers");
-    assert.ok(logs.some((l) => /retrying every 30s/.test(l)));
+    assert.ok(logs.some((l) => /retrying in 30s/.test(l)));
   });
 
   it("a renudge pre-empted by a wake that turns out empty is reinstalled", async () => {
@@ -322,6 +323,89 @@ describe("coordinator", () => {
     assert.deepEqual(forgotten, [["a", "c"]]);
     c.update([]);
     assert.deepEqual(forgotten, [["a", "c"], ["b"]]);
+  });
+
+  it("renudges a stuck delivery three times with widening gaps, then stops and says so once", async () => {
+    const { timers, wakes, logs, c } = setup({ renudgeMs: 10 * 60_000 });
+    c.update([d("a")]);
+    await timers.advance(2_000);
+    assert.equal(wakes.length, 1);
+    await timers.advance(10 * 60_000); // +10 min
+    assert.equal(wakes.length, 2, "first renudge after 10 min");
+    await timers.advance(30 * 60_000); // +30 min
+    assert.equal(wakes.length, 3, "second after 30 min");
+    await timers.advance(120 * 60_000); // +2 h
+    assert.equal(wakes.length, 4, "third after 2 h");
+    await timers.advance(48 * 60 * 60_000); // two days
+    assert.equal(wakes.length, 4, "no more: a stuck delivery doesn't burn turns forever");
+    assert.equal(logs.filter((l) => /not waking for it again/.test(l)).length, 1, "said once");
+    c.update([d("a"), d("b")]); // something new arrives: it is woken for, a is not
+    await timers.advance(2_000);
+    assert.deepEqual(wakes.at(-1), ["b"]);
+  });
+
+  it("doesn't renudge a claimed delivery while its lease is live", async () => {
+    const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+    c.update([d("a")]);
+    await timers.advance(2_000);
+    assert.equal(wakes.length, 1);
+    const lease = timers.now() + 30 * 60_000;
+    c.update([{ ...d("a"), state: "claimed", claim: { leaseExpiresAt: lease } }]); // the agent picked it up
+    await timers.advance(20 * 60_000);
+    assert.equal(wakes.length, 1, "no renudge while the agent holds the lease");
+    await timers.advance(15 * 60_000); // the lease expired without an answer
+    assert.equal(wakes.length, 2, "renudged once the lease lapsed");
+  });
+
+  it("backs off failed retries up to a cap, then gives up until something changes", async () => {
+    const timers = new FakeTimers();
+    const logs: string[] = [];
+    let calls = 0;
+    const at: number[] = [];
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: (l) => logs.push(l),
+      renudgeMs: 0,
+      wake: async () => {
+        calls++;
+        at.push(timers.now());
+        throw new Error("HTTP 500");
+      },
+    });
+    c.update([d("a")]);
+    await timers.advance(24 * 60 * 60_000);
+    const gaps = at.slice(1).map((t, i) => (t - at[i]!) / 1000);
+    assert.deepEqual(gaps.slice(0, 5), [30, 60, 120, 240, 300], "doubling from 30 s, capped at 300 s");
+    assert.equal(calls, 12, "gives up after 12 consecutive failures");
+    assert.equal(logs.filter((l) => /giving up/.test(l)).length, 1);
+    c.update([d("a"), d("b")]); // a new delivery: tried again
+    await timers.advance(2_000);
+    assert.equal(calls, 13);
+  });
+
+  it("gives the webhook a wake id that is stable across retries of the same set and new for a new set", async () => {
+    const timers = new FakeTimers();
+    const seen: { ids: string[]; wakeId: string }[] = [];
+    let fail = 2;
+    const c = new Coordinator({
+      participant: "grok",
+      timers,
+      log: () => {},
+      renudgeMs: 0,
+      wake: async (ids, info) => {
+        seen.push({ ids, wakeId: info!.wakeId });
+        if (fail-- > 0) throw new Error("HTTP 500");
+      },
+    });
+    c.update([d("a"), d("b")]);
+    await timers.advance(2_000 + 30_000 + 60_000);
+    assert.equal(seen.length, 3);
+    assert.equal(new Set(seen.map((s) => s.wakeId)).size, 1, "one id across the retries of [a,b]");
+    c.update([d("a"), d("b"), d("c")]);
+    await timers.advance(2_000);
+    assert.equal(seen.length, 4);
+    assert.notEqual(seen[3]!.wakeId, seen[0]!.wakeId, "a different set gets a new id");
   });
 
   it("a terminal wake failure isn't retried every 30 s; the renudge tries again later", async () => {
@@ -403,6 +487,15 @@ describe("webhook waker", () => {
     await writeFile(join(dir, "url"), "http://127.0.0.1:9/hook");
     await wake(["a"]);
     assert.equal(hits, 2);
+  });
+
+  it("puts the wake id in the webhook body", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wake-"));
+    await writeFile(join(dir, "url"), "https://example.com/hook");
+    let body = "";
+    const wake = webhookWaker("grok", { kind: "webhook", urlFile: join(dir, "url") }, async (_url, init) => ((body = String(init?.body)), new Response("{}")));
+    await wake(["a"], { wakeId: "wake_grok_1_x" });
+    assert.equal(JSON.parse(body).wakeId, "wake_grok_1_x");
   });
 
   it("never buffers the webhook's response body", async () => {

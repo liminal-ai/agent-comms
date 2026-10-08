@@ -4,7 +4,7 @@
 // mode 600, atomically (temp file + rename).
 
 import { createHash } from "node:crypto";
-import { chmod, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, open, readFile, rename } from "node:fs/promises";
 
 export interface Subscription {
   /** Derived from the key below; sent as `X-MCP-Subscription-Id`. */
@@ -51,7 +51,10 @@ export class SubscriptionStore {
   private readonly path: string;
   private readonly now: () => number;
 
-  constructor(path: string, now: () => number = Date.now) {
+  private readonly log: (line: string) => void;
+
+  constructor(path: string, now: () => number = Date.now, log: (line: string) => void = () => {}) {
+    this.log = log;
     this.path = path;
     this.now = now;
   }
@@ -65,8 +68,18 @@ export class SubscriptionStore {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
       throw error;
     }
-    const state = JSON.parse(raw) as { version?: number; subscriptions?: Subscription[] };
-    if (state.version !== 1 || !Array.isArray(state.subscriptions)) throw new Error(`${this.path}: not an agent-wake-relay state file`);
+    let state: { version?: number; subscriptions?: Subscription[] };
+    try {
+      state = JSON.parse(raw) as typeof state;
+      if (state.version !== 1 || !Array.isArray(state.subscriptions)) throw new Error("not an agent-wake-relay state file");
+    } catch (error) {
+      // A damaged file mustn't keep every waker down (the webhook targets don't even use it). Keep it
+      // for inspection and start empty; subscribers re-subscribe from ChatGPT.
+      const aside = `${this.path}.corrupt-${new Date(this.now()).toISOString().replace(/[:.]/g, "-")}`;
+      await rename(this.path, aside);
+      this.log(`mcp: state file unreadable (${(error as Error).message.slice(0, 60)}); moved to ${aside} and starting with no subscriptions`);
+      return;
+    }
     for (const s of state.subscriptions) this.subs.set(s.id, s);
     if (this.prune()) await this.save();
   }
@@ -149,7 +162,13 @@ export class SubscriptionStore {
   private async write(subs: Map<string, Subscription>): Promise<void> {
     const tmp = `${this.path}.${process.pid}.tmp`;
     const body = `${JSON.stringify({ version: 1, subscriptions: [...subs.values()] }, null, 2)}\n`;
-    await writeFile(tmp, body, { mode: 0o600 });
+    const handle = await open(tmp, "w", 0o600);
+    try {
+      await handle.writeFile(body);
+      await handle.sync(); // on disk before the rename makes it the state
+    } finally {
+      await handle.close();
+    }
     await chmod(tmp, 0o600);
     await rename(tmp, this.path);
   }
