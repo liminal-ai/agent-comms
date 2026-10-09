@@ -122,6 +122,17 @@ describe("coordinator", () => {
       assert.deepEqual(wakes, [["n1"]]);
     });
 
+    it("a notice last seen pending that leaves the work list (handed over between snapshots, e.g. across a subscription gap) is owed one wake", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("n1", "pending", { collect: false })]);
+      await timers.advance(500);
+      c.update([]); // claimed and handed over while the relay saw no snapshot: no `claimed` state was ever observed
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["n1"]], "the agent has to be woken to read it");
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, [["n1"]]);
+    });
+
     it("a delivered request that leaves the work list before its handoff wake was collected: no wake", async () => {
       const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
       c.update([st("r1", "pending")]);

@@ -180,10 +180,12 @@ export class Coordinator {
       // With `wakeAt: "delivered"` a request (`collect`) that vanishes is never owed: a `claimed` one was rejected by
       // the adapter (`failed`, nothing in the inbox) and a `delivered` one was collected (answered, so the agent ran
       // without us). A notice or answer leaves the work list at the handoff itself (only `delivered` requests stay
-      // listed), so one last seen `claimed` is owed its wake as before; the rare notice the adapter rejects costs one
-      // wake with nothing new in the inbox, the same as today.
+      // listed), so one that vanishes is owed its wake whatever state it was last seen in: snapshots can skip
+      // `claimed` (a subscription gap, or a fast handoff), and no earlier wake went out for it in this mode. The rare
+      // notice that vanishes without a handoff (rejected by the adapter, recipient retired) costs one wake with
+      // nothing new in the inbox, the same as today.
       const last = this.stateAtWake.get(id);
-      const taken = this.o.wakeAt === "delivered" ? this.collectOf.get(id) !== true && last !== "pending" : last !== "pending";
+      const taken = this.o.wakeAt === "delivered" ? this.collectOf.get(id) !== true : last !== "pending";
       if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && taken)) {
         this.owed.add(id);
         if (this.transitioned.has(id)) this.owedAfterWake.add(id);
