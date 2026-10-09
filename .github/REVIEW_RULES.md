@@ -12,7 +12,7 @@ Four bots review PRs here: Copilot, Bugbot, Codex and Macroscope. Each one has a
 |---|---|---|
 | Copilot (Lite) | Fast first pass: obvious bugs, typos in logic, API misuse, repository conventions | ≤5 inline |
 | Cursor Bugbot | Primary bug-finder: logic errors, edge cases, regressions, broken invariants, secrets or credentials in logs, concurrency and races | Bugbot default |
-| Codex (GPT-6.1 Sol) | P0/P1 correctness only, plus missing tests for changed behavior | 1 comment, ≤5 items |
+| Codex (GPT-6.1 Sol) | P0/P1 correctness only, plus missing tests for changed behavior | 1 comment; at most 5 P1 items, P0s never capped |
 | Macroscope | Correctness and approvability checks (neutral check runs). Its agreement is required before merge (CR-36). | Macroscope default |
 
 Auth and cross-module contracts have no dedicated bot lane; only Macroscope's correctness check covers them.
@@ -20,7 +20,7 @@ Auth and cross-module contracts have no dedicated bot lane; only Macroscope's co
 Rules for every reviewer:
 - Report only issues you'd block a merge on or that will clearly cause a bug or incident. Skip style, naming, formatting, and anything linters/typecheckers catch (CI covers those).
 - Before you comment, read the PR's existing review comments. If someone already flagged the issue, skip it, or reply in that thread only to add new evidence.
-- **Start every finding with its severity tag:** `[P0]`, `[P1]` or `[P2]`. Never post nits. review-gate reads this tag (RG-5, advisory; not yet wired on this repo), and untagged findings count as non-blocking.
+- **Start every finding with its severity tag:** `[P0]`, `[P1]` or `[P2]` (except Copilot, whose findings stay untagged and non-blocking). Never post nits. review-gate reads this tag (RG-5, advisory; not yet wired on this repo), and untagged findings count as non-blocking.
   - `[P0]` blocks merge: data loss or corruption, a security, auth or secret exposure, a broken wire contract, a crash on a main path, an irreversible side effect.
   - `[P1]` fix before merge, or the author records why not: a correctness bug in the changed behavior, a race, an idempotency or ordering bug, a behavior change with no test.
   - `[P2]` fix or file a follow-up: weak error handling, a perf risk, dead code, a test that mirrors the implementation.
@@ -29,7 +29,7 @@ Rules for every reviewer:
 - If you find nothing in your lane, say so briefly, or post nothing (Codex posts nothing when there are no findings).
 
 Path scope and exclusions:
-- Skip docs and generated/vendored artifacts: `**/*.md`, `docs/**`, `**/pnpm-lock.yaml`, `.repos/**`, `vendor/**`, `third_party/**`, `**/dist/**`, `**/_generated/**`, `**/node_modules/**`
+- Skip docs and generated/vendored artifacts (but do review reviewer configuration: `AGENTS.md`, `.cursor/**`, `.github/*.md`, `.macroscope/**`): `**/*.md`, `docs/**`, `**/pnpm-lock.yaml`, `.repos/**`, `vendor/**`, `third_party/**`, `**/dist/**`, `**/_generated/**`, `**/node_modules/**`
 
 Setup notes (for maintainers):
 - Codex review runs via the ChatGPT Codex GitHub connector (`chatgpt-codex-connector[bot]`); no `OPENAI_API_KEY` is needed here.
