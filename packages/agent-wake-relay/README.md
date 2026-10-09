@@ -84,6 +84,8 @@ There's one tool, `get_profile` (read-only, marked `openai/profile`), which retu
 
 A target can also set `"wakeOn": "requests"`: only deliveries that expect an answer (requests) wake that agent; answers and notices are ignored entirely, never owed and never renudged. Use it for an agent kept around to answer direct questions, such as a superseded copy that must not be woken by ordinary traffic. Default `"all"`.
 
+On a machine that runs a connector (grok-box), a delivery first appears as `pending`, is claimed by the connector and only then reaches the agent's inbox as `delivered`. By default the relay wakes at appearance and again at the handoff, which is two wakes a few seconds apart when the handoff takes longer than the coalesce window, and a sandboxed agent may start two runs. Set `"wakeAt": "delivered"` on such a target to wake once, at the handoff. A delivery taken and answered before any wake is still owed one wake. If a delivery sits unhanded for `handoffTimeout` (default 5 min, `"0"` turns it off) the relay reports it once (log, and a comms message when `alerts` is configured) and does not wake the agent, whose inbox has nothing yet; the handoff, when it comes, wakes as usual. The top-level `"alerts": { "commsBin": "/path/to/comms", "as": "<system sender homed on this machine>", "to": "<operator>", "socket": "<connector socket, optional>" }` is where such reports go; without it they are log-only.
+
 With an `mcp-events` target, add the `mcp` section (only `listen.port`, `publicBaseUrl`, `issuer`, an allowlist and `stateFile` are required; `jwksUrl` defaults to `<issuer>/oauth2/jwks`):
 
 ```json
