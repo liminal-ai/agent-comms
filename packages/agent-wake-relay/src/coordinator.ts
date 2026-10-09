@@ -217,7 +217,12 @@ export class Coordinator {
         this.collectOf.set(d.id, d.collect === true);
         // Waiting for the handoff: no wake yet. It is still tracked (a lease, a disappearance) like any outstanding id.
         if (this.waitsForHandoff(d)) this.awaitingHandoff.set(d.id, this.o.timers.now());
-        else fresh++;
+        else {
+          // With `wakeAt: "delivered"`, one first seen already `delivered` (at start, or handed over between two
+          // snapshots) is a handoff like any other: its live, renewed claim must not hold back the one wake it gets.
+          if (this.o.wakeAt === "delivered") this.handedOver.add(d.id);
+          fresh++;
+        }
         continue;
       }
       // Not woken for yet (coalescing): the state the wake will cover is the latest one. During an

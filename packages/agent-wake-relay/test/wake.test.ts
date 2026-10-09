@@ -133,6 +133,16 @@ describe("coordinator", () => {
       assert.deepEqual(wakes, [["n1"]]);
     });
 
+    it("a request first seen already delivered under a renewed claim (relay start, or handed over between snapshots) wakes once", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("r1", "delivered", { claim: { leaseExpiresAt: timers.t + 60_000 } })]);
+      for (let i = 0; i < 5; i++) {
+        await timers.advance(30_000);
+        c.update([st("r1", "delivered", { claim: { leaseExpiresAt: timers.t + 60_000 } })]); // the connector renews the claim while it awaits the answer
+      }
+      assert.deepEqual(wakes, [["r1"]], "one wake despite the live lease, and no second one while it is renewed");
+    });
+
     it("a delivered request that leaves the work list before its handoff wake was collected: no wake", async () => {
       const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
       c.update([st("r1", "pending")]);
