@@ -65,7 +65,7 @@ export interface WakeConfigFile {
 export interface AlertsConfigFile {
   /** The comms CLI binary. */
   commsBin: string;
-  /** The participant the relay sends as (a system sender homed on this machine), and who gets the message. */
+  /** The participant the relay sends as (an agent participant homed on this machine: the connector refuses a `system` one, which has no home), and who gets the message. */
   as: string;
   to: string;
   /** The connector's loopback socket, when the service's environment doesn't carry AGENT_COMMS_SOCKET. */

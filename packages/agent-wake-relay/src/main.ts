@@ -30,7 +30,7 @@ if (!path || path === "--help" || path === "-h") {
 const log = (line: string) => process.stdout.write(`${new Date().toISOString()} ${line}\n`);
 const config = loadConfig(path);
 
-// A report that needs someone (an overdue handoff): one comms message through the CLI, as the configured system sender.
+// A report that needs someone (an overdue handoff): one comms message through the CLI, as the configured sender agent homed on this machine.
 // Fire-and-forget; a failure to send is logged, never retried (the log line already carries the report).
 const alert = config.alerts
   ? (line: string) => {
