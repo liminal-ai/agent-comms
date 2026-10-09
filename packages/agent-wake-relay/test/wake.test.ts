@@ -109,6 +109,30 @@ describe("coordinator", () => {
       assert.deepEqual(wakes, [["n1"]]);
     });
 
+    it("a notice last seen claimed that leaves the work list (it left at its handoff) is owed one wake", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("n1", "pending", { collect: false })]);
+      await timers.advance(500);
+      c.update([st("n1", "claimed", { collect: false, claim: { leaseExpiresAt: timers.t + 60_000 } })]);
+      await timers.advance(500);
+      c.update([]); // a notice is not listed once delivered: the handoff is where it disappears
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["n1"]], "the agent has to be woken to read it");
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, [["n1"]]);
+    });
+
+    it("a delivered request that leaves the work list before its handoff wake was collected: no wake", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("r1", "pending")]);
+      await timers.advance(500);
+      c.update([st("r1", "delivered", { claim: { leaseExpiresAt: timers.t + 60_000 } })]);
+      await timers.advance(500);
+      c.update([]); // answered by a run the agent started on its own; nothing new in the inbox
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, []);
+    });
+
     it("a claimed request that vanishes (rejected by the adapter, or already answered) is not owed a wake", async () => {
       const { timers, wakes, alerts, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
       c.update([st("r1", "pending")]);

@@ -101,6 +101,8 @@ export class Coordinator {
   };
   /** With `wakeAt: "delivered"`: deliveries seen but not yet handed over -> when they were first seen. */
   private readonly awaitingHandoff = new Map<string, number>();
+  /** Delivery id -> whether it expects an answer (`collect`), kept for the disappearance rule after it leaves the list. */
+  private readonly collectOf = new Map<string, boolean>();
   /** Those of them already reported as overdue (once each). */
   private readonly overdue = new Set<string>();
   private handoffTimer: unknown = null;
@@ -175,10 +177,13 @@ export class Coordinator {
       // was paused, or the message withdrawn), so nothing is owed. If a wake carrying it is out, that wake's outcome
       // settles it: success clears the debt, a failed one retries with it.
       // A handoff noted during an in-flight wake (`transitioned`) counts as having seen it taken.
-      // With `wakeAt: "delivered"` only a row last seen `delivered` is owed: a `claimed` row that vanishes was either
-      // rejected by the adapter (`failed`, nothing in the inbox) or already answered (collected, so the agent ran
-      // without us); neither needs a wake, and the handoff itself is never inferred from a disappearance.
-      const taken = this.o.wakeAt === "delivered" ? this.stateAtWake.get(id) === "delivered" : this.stateAtWake.get(id) !== "pending";
+      // With `wakeAt: "delivered"` a request (`collect`) that vanishes is never owed: a `claimed` one was rejected by
+      // the adapter (`failed`, nothing in the inbox) and a `delivered` one was collected (answered, so the agent ran
+      // without us). A notice or answer leaves the work list at the handoff itself (only `delivered` requests stay
+      // listed), so one last seen `claimed` is owed its wake as before; the rare notice the adapter rejects costs one
+      // wake with nothing new in the inbox, the same as today.
+      const last = this.stateAtWake.get(id);
+      const taken = this.o.wakeAt === "delivered" ? this.collectOf.get(id) !== true && last !== "pending" : last !== "pending";
       if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && taken)) {
         this.owed.add(id);
         if (this.transitioned.has(id)) this.owedAfterWake.add(id);
@@ -192,6 +197,7 @@ export class Coordinator {
       this.exhausted.delete(id);
       this.awaitingHandoff.delete(id);
       this.overdue.delete(id);
+      this.collectOf.delete(id);
       if (!this.owed.has(id)) {
         this.unreached.delete(id);
         this.rearmed.delete(id);
@@ -206,6 +212,7 @@ export class Coordinator {
         this.owed.delete(d.id);
         this.outstanding.set(d.id, 0);
         this.stateAtWake.set(d.id, d.state);
+        this.collectOf.set(d.id, d.collect === true);
         // Waiting for the handoff: no wake yet. It is still tracked (a lease, a disappearance) like any outstanding id.
         if (this.waitsForHandoff(d)) this.awaitingHandoff.set(d.id, this.o.timers.now());
         else fresh++;
