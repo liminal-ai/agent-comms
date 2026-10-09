@@ -7,6 +7,7 @@
 // subscribes through. Usage: agent-wake-relay <config.json>
 
 import { ConvexError } from "convex/values";
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { ConvexClient } from "convex/browser";
@@ -28,6 +29,20 @@ if (!path || path === "--help" || path === "-h") {
 
 const log = (line: string) => process.stdout.write(`${new Date().toISOString()} ${line}\n`);
 const config = loadConfig(path);
+
+// A report that needs someone (an overdue handoff): one comms message through the CLI, as the configured sender agent homed on this machine.
+// Fire-and-forget; a failure to send is logged, never retried (the log line already carries the report).
+const alert = config.alerts
+  ? (line: string) => {
+      const a = config.alerts!;
+      const env = { ...process.env, ...(a.socket ? { AGENT_COMMS_SOCKET: a.socket } : {}) };
+      // `--continue`: report delivery, don't wait for an answer. The CLI can only send requests, not notices, so the
+      // text says no reply is needed: nothing reads the sender's inbox.
+      execFile(a.commsBin, ["send", "--as", a.as, "--continue", `@${a.to}`, `agent-wake-relay: ${line} (No reply needed; the relay can't read one.)`], { env, timeout: 60_000 }, (error) => {
+        if (error) log(`alert to @${a.to} failed: ${error.message.split("\n")[0]}`);
+      });
+    }
+  : undefined;
 
 let events: EventHub | undefined;
 let server: Server | undefined;
@@ -83,6 +98,9 @@ for (const t of config.targets) {
     log,
     renudgeMs: t.renudgeMs,
     wakeOn: t.wakeOn,
+    wakeAt: t.wakeAt,
+    handoffTimeoutMs: t.handoffTimeoutMs,
+    ...(alert ? { alert } : {}),
     ...(t.waker.kind === "mcp-events" && events
       ? {
           forget: (ids: string[]) => events.forget(t.participant, ids),

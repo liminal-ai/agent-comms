@@ -36,18 +36,22 @@ class FakeTimers implements Timers {
 
 const d = (id: string, recipient = "grok"): WorkDelivery => ({ id, recipient, state: "delivered", createdAt: 0 });
 
-function setup(opts: { fail?: number; renudgeMs?: number; terminal?: number; wakeOn?: "all" | "requests" } = {}) {
+function setup(opts: { fail?: number; renudgeMs?: number; terminal?: number; wakeOn?: "all" | "requests"; wakeAt?: "appearance" | "delivered"; handoffTimeoutMs?: number } = {}) {
   const timers = new FakeTimers();
   const wakes: string[][] = [];
   const logs: string[] = [];
+  const alerts: string[] = [];
   let failures = opts.fail ?? 0;
   let terminal = opts.terminal ?? 0;
   const c = new Coordinator({
     participant: "grok",
     timers,
     log: (l) => logs.push(l),
+    alert: (l) => alerts.push(l),
     renudgeMs: opts.renudgeMs ?? 0,
     ...(opts.wakeOn ? { wakeOn: opts.wakeOn } : {}),
+    ...(opts.wakeAt ? { wakeAt: opts.wakeAt } : {}),
+    ...(opts.handoffTimeoutMs !== undefined ? { handoffTimeoutMs: opts.handoffTimeoutMs } : {}),
     wake: async (ids) => {
       if (failures > 0) {
         failures--;
@@ -60,10 +64,161 @@ function setup(opts: { fail?: number; renudgeMs?: number; terminal?: number; wak
       wakes.push(ids);
     },
   });
-  return { timers, wakes, logs, c };
+  return { timers, wakes, logs, alerts, c };
 }
 
 describe("coordinator", () => {
+  describe("wakeAt delivered (a machine with a connector)", () => {
+    const st = (id: string, state: string, extra: Partial<WorkDelivery> = {}): WorkDelivery => ({ id, recipient: "grok", state, createdAt: 0, collect: true, ...extra });
+
+    it("wakes exactly once, at the handoff, when the connector takes 3.2 s to hand a request over", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("r1", "pending")]);
+      await timers.advance(1_000);
+      c.update([st("r1", "claimed", { claim: { leaseExpiresAt: timers.t + 60_000 } })]);
+      await timers.advance(2_200);
+      assert.deepEqual(wakes, [], "no wake while the request is only pending/claimed");
+      c.update([st("r1", "delivered", { claim: { leaseExpiresAt: timers.t + 60_000 } })]);
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["r1"]], "one wake, carrying the handed-over request");
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, [["r1"]], "and no second one");
+    });
+
+    it("wakes exactly once when the handoff lands inside the coalesce window", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("r1", "pending")]);
+      await timers.advance(500);
+      c.update([st("r1", "delivered")]);
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["r1"]]);
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, [["r1"]]);
+    });
+
+    it("a notice handed over and gone before any wake is still owed one wake", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("n1", "pending", { collect: false })]);
+      await timers.advance(500);
+      c.update([st("n1", "delivered", { collect: false })]);
+      await timers.advance(500);
+      c.update([]); // a delivered notice has nothing left to do and drops out of the work list before the coalesced wake
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["n1"]], "the agent still has to be woken to read it");
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, [["n1"]]);
+    });
+
+    it("a notice last seen claimed that leaves the work list (it left at its handoff) is owed one wake", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("n1", "pending", { collect: false })]);
+      await timers.advance(500);
+      c.update([st("n1", "claimed", { collect: false, claim: { leaseExpiresAt: timers.t + 60_000 } })]);
+      await timers.advance(500);
+      c.update([]); // a notice is not listed once delivered: the handoff is where it disappears
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["n1"]], "the agent has to be woken to read it");
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, [["n1"]]);
+    });
+
+    it("a notice last seen pending that leaves the work list (handed over between snapshots, e.g. across a subscription gap) is owed one wake", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("n1", "pending", { collect: false })]);
+      await timers.advance(500);
+      c.update([]); // claimed and handed over while the relay saw no snapshot: no `claimed` state was ever observed
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["n1"]], "the agent has to be woken to read it");
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, [["n1"]]);
+    });
+
+    it("a request first seen already delivered under a renewed claim (relay start, or handed over between snapshots) wakes once", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("r1", "delivered", { claim: { leaseExpiresAt: timers.t + 60_000 } })]);
+      for (let i = 0; i < 5; i++) {
+        await timers.advance(30_000);
+        c.update([st("r1", "delivered", { claim: { leaseExpiresAt: timers.t + 60_000 } })]); // the connector renews the claim while it awaits the answer
+      }
+      assert.deepEqual(wakes, [["r1"]], "one wake despite the live lease, and no second one while it is renewed");
+    });
+
+    it("a delivered request that leaves the work list before its handoff wake was collected: no wake", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("r1", "pending")]);
+      await timers.advance(500);
+      c.update([st("r1", "delivered", { claim: { leaseExpiresAt: timers.t + 60_000 } })]);
+      await timers.advance(500);
+      c.update([]); // answered by a run the agent started on its own; nothing new in the inbox
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, []);
+    });
+
+    it("a claimed request that vanishes (rejected by the adapter, or already answered) is not owed a wake", async () => {
+      const { timers, wakes, alerts, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("r1", "pending")]);
+      await timers.advance(500);
+      c.update([st("r1", "claimed", { claim: { leaseExpiresAt: timers.t + 60_000 } })]);
+      await timers.advance(500);
+      c.update([]); // claimed -> failed (adapter rejected it) or collected: either way nothing new sits in the inbox
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [], "the handoff is never inferred from a disappearance");
+      await timers.advance(60 * 60_000);
+      assert.deepEqual(wakes, []);
+      assert.deepEqual(alerts, []);
+    });
+
+    it("many handoffs falling overdue together give one alert, with each id logged", async () => {
+      const { timers, wakes, logs, alerts, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
+      c.update(Array.from({ length: 50 }, (_, i) => st(`r${i}`, "pending")));
+      await timers.advance(5 * 60_000 + 1_000);
+      assert.equal(alerts.length, 1, "one alert for the whole backlog");
+      assert.match(alerts[0]!, /handoff overdue for 50 deliveries/);
+      assert.equal(logs.filter((l) => /handoff overdue: delivery r\d+/.test(l)).length, 50);
+      assert.deepEqual(wakes, []);
+    });
+
+    it("reports an overdue handoff once, without waking; the handoff later wakes exactly once", async () => {
+      const { timers, wakes, logs, alerts, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
+      c.update([st("r1", "pending")]);
+      await timers.advance(5 * 60_000 - 1);
+      assert.deepEqual(alerts, []);
+      await timers.advance(1);
+      assert.equal(alerts.length, 1, "one alert when the timeout passes");
+      assert.match(alerts[0]!, /@grok: handoff overdue: delivery r1 has waited 5 min/);
+      assert.ok(logs.some((l) => l.includes("handoff overdue")), "and it is logged");
+      assert.deepEqual(wakes, [], "no wake: the inbox has nothing yet");
+      await timers.advance(20 * 60_000);
+      assert.equal(alerts.length, 1, "reported once, not every check");
+      assert.deepEqual(wakes, []);
+      c.update([st("r1", "delivered")]);
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["r1"]], "the handoff wakes once");
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, [["r1"]]);
+    });
+
+    it("a never-woken pending request that is withdrawn is neither reported nor woken for", async () => {
+      const { timers, wakes, alerts, c } = setup({ wakeAt: "delivered", handoffTimeoutMs: 60_000 });
+      c.update([st("r1", "pending")]);
+      await timers.advance(30_000);
+      c.update([]);
+      await timers.advance(5 * 60_000);
+      assert.deepEqual(wakes, []);
+      assert.deepEqual(alerts, []);
+    });
+
+    it("the default, wakeAt appearance, still wakes at appearance and again at the handoff", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000 });
+      c.update([st("r1", "pending")]);
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["r1"]]);
+      c.update([st("r1", "delivered")]);
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["r1"], ["r1"]], "today's behaviour is unchanged");
+    });
+  });
+
   it("wakes once for a burst of new deliveries, only for its participant", async () => {
     const { timers, wakes, c } = setup();
     c.update([]);
@@ -1315,6 +1470,17 @@ describe("config", () => {
     assert.equal(c.targets[0]!.wakeOn, "all");
     assert.equal(parseConfig({ convexUrl: "https://x.convex.cloud", targets: [{ ...target, wakeOn: "requests" }] }).targets[0]!.wakeOn, "requests");
     assert.throws(() => parseConfig({ convexUrl: "https://x.convex.cloud", targets: [{ ...target, wakeOn: "fyi" }] }), /wakeOn/);
+    assert.equal(c.targets[0]!.wakeAt, "appearance");
+    assert.equal(c.targets[0]!.handoffTimeoutMs, 5 * 60_000);
+    const atHandoff = parseConfig({ convexUrl: "https://x.convex.cloud", targets: [{ ...target, wakeAt: "delivered", handoffTimeout: "2m" }] }).targets[0]!;
+    assert.equal(atHandoff.wakeAt, "delivered");
+    assert.equal(atHandoff.handoffTimeoutMs, 2 * 60_000);
+    assert.throws(() => parseConfig({ convexUrl: "https://x.convex.cloud", targets: [{ ...target, wakeAt: "handoff" }] }), /targets\[0\]\.wakeAt: expected "appearance" or "delivered"/);
+    assert.equal(parseConfig({ convexUrl: "https://x.convex.cloud", targets: [target] }).alerts, undefined);
+    const alerts = { commsBin: "/usr/local/bin/comms", as: "wake-relay", to: "kit", socket: "/run/x.sock" };
+    assert.deepEqual(parseConfig({ convexUrl: "https://x.convex.cloud", targets: [target], alerts }).alerts, alerts);
+    assert.throws(() => parseConfig({ convexUrl: "https://x.convex.cloud", targets: [target], alerts: { ...alerts, to: "Kit!" } }), /alerts\.to/);
+    assert.throws(() => parseConfig({ convexUrl: "https://x.convex.cloud", targets: [target], alerts: { as: "wake-relay", to: "kit" } }), /alerts\.commsBin/);
     assert.throws(() => parseConfig({ convexUrl: "https://x.convex.cloud", targets: [{ ...target, machineSecretFile: join(dir, "nope") }] }), ConfigError);
     assert.throws(() => parseConfig({ convexUrl: "https://x.convex.cloud", targets: [{ ...target, waker: { kind: "email" } }] }), /waker.kind/);
     assert.throws(() => parseConfig({ convexUrl: "https://x.convex.cloud", targets: [target, target] }), /listed twice/);

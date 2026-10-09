@@ -76,14 +76,36 @@ export interface CoordinatorOptions {
   renudgeMs?: number;
   /** `requests`: only deliveries with `collect` wake the agent; answers and notices are ignored entirely. Default `all`. */
   wakeOn?: "all" | "requests";
+  /**
+   * When the first wake for a delivery goes out. `appearance` (default): as soon as it is in the work list, in any
+   * state. `delivered`: only once the machine's connector has handed it to the agent's inbox (state `delivered`), so a
+   * machine with a connector gets one wake per delivery instead of one at appearance and another at the handoff.
+   */
+  wakeAt?: "appearance" | "delivered";
+  /**
+   * With `wakeAt: "delivered"`: a delivery still not handed over this long after it appeared is reported once
+   * (log + `alert`), since the connector is down or stuck. The agent is not woken for it (its inbox is empty); the
+   * handoff, when it comes, wakes as usual. Default 5 min; 0 turns the report off.
+   */
+  handoffTimeoutMs?: number;
+  /** Where an overdue-handoff report goes besides the log (a comms message to the operator). */
+  alert?: (line: string) => void;
 }
 
 export class Coordinator {
-  private readonly o: Required<Omit<CoordinatorOptions, "timers" | "forget" | "retire">> & {
+  private readonly o: Required<Omit<CoordinatorOptions, "timers" | "forget" | "retire" | "alert">> & {
     timers: Timers;
     forget?: (ids: string[]) => void;
     retire?: (ids: string[]) => void;
+    alert?: (line: string) => void;
   };
+  /** With `wakeAt: "delivered"`: deliveries seen but not yet handed over -> when they were first seen. */
+  private readonly awaitingHandoff = new Map<string, number>();
+  /** Delivery id -> whether it expects an answer (`collect`), kept for the disappearance rule after it leaves the list. */
+  private readonly collectOf = new Map<string, boolean>();
+  /** Those of them already reported as overdue (once each). */
+  private readonly overdue = new Set<string>();
+  private handoffTimer: unknown = null;
   /** Outstanding deliveries for the participant → when they were last woken for (0 = not yet). */
   /** Delivery id -> when it was last woken for (0 = never). */
   private readonly outstanding = new Map<string, number>();
@@ -132,7 +154,7 @@ export class Coordinator {
   private lastFailure: { message: string; at: number; repeats: number } | null = null;
 
   constructor(options: CoordinatorOptions) {
-    this.o = { coalesceMs: 2_000, retryMs: 30_000, renudgeMs: 10 * 60_000, wakeOn: "all", timers: realTimers, ...options };
+    this.o = { coalesceMs: 2_000, retryMs: 30_000, renudgeMs: 10 * 60_000, wakeOn: "all", wakeAt: "appearance", handoffTimeoutMs: 5 * 60_000, timers: realTimers, ...options };
   }
 
   /** Feed each new value of the work subscription. */
@@ -155,7 +177,16 @@ export class Coordinator {
       // was paused, or the message withdrawn), so nothing is owed. If a wake carrying it is out, that wake's outcome
       // settles it: success clears the debt, a failed one retries with it.
       // A handoff noted during an in-flight wake (`transitioned`) counts as having seen it taken.
-      if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && this.stateAtWake.get(id) !== "pending")) {
+      // With `wakeAt: "delivered"` a request (`collect`) that vanishes is never owed: a `claimed` one was rejected by
+      // the adapter (`failed`, nothing in the inbox) and a `delivered` one was collected (answered, so the agent ran
+      // without us). A notice or answer leaves the work list at the handoff itself (only `delivered` requests stay
+      // listed), so one that vanishes is owed its wake whatever state it was last seen in: snapshots can skip
+      // `claimed` (a subscription gap, or a fast handoff), and no earlier wake went out for it in this mode. The rare
+      // notice that vanishes without a handoff (rejected by the adapter, recipient retired) costs one wake with
+      // nothing new in the inbox, the same as today.
+      const last = this.stateAtWake.get(id);
+      const taken = this.o.wakeAt === "delivered" ? this.collectOf.get(id) !== true : last !== "pending";
+      if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && taken)) {
         this.owed.add(id);
         if (this.transitioned.has(id)) this.owedAfterWake.add(id);
         if (!this.inFlightStates?.has(id)) fresh++;
@@ -166,6 +197,9 @@ export class Coordinator {
       this.transitioned.delete(id);
       this.wakes.delete(id);
       this.exhausted.delete(id);
+      this.awaitingHandoff.delete(id);
+      this.overdue.delete(id);
+      this.collectOf.delete(id);
       if (!this.owed.has(id)) {
         this.unreached.delete(id);
         this.rearmed.delete(id);
@@ -180,7 +214,15 @@ export class Coordinator {
         this.owed.delete(d.id);
         this.outstanding.set(d.id, 0);
         this.stateAtWake.set(d.id, d.state);
-        fresh++;
+        this.collectOf.set(d.id, d.collect === true);
+        // Waiting for the handoff: no wake yet. It is still tracked (a lease, a disappearance) like any outstanding id.
+        if (this.waitsForHandoff(d)) this.awaitingHandoff.set(d.id, this.o.timers.now());
+        else {
+          // With `wakeAt: "delivered"`, one first seen already `delivered` (at start, or handed over between two
+          // snapshots) is a handoff like any other: its live, renewed claim must not hold back the one wake it gets.
+          if (this.o.wakeAt === "delivered") this.handedOver.add(d.id);
+          fresh++;
+        }
         continue;
       }
       // Not woken for yet (coalescing): the state the wake will cover is the latest one. During an
@@ -194,6 +236,8 @@ export class Coordinator {
           this.stateAtWake.set(d.id, d.state);
           // A delivery that flips to delivered while still at 0 (never woken) must schedule a wake.
           if (d.state === "delivered" && prev !== "delivered") {
+            this.awaitingHandoff.delete(d.id);
+            this.overdue.delete(d.id);
             this.handedOver.add(d.id);
             // The wake this schedules covers the handoff; one noted during an earlier, failed wake is the same handoff.
             this.transitioned.delete(d.id);
@@ -231,12 +275,47 @@ export class Coordinator {
       this.schedule(this.o.coalesceMs);
     }
     this.scheduleRenudge();
+    this.scheduleHandoffCheck();
   }
 
   close(): void {
     if (this.timer) this.o.timers.clear(this.timer);
     if (this.renudgeTimer) this.o.timers.clear(this.renudgeTimer);
-    this.timer = this.renudgeTimer = null;
+    if (this.handoffTimer) this.o.timers.clear(this.handoffTimer);
+    this.timer = this.renudgeTimer = this.handoffTimer = null;
+  }
+
+  /** With `wakeAt: "delivered"`, a delivery the connector hasn't handed over yet is not woken for. */
+  private waitsForHandoff(d: WorkDelivery): boolean {
+    return this.o.wakeAt === "delivered" && d.state !== "delivered";
+  }
+
+  /** Reports, once each, deliveries whose handoff is overdue; the agent is not woken (its inbox has nothing yet). */
+  private scheduleHandoffCheck(): void {
+    if (this.handoffTimer) this.o.timers.clear(this.handoffTimer);
+    this.handoffTimer = null;
+    if (this.o.wakeAt !== "delivered" || this.o.handoffTimeoutMs <= 0) return;
+    const now = this.o.timers.now();
+    let next = Infinity;
+    const lines: string[] = [];
+    for (const [id, since] of this.awaitingHandoff) {
+      if (this.overdue.has(id)) continue;
+      const at = since + this.o.handoffTimeoutMs;
+      if (at <= now) {
+        this.overdue.add(id);
+        const line = `@${this.o.participant}: handoff overdue: delivery ${id} has waited ${Math.round((now - since) / 60_000)} min for the connector on its machine; not waking (nothing in the inbox yet); it wakes once the handoff lands`;
+        this.o.log(line);
+        lines.push(line);
+      } else next = Math.min(next, at);
+    }
+    // One alert per check, however many fell due together (a connector outage can strand a large backlog at once).
+    if (lines.length === 1) this.o.alert?.(lines[0]!);
+    else if (lines.length > 1) this.o.alert?.(`@${this.o.participant}: handoff overdue for ${lines.length} deliveries waiting for the connector on its machine; not waking (nothing in the inbox yet); each wakes once its handoff lands. See the relay log for the ids.`);
+    if (next === Infinity) return;
+    this.handoffTimer = this.o.timers.set(() => {
+      this.handoffTimer = null;
+      this.scheduleHandoffCheck();
+    }, Math.min(next - now, MAX_TIMER_MS));
   }
 
   private timerDue = 0;
@@ -362,6 +441,7 @@ export class Coordinator {
     const now = this.o.timers.now();
     const out: string[] = [...this.owed];
     for (const [id, at] of this.outstanding) {
+      if (this.awaitingHandoff.has(id)) continue;
       if (this.leased(id)) continue;
       if (at === 0) {
         out.push(id);
@@ -516,6 +596,7 @@ export class Coordinator {
     // woken for and has no wake pending: the lease lapsing changes nothing in the query, so it is revisited then.
     const now = this.o.timers.now();
     const nexts = [...this.outstanding].flatMap(([id, at]) => {
+      if (this.awaitingHandoff.has(id)) return [];
       const d = this.latest.get(id);
       const lease = this.handoffPending(id) ? 0 : (d?.claim?.leaseExpiresAt ?? 0);
       if (at === 0) return lease > now ? [lease] : [];

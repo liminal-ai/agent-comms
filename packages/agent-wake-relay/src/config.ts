@@ -23,6 +23,14 @@ export interface TargetConfigFile {
    * (`collect`), so an agent kept around to answer direct questions is never woken by answers or FYIs.
    */
   wakeOn?: "all" | "requests";
+  /**
+   * When the first wake goes out. `appearance` (default): when the delivery is in the work list, in any state.
+   * `delivered`: only once the machine's connector has handed it to the agent's inbox, so a machine with a
+   * connector gets one wake per delivery instead of one at appearance and another at the handoff.
+   */
+  wakeAt?: "appearance" | "delivered";
+  /** With `wakeAt: "delivered"`: report (log + alert) a delivery not handed over this long after it appeared (ms or `<n>s|m|h`). Default 5m; 0 turns it off. */
+  handoffTimeout?: number | string;
 }
 
 /** The MCP server ChatGPT connects to for the `mcp-events` waker. */
@@ -50,6 +58,25 @@ export interface WakeConfigFile {
   convexUrl: string;
   targets: TargetConfigFile[];
   mcp?: McpConfigFile;
+  /** Where reports that need a person or an agent (an overdue handoff) go: a comms message sent with the comms CLI. Log-only when absent. */
+  alerts?: AlertsConfigFile;
+}
+
+export interface AlertsConfigFile {
+  /** The comms CLI binary. */
+  commsBin: string;
+  /** The participant the relay sends as (an agent participant homed on this machine: the connector refuses a `system` one, which has no home), and who gets the message. */
+  as: string;
+  to: string;
+  /** The connector's loopback socket, when the service's environment doesn't carry AGENT_COMMS_SOCKET. */
+  socket?: string;
+}
+
+export interface AlertsConfig {
+  commsBin: string;
+  as: string;
+  to: string;
+  socket?: string;
 }
 
 export interface Target {
@@ -59,6 +86,10 @@ export interface Target {
   waker: WakerConfig;
   renudgeMs: number;
   wakeOn: "all" | "requests";
+  /** See CoordinatorOptions.wakeAt. */
+  wakeAt: "appearance" | "delivered";
+  /** See CoordinatorOptions.handoffTimeoutMs. */
+  handoffTimeoutMs: number;
 }
 
 export interface McpConfig {
@@ -78,6 +109,7 @@ export interface WakeConfig {
   convexUrl: string;
   targets: Target[];
   mcp?: McpConfig;
+  alerts?: AlertsConfig;
 }
 
 export class ConfigError extends Error {}
@@ -114,6 +146,12 @@ function durationValue(value: number | string | undefined, what: string, fallbac
   if (ms === null) throw new ConfigError(`${what}: expected milliseconds or <n>s|m|h|d, got "${value}"`);
   if (!Number.isSafeInteger(ms)) throw new ConfigError(`${what}: too large`);
   return ms;
+}
+
+function wakeAt(v: unknown, at: string): "appearance" | "delivered" {
+  if (v === undefined || v === "appearance") return "appearance";
+  if (v === "delivered") return "delivered";
+  throw new ConfigError(`${at}: expected "appearance" or "delivered"`);
 }
 
 function wakeOn(v: unknown, at: string): "all" | "requests" {
@@ -162,11 +200,24 @@ export function parseConfig(raw: unknown): WakeConfig {
       waker,
       renudgeMs: duration(t.renudgeAfter, `${at}.renudgeAfter`, 10 * 60_000, MAX_TIMER_MS),
       wakeOn: wakeOn(t.wakeOn, `${at}.wakeOn`),
+      wakeAt: wakeAt(t.wakeAt, `${at}.wakeAt`),
+      handoffTimeoutMs: duration(t.handoffTimeout, `${at}.handoffTimeout`, 5 * 60_000, MAX_TIMER_MS),
     };
   });
   const mcp = c.mcp === undefined ? undefined : parseMcp(c.mcp);
   if (!mcp && events.size) throw new ConfigError("mcp: required when a target uses the mcp-events waker");
-  return { convexUrl: c.convexUrl, targets, ...(mcp ? { mcp } : {}) };
+  const alerts = c.alerts === undefined ? undefined : parseAlerts(c.alerts);
+  return { convexUrl: c.convexUrl, targets, ...(mcp ? { mcp } : {}), ...(alerts ? { alerts } : {}) };
+}
+
+function parseAlerts(raw: unknown): AlertsConfig {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new ConfigError("alerts: expected an object");
+  const a = raw as Partial<AlertsConfigFile>;
+  if (typeof a.commsBin !== "string" || !a.commsBin) throw new ConfigError("alerts.commsBin: expected the path of the comms CLI");
+  if (typeof a.as !== "string" || !NAME_PATTERN.test(a.as)) throw new ConfigError("alerts.as: expected a comms name");
+  if (typeof a.to !== "string" || !NAME_PATTERN.test(a.to)) throw new ConfigError("alerts.to: expected a comms name");
+  if (a.socket !== undefined && (typeof a.socket !== "string" || !a.socket)) throw new ConfigError("alerts.socket: expected a path");
+  return { commsBin: a.commsBin, as: a.as, to: a.to, ...(a.socket ? { socket: a.socket } : {}) };
 }
 
 function httpsUrl(value: unknown, what: string): string {
