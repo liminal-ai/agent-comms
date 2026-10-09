@@ -175,7 +175,11 @@ export class Coordinator {
       // was paused, or the message withdrawn), so nothing is owed. If a wake carrying it is out, that wake's outcome
       // settles it: success clears the debt, a failed one retries with it.
       // A handoff noted during an in-flight wake (`transitioned`) counts as having seen it taken.
-      if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && this.stateAtWake.get(id) !== "pending")) {
+      // With `wakeAt: "delivered"` only a row last seen `delivered` is owed: a `claimed` row that vanishes was either
+      // rejected by the adapter (`failed`, nothing in the inbox) or already answered (collected, so the agent ran
+      // without us); neither needs a wake, and the handoff itself is never inferred from a disappearance.
+      const taken = this.o.wakeAt === "delivered" ? this.stateAtWake.get(id) === "delivered" : this.stateAtWake.get(id) !== "pending";
+      if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && taken)) {
         this.owed.add(id);
         if (this.transitioned.has(id)) this.owedAfterWake.add(id);
         if (!this.inFlightStates?.has(id)) fresh++;

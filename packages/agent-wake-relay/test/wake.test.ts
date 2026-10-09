@@ -96,17 +96,31 @@ describe("coordinator", () => {
       assert.deepEqual(wakes, [["r1"]]);
     });
 
-    it("a request taken and answered before any wake is still owed one wake", async () => {
+    it("a notice handed over and gone before any wake is still owed one wake", async () => {
       const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
+      c.update([st("n1", "pending", { collect: false })]);
+      await timers.advance(500);
+      c.update([st("n1", "delivered", { collect: false })]);
+      await timers.advance(500);
+      c.update([]); // a delivered notice has nothing left to do and drops out of the work list before the coalesced wake
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["n1"]], "the agent still has to be woken to read it");
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, [["n1"]]);
+    });
+
+    it("a claimed request that vanishes (rejected by the adapter, or already answered) is not owed a wake", async () => {
+      const { timers, wakes, alerts, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered" });
       c.update([st("r1", "pending")]);
       await timers.advance(500);
       c.update([st("r1", "claimed", { claim: { leaseExpiresAt: timers.t + 60_000 } })]);
       await timers.advance(500);
-      c.update([]); // handed over and collected within one query window: gone from the work list
+      c.update([]); // claimed -> failed (adapter rejected it) or collected: either way nothing new sits in the inbox
       await timers.advance(2_000);
-      assert.deepEqual(wakes, [["r1"]], "the agent still has to be woken to read it");
-      await timers.advance(60_000);
-      assert.deepEqual(wakes, [["r1"]]);
+      assert.deepEqual(wakes, [], "the handoff is never inferred from a disappearance");
+      await timers.advance(60 * 60_000);
+      assert.deepEqual(wakes, []);
+      assert.deepEqual(alerts, []);
     });
 
     it("reports an overdue handoff once, without waking; the handoff later wakes exactly once", async () => {

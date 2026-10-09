@@ -36,7 +36,8 @@ const alert = config.alerts
   ? (line: string) => {
       const a = config.alerts!;
       const env = { ...process.env, ...(a.socket ? { AGENT_COMMS_SOCKET: a.socket } : {}) };
-      execFile(a.commsBin, ["send", "--as", a.as, `@${a.to}`, `agent-wake-relay: ${line}`], { env, timeout: 60_000 }, (error) => {
+      // `--continue`: report delivery, don't wait for an answer (the sender has no inbox for one).
+      execFile(a.commsBin, ["send", "--as", a.as, "--continue", `@${a.to}`, `agent-wake-relay: ${line}`], { env, timeout: 60_000 }, (error) => {
         if (error) log(`alert to @${a.to} failed: ${error.message.split("\n")[0]}`);
       });
     }
