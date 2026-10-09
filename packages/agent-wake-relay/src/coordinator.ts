@@ -297,6 +297,7 @@ export class Coordinator {
     if (this.o.wakeAt !== "delivered" || this.o.handoffTimeoutMs <= 0) return;
     const now = this.o.timers.now();
     let next = Infinity;
+    const lines: string[] = [];
     for (const [id, since] of this.awaitingHandoff) {
       if (this.overdue.has(id)) continue;
       const at = since + this.o.handoffTimeoutMs;
@@ -304,9 +305,12 @@ export class Coordinator {
         this.overdue.add(id);
         const line = `@${this.o.participant}: handoff overdue: delivery ${id} has waited ${Math.round((now - since) / 60_000)} min for the connector on its machine; not waking (nothing in the inbox yet); it wakes once the handoff lands`;
         this.o.log(line);
-        this.o.alert?.(line);
+        lines.push(line);
       } else next = Math.min(next, at);
     }
+    // One alert per check, however many fell due together (a connector outage can strand a large backlog at once).
+    if (lines.length === 1) this.o.alert?.(lines[0]!);
+    else if (lines.length > 1) this.o.alert?.(`@${this.o.participant}: handoff overdue for ${lines.length} deliveries waiting for the connector on its machine; not waking (nothing in the inbox yet); each wakes once its handoff lands. See the relay log for the ids.`);
     if (next === Infinity) return;
     this.handoffTimer = this.o.timers.set(() => {
       this.handoffTimer = null;

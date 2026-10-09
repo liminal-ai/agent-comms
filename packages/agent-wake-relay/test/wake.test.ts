@@ -168,6 +168,16 @@ describe("coordinator", () => {
       assert.deepEqual(alerts, []);
     });
 
+    it("many handoffs falling overdue together give one alert, with each id logged", async () => {
+      const { timers, wakes, logs, alerts, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
+      c.update(Array.from({ length: 50 }, (_, i) => st(`r${i}`, "pending")));
+      await timers.advance(5 * 60_000 + 1_000);
+      assert.equal(alerts.length, 1, "one alert for the whole backlog");
+      assert.match(alerts[0]!, /handoff overdue for 50 deliveries/);
+      assert.equal(logs.filter((l) => /handoff overdue: delivery r\d+/.test(l)).length, 50);
+      assert.deepEqual(wakes, []);
+    });
+
     it("reports an overdue handoff once, without waking; the handoff later wakes exactly once", async () => {
       const { timers, wakes, logs, alerts, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
       c.update([st("r1", "pending")]);
