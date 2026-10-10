@@ -78,8 +78,9 @@ export const runDispatcher = (options: DispatcherOptions) =>
      * (a stop, say) needn't wait for a long turn to finish.
      */
     const background = new Set<string>();
-    /** Participant → how many of its turns we're following: a turn is running there, so an urgent delivery can join it. */
+    /** Participant and home (locator) → how many turns we're following there: an urgent delivery for that home can join one. */
     const turnsRunning = new Map<string, number>();
+    const turnKey = (participant: string, locator: string) => `${participant}\u0000${locator}`;
     /** Claims we hold, by delivery id: lets us resume without waiting out our own lease. */
     const held = new Map<string, Held>();
     /** Delivery id → don't look before this time. */
@@ -185,7 +186,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
     // Tasks
 
     const follow = (adapter: HarnessAdapter, h: Held, turnId: string) => {
-      const p = h.target.participant;
+      const p = turnKey(h.target.participant, h.target.locator);
       return Effect.gen(function* () {
         turnsRunning.set(p, (turnsRunning.get(p) ?? 0) + 1);
         wake();
@@ -390,9 +391,10 @@ export const runDispatcher = (options: DispatcherOptions) =>
         if (busy.has(participant) || urgentBusy.has(participant)) {
           // Another delivery holds the agent: only an urgent one goes now, one at a time.
           const urgent = items.find((i) => i.urgent && i.state !== "delivered");
-          // And only once a turn is running there to join: a holder still handing over hasn't started one,
+          // And only once a turn is running there, in the urgent's own home, to join: a holder still handing
+          // over hasn't started one, a turn in an old home (after a rebind) isn't the one it would reach,
           // and two handoffs to an idle thread would each start a run, the urgent one queued behind.
-          if (!urgent || urgentBusy.has(participant) || !turnsRunning.has(participant) || (notBefore.get(urgent.id) ?? 0) > now) continue;
+          if (!urgent || urgentBusy.has(participant) || !turnsRunning.has(turnKey(participant, urgent.locator)) || (notBefore.get(urgent.id) ?? 0) > now) continue;
           const adapter = adapters.get(urgent.harness);
           // Only an adapter that steers into a running turn (T3 protocol 2); others would queue it behind the turn anyway.
           if (!adapter?.steersIntoRunningTurn || !readiness.get(`${urgent.harness}/${participant}`)) continue;
