@@ -119,10 +119,24 @@ export const deleteConversation = mutation({
     }
     const now = Date.now();
     for (const id of groups.keys()) await ctx.db.patch(id, { deletingAt: now });
+    // Every delivery still in play goes now, whatever its age, so nothing claims, hands off
+    // or wakes into a deleted group (sends and replies into it are refused in `post`).
+    for (const state of LIVE_STATES)
+      for (const d of await ctx.db.query("deliveries").withIndex("by_state_at", (q) => q.eq("state", state)).collect())
+        if (groups.has(d.conversationId)) await removeDelivery(ctx, d._id);
     await purgePass(ctx, [...groups.keys()]);
     return { deleted: groups.size };
   },
 });
+
+/** Delivery states an agent, connector or relay can still act on. */
+const LIVE_STATES = ["pending", "claimed", "delivered", "ambiguous", "uncertain"] as const;
+
+async function removeDelivery(ctx: MutationCtx, id: Id<"deliveries">): Promise<void> {
+  for (const r of await ctx.db.query("waitResults").withIndex("by_delivery", (q) => q.eq("deliveryId", id)).collect())
+    await ctx.db.delete(r._id);
+  await ctx.db.delete(id);
+}
 
 /** The minute cron: one bounded pass over groups whose delete didn't fit its own transaction. */
 export const purge = internalMutation({
@@ -167,13 +181,14 @@ async function purgePass(ctx: MutationCtx, ids: Id<"conversations">[]): Promise<
       for (const m of messages) {
         if (full()) break;
         bytes += encoder.encode(m.text).length + 1_024;
+        // A delivery or wait goes only once none of its wait results are left (the fallback sweep reads them).
         for (const d of await take(ctx.db.query("deliveries").withIndex("by_message", (q) => q.eq("messageId", m._id)))) {
           for (const r of await take(ctx.db.query("waitResults").withIndex("by_delivery", (q) => q.eq("deliveryId", d._id)))) await remove(r._id);
-          await remove(d._id);
+          if (!(await take(ctx.db.query("waitResults").withIndex("by_delivery", (q) => q.eq("deliveryId", d._id)))).length) await remove(d._id);
         }
         for (const w of await take(ctx.db.query("waits").withIndex("by_message", (q) => q.eq("messageId", m._id)))) {
           for (const r of await take(ctx.db.query("waitResults").withIndex("by_wait", (q) => q.eq("waitId", w._id)))) await remove(r._id);
-          await remove(w._id);
+          if (!(await take(ctx.db.query("waitResults").withIndex("by_wait", (q) => q.eq("waitId", w._id)))).length) await remove(w._id);
         }
         for (const f of await take(ctx.db.query("reminderFires").withIndex("by_message", (q) => q.eq("messageId", m._id)))) await remove(f._id);
         for (const h of humans)

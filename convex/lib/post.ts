@@ -25,6 +25,7 @@ export interface PostInput {
 
 export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResult> {
   const { sender, conversation, recipients } = input;
+  if (conversation.deletingAt !== undefined) fail("unknown_conversation", `no conversation ${conversation._id}`);
   if (sender.state === "retired" && !input.inFlight) fail("conflict", `@${sender.name} is retired`);
   if (input.text.length > MAX_TEXT_CHARS) {
     fail("bad_request", `message text is ${input.text.length} characters; the limit is ${MAX_TEXT_CHARS}. Shorten it, or put the long part in a file and send a reference.`);

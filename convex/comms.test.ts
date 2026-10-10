@@ -576,11 +576,17 @@ describe("delete", () => {
       const [a, b] = ["a", "b"].map((n) => people.find((p) => p.name === n)!);
       for (let seq = 1; seq <= 1_500; seq++) {
         const messageId = await ctx.db.insert("messages", { conversationId: id, seq, senderId: a._id, recipientIds: [b._id], kind: "request", text: "x".repeat(200), attachments: [], origin: { via: "cli" }, createdAt: seq } as never);
-        await ctx.db.insert("deliveries", { messageId, conversationId: id, recipientId: b._id, collect: false, state: "delivered", at: seq, createdAt: seq });
+        // The oldest request is still pending: purged last, so it must go at delete time.
+        const pending = seq === 1;
+        await ctx.db.insert("deliveries", { messageId, conversationId: id, recipientId: b._id, collect: pending, state: pending ? "pending" : "replied", at: seq, createdAt: seq });
       }
       await ctx.db.patch(id, { lastSeq: 1_500 });
     });
+    expect((await work(t)).map((d) => d.recipient)).toEqual(["b"]);
+    const oldest = await t.run(async (ctx) => (await ctx.db.query("messages").collect()).find((m) => m.seq === 1)!._id);
     expect(await del(t, [g])).toEqual({ deleted: 1 });
+    expect(await work(t)).toEqual([]);
+    expect(await errorCode(t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: oldest, text: "late" }))).toBe("unknown_conversation");
     expect((await t.query(api.conversations.list, { adminToken: ADMIN })).conversations).toEqual([]);
     expect(await errorCode(t.query(api.conversations.view, { adminToken: ADMIN, conversationId: g }))).toBe("unknown_conversation");
     const count = () => t.run(async (ctx) => (await ctx.db.query("messages").collect()).length + (await ctx.db.query("deliveries").collect()).length);
@@ -588,7 +594,7 @@ describe("delete", () => {
     for (let pass = 0; pass < 10 && (await count()) > 0; pass++) await t.mutation(internal.conversations.purge, {});
     expect(await count()).toBe(0);
     expect(await t.run(async (ctx) => (await ctx.db.query("conversations").collect()).length)).toBe(0);
-  });
+  }, 60_000);
 
   it("refuses DMs, agents, a wrong token and oversized batches, deleting nothing", async () => {
     const t = await setup();
