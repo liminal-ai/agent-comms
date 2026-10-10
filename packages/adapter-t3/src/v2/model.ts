@@ -177,7 +177,9 @@ export class RunTracker {
   }
 
   feed(event: V2Event): void {
-    this.lastSequence = Math.max(this.lastSequence, event.sequence);
+    // Already covered by a snapshot loaded out of band (a lagging stream): applying it would undo newer state.
+    if (event.sequence <= this.lastSequence) return;
+    this.lastSequence = event.sequence;
     if (event.type === "run") this.run(event.run);
   }
 
