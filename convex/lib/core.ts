@@ -124,7 +124,9 @@ export async function getOr<T extends "conversations" | "messages" | "deliveries
             : "unknown_participant";
   const normalized = ctx.db.normalizeId(table, id);
   const doc = normalized ? await ctx.db.get(normalized) : null;
-  if (!doc) fail(code, `no ${table.replace(/s$/, "")} ${id}`);
+  // A deleted group is gone even while its rows are still being purged.
+  if (!doc || (table === "conversations" && "deletingAt" in doc && doc.deletingAt !== undefined))
+    fail(code, `no ${table.replace(/s$/, "")} ${id}`);
   return doc as Doc<T>;
 }
 

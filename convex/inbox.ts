@@ -53,7 +53,7 @@ export const list = query({
     for (const row of page.page) {
       const message = await ctx.db.get(row.messageId);
       const conversation = await ctx.db.get(row.conversationId);
-      if (!message || !conversation) continue;
+      if (!message || !conversation || conversation.deletingAt !== undefined) continue;
       items.push({ message: await envelope(ctx, message), conversation: conversationRef(conversation), readAt: row.readAt ?? null });
     }
     const hasMore = !page.isDone;

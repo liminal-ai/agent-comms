@@ -12,4 +12,7 @@ crons.interval("reminders", { minutes: 1 }, internal.reminders.tick, {});
 // Alerts: one per incident, to the affected agent's owner.
 crons.interval("alerts", { minutes: 1 }, internal.alerts.scan, {});
 
+// Deleted groups too large for one transaction: purged in bounded passes.
+crons.interval("purge deleted groups", { minutes: 1 }, internal.conversations.purge, {});
+
 export default crons;

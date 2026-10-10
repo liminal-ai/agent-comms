@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -565,6 +565,29 @@ describe("delete", () => {
     expect(await errorCode(t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: sent.message.id, text: "done" }))).toBe("unknown_message");
     expect(await errorCode(t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["b"], text: "again" }))).toBe("unknown_conversation");
     expect(await errorCode(del(t, [g]))).toBe("unknown_conversation");
+  });
+
+  it("removes a group too large for one transaction, gone at once and purged in bounded passes", async () => {
+    const t = await setup();
+    const g = await group(t, ["lee", "a", "b"]);
+    await t.run(async (ctx) => {
+      const id = ctx.db.normalizeId("conversations", g)!;
+      const people = await ctx.db.query("participants").collect();
+      const [a, b] = ["a", "b"].map((n) => people.find((p) => p.name === n)!);
+      for (let seq = 1; seq <= 1_500; seq++) {
+        const messageId = await ctx.db.insert("messages", { conversationId: id, seq, senderId: a._id, recipientIds: [b._id], kind: "request", text: "x".repeat(200), attachments: [], origin: { via: "cli" }, createdAt: seq } as never);
+        await ctx.db.insert("deliveries", { messageId, conversationId: id, recipientId: b._id, collect: false, state: "delivered", at: seq, createdAt: seq });
+      }
+      await ctx.db.patch(id, { lastSeq: 1_500 });
+    });
+    expect(await del(t, [g])).toEqual({ deleted: 1 });
+    expect((await t.query(api.conversations.list, { adminToken: ADMIN })).conversations).toEqual([]);
+    expect(await errorCode(t.query(api.conversations.view, { adminToken: ADMIN, conversationId: g }))).toBe("unknown_conversation");
+    const count = () => t.run(async (ctx) => (await ctx.db.query("messages").collect()).length + (await ctx.db.query("deliveries").collect()).length);
+    expect(await count()).toBeGreaterThan(0);
+    for (let pass = 0; pass < 10 && (await count()) > 0; pass++) await t.mutation(internal.conversations.purge, {});
+    expect(await count()).toBe(0);
+    expect(await t.run(async (ctx) => (await ctx.db.query("conversations").collect()).length)).toBe(0);
   });
 
   it("refuses DMs, agents, a wrong token and oversized batches, deleting nothing", async () => {

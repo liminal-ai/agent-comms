@@ -3,7 +3,7 @@ import { MAX_TITLE_CHARS } from "@agent-comms/protocol";
 
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, type MutationCtx, mutation, query } from "./_generated/server";
 import { conversationRef, envelope, fail, getOr, participantByName, refById, requireAdmin, stateRef, summary } from "./lib/core";
 import { openDm as openDmBetween, post } from "./lib/post";
 
@@ -88,11 +88,20 @@ export const postAs = mutation({
 });
 
 const MAX_DELETE_BATCH = 100;
+/**
+ * How much one purge pass may touch, in reads and writes (each query or delete counts one),
+ * and in bytes of message text, well under Convex's 4,096 index ranges and 16 MiB per
+ * transaction. A larger group is finished by the minute cron.
+ */
+const PURGE_OPS = 2_000;
+const PURGE_BYTES = 6 * 1024 * 1024;
+const encoder = new TextEncoder();
 
 /**
- * Delete groups as a person, all or nothing: the group, its members, messages, deliveries,
- * inbox rows, and the waits and reminder fires on its messages. Undelivered work for it is
- * gone, so nothing wakes into it; a later reply or report on its ids fails as unknown.
+ * Delete groups as a person, all or nothing: they're gone to every caller at once (list, view,
+ * sends, replies, inbox). Their members, messages, deliveries, inbox rows, and the waits and
+ * reminder fires on their messages are purged newest first, so undelivered work goes in the
+ * first pass; whatever doesn't fit one transaction is purged by the minute cron.
  */
 export const deleteConversation = mutation({
   args: { adminToken: v.string(), as: v.string(), conversationIds: v.array(v.string()) },
@@ -108,47 +117,92 @@ export const deleteConversation = mutation({
       if (c.kind !== "group") fail("bad_request", "DMs can't be deleted");
       groups.set(c._id, c);
     }
-    const humans = (await ctx.db.query("participants").collect()).filter((p) => p.kind === "human");
-    for (const c of groups.values()) {
-      const messages = await ctx.db
-        .query("messages")
-        .withIndex("by_conversation_seq", (q) => q.eq("conversationId", c._id))
-        .collect();
-      for (const m of messages) {
-        for (const d of await ctx.db.query("deliveries").withIndex("by_message", (q) => q.eq("messageId", m._id)).collect()) {
-          for (const r of await ctx.db.query("waitResults").withIndex("by_delivery", (q) => q.eq("deliveryId", d._id)).collect())
-            await ctx.db.delete(r._id);
-          await ctx.db.delete(d._id);
-        }
-        for (const w of await ctx.db.query("waits").withIndex("by_message", (q) => q.eq("messageId", m._id)).collect()) {
-          for (const r of await ctx.db.query("waitResults").withIndex("by_wait", (q) => q.eq("waitId", w._id)).collect())
-            await ctx.db.delete(r._id);
-          await ctx.db.delete(w._id);
-        }
-        for (const f of await ctx.db.query("reminderFires").withIndex("by_message", (q) => q.eq("messageId", m._id)).collect())
-          await ctx.db.delete(f._id);
-        await ctx.db.delete(m._id);
-      }
-      for (const h of humans)
-        for (const i of await ctx.db
-          .query("inbox")
-          .withIndex("by_human_conversation", (q) => q.eq("humanId", h._id).eq("conversationId", c._id))
-          .collect())
-          await ctx.db.delete(i._id);
-      for (const m of await ctx.db.query("members").withIndex("by_conversation", (q) => q.eq("conversationId", c._id)).collect())
-        await ctx.db.delete(m._id);
-      await ctx.db.delete(c._id);
-    }
+    const now = Date.now();
+    for (const id of groups.keys()) await ctx.db.patch(id, { deletingAt: now });
+    await purgePass(ctx, [...groups.keys()]);
     return { deleted: groups.size };
   },
 });
+
+/** The minute cron: one bounded pass over groups whose delete didn't fit its own transaction. */
+export const purge = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const pending = await ctx.db
+      .query("conversations")
+      .withIndex("by_deletingAt", (q) => q.gt("deletingAt", 0))
+      .take(MAX_DELETE_BATCH);
+    if (pending.length) await purgePass(ctx, pending.map((c) => c._id));
+  },
+});
+
+/** Purge what fits one transaction; returns the groups not yet fully gone. */
+async function purgePass(ctx: MutationCtx, ids: Id<"conversations">[]): Promise<Id<"conversations">[]> {
+  let ops = 0;
+  let bytes = 0;
+  const full = () => ops >= PURGE_OPS || bytes >= PURGE_BYTES;
+  const take = async <T>(q: { take(n: number): Promise<T[]> }) => {
+    ops++;
+    return q.take(Math.max(1, Math.min(100, PURGE_OPS - ops)));
+  };
+  const remove = async (id: Id<"messages" | "deliveries" | "waits" | "waitResults" | "reminderFires" | "inbox" | "members" | "conversations">) => {
+    ops++;
+    await ctx.db.delete(id);
+  };
+  const humans = (await ctx.db.query("participants").collect()).filter((p) => p.kind === "human");
+  ops++;
+  const left: Id<"conversations">[] = [];
+  for (const id of ids) {
+    if (full()) {
+      left.push(id);
+      continue;
+    }
+    let done = false;
+    while (!full()) {
+      const messages = await take(ctx.db.query("messages").withIndex("by_conversation_seq", (q) => q.eq("conversationId", id)).order("desc"));
+      if (!messages.length) {
+        done = true;
+        break;
+      }
+      for (const m of messages) {
+        if (full()) break;
+        bytes += encoder.encode(m.text).length + 1_024;
+        for (const d of await take(ctx.db.query("deliveries").withIndex("by_message", (q) => q.eq("messageId", m._id)))) {
+          for (const r of await take(ctx.db.query("waitResults").withIndex("by_delivery", (q) => q.eq("deliveryId", d._id)))) await remove(r._id);
+          await remove(d._id);
+        }
+        for (const w of await take(ctx.db.query("waits").withIndex("by_message", (q) => q.eq("messageId", m._id)))) {
+          for (const r of await take(ctx.db.query("waitResults").withIndex("by_wait", (q) => q.eq("waitId", w._id)))) await remove(r._id);
+          await remove(w._id);
+        }
+        for (const f of await take(ctx.db.query("reminderFires").withIndex("by_message", (q) => q.eq("messageId", m._id)))) await remove(f._id);
+        for (const h of humans)
+          for (const i of await take(ctx.db.query("inbox").withIndex("by_human_message", (q) => q.eq("humanId", h._id).eq("messageId", m._id))))
+            await remove(i._id);
+        // Only once nothing points at it (a long reply chain may leave some for the next pass).
+        const rest = await take(ctx.db.query("deliveries").withIndex("by_message", (q) => q.eq("messageId", m._id)));
+        const waiting = await take(ctx.db.query("waits").withIndex("by_message", (q) => q.eq("messageId", m._id)));
+        if (!rest.length && !waiting.length) await remove(m._id);
+      }
+    }
+    if (done) {
+      const members = await take(ctx.db.query("members").withIndex("by_conversation", (q) => q.eq("conversationId", id)));
+      for (const m of members) await remove(m._id);
+      if (members.length && full()) done = false;
+      else if (!(await take(ctx.db.query("members").withIndex("by_conversation", (q) => q.eq("conversationId", id)))).length) await remove(id);
+      else done = false;
+    }
+    if (!done) left.push(id);
+  }
+  return left;
+}
 
 /** Every conversation, most recent first. */
 export const list = query({
   args: { adminToken: v.string() },
   handler: async (ctx, args) => {
     await requireAdmin(args.adminToken);
-    const all = await ctx.db.query("conversations").collect();
+    const all = (await ctx.db.query("conversations").collect()).filter((c) => c.deletingAt === undefined);
     all.sort((a, b) => b.lastAt - a.lastAt);
     return { conversations: await Promise.all(all.map((c) => summary(ctx, c, c.lastSeq))) };
   },

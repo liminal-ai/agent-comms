@@ -49,7 +49,11 @@ export default defineSchema({
     lastSeq: v.number(),
     lastAt: v.number(),
     createdAt: v.number(),
-  }).index("by_dmKey", ["dmKey"]),
+    /** Groups only: deleted at this time. Gone to every caller; its rows are purged in bounded passes. */
+    deletingAt: v.optional(v.number()),
+  })
+    .index("by_dmKey", ["dmKey"])
+    .index("by_deletingAt", ["deletingAt"]),
 
   members: defineTable({
     conversationId: v.id("conversations"),
