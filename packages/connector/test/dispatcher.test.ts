@@ -121,6 +121,24 @@ describe("reaching a busy agent (Mira #371: a stop waited 75 minutes)", () => {
     expect(row.state).toBe("ambiguous");
   });
 
+  it("after a restart, a delivery found steered into a running turn doesn't hold the agent", async () => {
+    const w = await world();
+    const s = new Scripted();
+    const t1 = turn();
+    // The first handoff is lost (as in a crash); the restart check finds it steered into a running turn.
+    s.onHandOff = () => (s.sent === 1 ? { _tag: "lost", detail: "connector restarted" } : { _tag: "accepted", turnId: "own-run" });
+    s.onCheck = () => ({ _tag: "running", turnId: "long-run", steered: true });
+    s.onOutcome = () => (s.sent === 1 ? t1.done : { _tag: "replied", answer: "ok" });
+    running.push(await startConnector(w.api, w.socket, 1_500, [s.adapter]));
+    const first = await call(w.socket, "send", { as: "a", to: ["tee"], text: "first" });
+    if (!first.ok) throw new Error(first.error.message);
+    await until("first recovered as steered", async () => s.checks > 0, 15_000);
+    const second = await call(w.socket, "send", { as: "a", to: ["tee"], text: "second" });
+    if (!second.ok) throw new Error(second.error.message);
+    await until("second handed over while the recovered turn runs", async () => s.sent === 2, 15_000);
+    t1.end({ _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
+  }, 40_000);
+
   it("an urgent delivery doesn't wait for the turn holding the agent; an ordinary one still does", async () => {
     const w = await world();
     const s = new Scripted();

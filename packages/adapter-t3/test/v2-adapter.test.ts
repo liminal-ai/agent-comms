@@ -479,7 +479,7 @@ describe("T3 V2 adapter: restart check (from one snapshot)", () => {
     t3.human("lee");
     const { turnId } = (await adapter.handOff(target, delivery())) as { turnId: string };
     const after = makeT3AdapterV2({ client: t3, ...options });
-    assert.deepEqual(await after.check(target, delivery(), turnId), { _tag: "running", turnId });
+    assert.deepEqual(await after.check(target, delivery(), turnId), { _tag: "running", turnId, steered: true });
     t3.finish();
     await tick(60);
     assert.deepEqual(await after.check(target, delivery(), turnId), { _tag: "completed", turnId, outcome: { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] } });

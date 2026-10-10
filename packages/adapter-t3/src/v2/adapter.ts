@@ -230,7 +230,7 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
     const ran = run ?? steeredInto;
     if (!ran) return { _tag: "later", detail: "our message isn't in a run yet" };
     const outcome = outcomeOf(thread, messageId, ran.status !== "waiting");
-    if (!outcome) return { _tag: "running", turnId: ran.id };
+    if (!outcome) return { _tag: "running", turnId: ran.id, ...(!run ? { steered: true } : {}) };
     if (outcome._tag === "uncertain") return { _tag: "unknown", detail: outcome.detail };
     return { _tag: "completed", turnId: ran.id, outcome };
   }

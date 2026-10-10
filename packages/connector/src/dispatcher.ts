@@ -204,6 +204,19 @@ export const runDispatcher = (options: DispatcherOptions) =>
       );
     };
 
+    /** A delivery steered into a turn already running: followed to that turn's end without holding its agent. */
+    const followInBackground = (adapter: HarnessAdapter, h: Held, turnId: string) =>
+      Effect.gen(function* () {
+        const id = h.delivery.id;
+        background.add(id);
+        decide(id, "following", `steered into turn=${turnId}; agent released`);
+        yield* follow(adapter, h, turnId).pipe(
+          Effect.catchTag("ClaimLost", (e) => Effect.sync(() => (held.delete(e.deliveryId), log(`${e.deliveryId}: claim lost to another holder; stopped`)))),
+          Effect.ensuring(Effect.sync(() => (background.delete(id), wake()))),
+          Effect.forkScoped,
+        );
+      });
+
     /** Records `delivered`, and keeps our copy of the delivery current: recovery decides from it (2.1). */
     const markDelivered = (h: Held, turnId: string, cursor?: string) =>
       write("delivered", h.delivery.id, api.delivered(h.delivery.id, h.claim.claimId, turnId, cursor)).pipe(
@@ -264,17 +277,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
             }
             if (!(yield* markDelivered(h, result.turnId, result.cursor))) return yield* release(h);
             if (h.delivery.message.kind !== "request") return yield* release(h);
-            if (result.steered) {
-              const id = h.delivery.id;
-              background.add(id);
-              decide(id, "following", `steered into turn=${result.turnId}; agent released`);
-              yield* follow(adapter, h, result.turnId).pipe(
-                Effect.catchTag("ClaimLost", (e) => Effect.sync(() => (held.delete(e.deliveryId), log(`${e.deliveryId}: claim lost to another holder; stopped`)))),
-                Effect.ensuring(Effect.sync(() => (background.delete(id), wake()))),
-                Effect.forkScoped,
-              );
-              return;
-            }
+            if (result.steered) return yield* followInBackground(adapter, h, result.turnId);
             return yield* follow(adapter, h, result.turnId);
           }
         }
@@ -310,6 +313,8 @@ export const runDispatcher = (options: DispatcherOptions) =>
           case "running":
             if (!wasDelivered && !(yield* markDelivered(h, check.turnId))) return yield* release(h);
             if (!collect) return yield* release(h);
+            // Steered (found after a restart, say): don't hold the agent for someone else's turn.
+            if (check.steered) return yield* followInBackground(adapter, h, check.turnId);
             return yield* follow(adapter, h, check.turnId);
           case "completed":
             if (!wasDelivered && !(yield* markDelivered(h, check.turnId))) return yield* release(h);

@@ -50,7 +50,8 @@ export type Outcome =
 /** The restart question: does the harness have this delivery, and what happened to its turn? */
 export type Check =
   | { _tag: "absent" }
-  | { _tag: "running"; turnId: string }
+  /** `steered`: it joined a turn that wasn't its own, so the agent needn't be held while it runs. */
+  | { _tag: "running"; turnId: string; steered?: boolean }
   /** `outcome` absent: the turn finished but its outcome isn't known (fine for an answer's delivery; a request's becomes uncertain). */
   | { _tag: "completed"; turnId: string; outcome?: Exclude<Outcome, { _tag: "lost" }> }
   | { _tag: "unknown"; detail: string }
