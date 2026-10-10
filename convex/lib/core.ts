@@ -107,6 +107,13 @@ export async function actingAs(ctx: QueryCtx, machine: Doc<"machines">, name: st
   return p;
 }
 
+async function inDeletedGroup(ctx: QueryCtx, table: string, doc: object): Promise<boolean> {
+  if (table === "conversations") return "deletingAt" in doc && doc.deletingAt !== undefined;
+  if (table !== "messages" || !("conversationId" in doc)) return false;
+  const c = await ctx.db.get(doc.conversationId as Id<"conversations">);
+  return !c || c.deletingAt !== undefined;
+}
+
 export async function getOr<T extends "conversations" | "messages" | "deliveries" | "participants" | "reminders">(
   ctx: QueryCtx,
   table: T,
@@ -124,7 +131,8 @@ export async function getOr<T extends "conversations" | "messages" | "deliveries
             : "unknown_participant";
   const normalized = ctx.db.normalizeId(table, id);
   const doc = normalized ? await ctx.db.get(normalized) : null;
-  if (!doc) fail(code, `no ${table.replace(/s$/, "")} ${id}`);
+  // A deleted group, and every message in it, is gone even while its rows are still being purged.
+  if (!doc || (await inDeletedGroup(ctx, table, doc))) fail(code, `no ${table.replace(/s$/, "")} ${id}`);
   return doc as Doc<T>;
 }
 

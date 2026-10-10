@@ -4,7 +4,7 @@
 import { type AttachmentRef, MAX_TEXT_CHARS, type MessageMeta, type Origin, type SendResult } from "@agent-comms/protocol";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { advanceRead, envelope, fail, membership, stateRef } from "./core";
+import { advanceRead, envelope, fail, getOr, membership, stateRef } from "./core";
 
 export interface PostInput {
   sender: Doc<"participants">;
@@ -25,6 +25,7 @@ export interface PostInput {
 
 export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResult> {
   const { sender, conversation, recipients } = input;
+  if (conversation.deletingAt !== undefined) fail("unknown_conversation", `no conversation ${conversation._id}`);
   if (sender.state === "retired" && !input.inFlight) fail("conflict", `@${sender.name} is retired`);
   if (input.text.length > MAX_TEXT_CHARS) {
     fail("bad_request", `message text is ${input.text.length} characters; the limit is ${MAX_TEXT_CHARS}. Shorten it, or put the long part in a file and send a reference.`);
@@ -102,6 +103,7 @@ export async function replayed(ctx: MutationCtx, sender: Doc<"participants">, ke
     .withIndex("by_sender_key", (q) => q.eq("senderId", sender._id).eq("idempotencyKey", key))
     .first();
   if (!m) return null;
+  await getOr(ctx, "messages", m._id); // a message in a deleted group is gone, even to a retry
   const deliveries = await ctx.db
     .query("deliveries")
     .withIndex("by_message", (q) => q.eq("messageId", m._id))

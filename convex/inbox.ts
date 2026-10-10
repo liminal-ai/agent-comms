@@ -17,12 +17,21 @@ async function human(ctx: QueryCtx, name: string): Promise<Doc<"participants">> 
 }
 
 async function unread(ctx: QueryCtx, humanId: Doc<"participants">["_id"]): Promise<number> {
-  return (
-    await ctx.db
-      .query("inbox")
-      .withIndex("by_human_read", (q) => q.eq("humanId", humanId).eq("readAt", undefined))
-      .collect()
-  ).length;
+  const rows = await ctx.db
+    .query("inbox")
+    .withIndex("by_human_read", (q) => q.eq("humanId", humanId).eq("readAt", undefined))
+    .collect();
+  // Rows of a deleted group still being purged don't count.
+  const deleted = new Map<string, boolean>();
+  let n = 0;
+  for (const row of rows) {
+    if (!deleted.has(row.conversationId)) {
+      const c = await ctx.db.get(row.conversationId);
+      deleted.set(row.conversationId, !c || c.deletingAt !== undefined);
+    }
+    if (!deleted.get(row.conversationId)) n++;
+  }
+  return n;
 }
 
 /**
@@ -53,7 +62,7 @@ export const list = query({
     for (const row of page.page) {
       const message = await ctx.db.get(row.messageId);
       const conversation = await ctx.db.get(row.conversationId);
-      if (!message || !conversation) continue;
+      if (!message || !conversation || conversation.deletingAt !== undefined) continue;
       items.push({ message: await envelope(ctx, message), conversation: conversationRef(conversation), readAt: row.readAt ?? null });
     }
     const hasMore = !page.isDone;

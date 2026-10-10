@@ -746,7 +746,7 @@ export const list = query({
     const rows = [];
     for (const m of memberships) {
       const c = await ctx.db.get(m.conversationId);
-      if (c) rows.push({ c, readSeq: m.readSeq });
+      if (c && c.deletingAt === undefined) rows.push({ c, readSeq: m.readSeq });
     }
     rows.sort((a, b) => b.c.lastAt - a.c.lastAt);
     return { conversations: await Promise.all(rows.map(({ c, readSeq }) => summary(ctx, c, readSeq))) };

@@ -49,7 +49,11 @@ export default defineSchema({
     lastSeq: v.number(),
     lastAt: v.number(),
     createdAt: v.number(),
-  }).index("by_dmKey", ["dmKey"]),
+    /** Groups only: deleted at this time. Gone to every caller; its rows are purged in bounded passes. */
+    deletingAt: v.optional(v.number()),
+  })
+    .index("by_dmKey", ["dmKey"])
+    .index("by_deletingAt", ["deletingAt"]),
 
   members: defineTable({
     conversationId: v.id("conversations"),
@@ -121,6 +125,8 @@ export default defineSchema({
     .index("by_recipient_state_collect", ["recipientId", "state", "collect"])
     .index("by_target_state_collect", ["target.machine", "state", "collect"])
     .index("by_message", ["messageId"])
+    // Deleting a group: its deliveries still in flight (a `delivered` answer is finished: collect false).
+    .index("by_conversation_state_collect", ["conversationId", "state", "collect"])
     .index("by_state_at", ["state", "at"])
     // Alerts (follow-up 2, 3): what hasn't been reported yet, so every scan makes progress.
     .index("by_state_uncertainReported", ["state", "uncertainReported"])

@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -525,5 +525,129 @@ describe("web", () => {
     expect(await errorCode(t.mutation(api.conversations.addMember, { adminToken: ADMIN, conversationId: dm.conversation.id, name: "c" }))).toBe(
       "bad_request",
     );
+  });
+});
+
+describe("delete", () => {
+  const del = (t: T, conversationIds: string[], over: Record<string, unknown> = {}) =>
+    t.mutation(api.conversations.deleteConversation, { adminToken: ADMIN, as: "lee", conversationIds, ...over });
+
+  it("removes the group and everything in it, so nothing is left to deliver or wake", async () => {
+    const t = await setup();
+    const g = await group(t);
+    const keep = await group(t);
+    const sent = await t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["lee", "b", "c"], text: "status?" });
+    await t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: keep, to: ["b"], text: "other" });
+    expect((await work(t)).length + (await work(t, m2)).length).toBe(3);
+
+    expect(await del(t, [g, g])).toEqual({ deleted: 1 });
+
+    const ids = (await t.query(api.conversations.list, { adminToken: ADMIN })).conversations.map((c) => c.id);
+    expect(ids).toEqual([keep]);
+    expect((await work(t)).map((d) => d.recipient)).toEqual(["b"]);
+    expect(await work(t, m2)).toEqual([]);
+    const left = await t.run(async (ctx) => ({
+      messages: (await ctx.db.query("messages").collect()).filter((m) => m.conversationId === g).length,
+      deliveries: (await ctx.db.query("deliveries").collect()).filter((d) => d.conversationId === g).length,
+      inbox: (await ctx.db.query("inbox").collect()).filter((i) => i.conversationId === g).length,
+      members: (await ctx.db.query("members").collect()).filter((m) => m.conversationId === g).length,
+      waits: (await ctx.db.query("waits").collect()).filter((w) => w.messageId === sent.message.id).length,
+    }));
+    expect(left).toEqual({ messages: 0, deliveries: 0, inbox: 0, members: 0, waits: 0 });
+    expect(await errorCode(t.query(api.conversations.view, { adminToken: ADMIN, conversationId: g }))).toBe("unknown_conversation");
+  });
+
+  it("answers into a deleted group fail as unknown, not a crash", async () => {
+    const t = await setup();
+    const g = await group(t);
+    const sent = await t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["b"], text: "status?" });
+    await del(t, [g]);
+    expect(await errorCode(t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: sent.message.id, text: "done" }))).toBe("unknown_message");
+    expect(await errorCode(t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["b"], text: "again" }))).toBe("unknown_conversation");
+    expect(await errorCode(del(t, [g]))).toBe("unknown_conversation");
+  });
+
+  it("removes a group too large for one transaction, gone at once and purged in bounded passes", async () => {
+    const t = await setup();
+    const g = await group(t, ["lee", "a", "b"]);
+    await t.run(async (ctx) => {
+      const id = ctx.db.normalizeId("conversations", g)!;
+      const people = await ctx.db.query("participants").collect();
+      const [a, b, lee] = ["a", "b", "lee"].map((n) => people.find((p) => p.name === n)!);
+      for (let seq = 1; seq <= 1_500; seq++) {
+        // The oldest request is still pending: purged last, so it must go at delete time.
+        const pending = seq === 1;
+        const key = pending ? { idempotencyKey: "k-oldest" } : {};
+        const messageId = await ctx.db.insert("messages", { conversationId: id, seq, senderId: a._id, recipientIds: [b._id], kind: "request", text: "x".repeat(200), attachments: [], origin: { via: "cli" }, createdAt: seq, ...key } as never);
+        await ctx.db.insert("deliveries", { messageId, conversationId: id, recipientId: b._id, collect: pending, state: pending ? "pending" : "replied", at: seq, createdAt: seq });
+        if (seq <= 3) await ctx.db.insert("inbox", { humanId: lee._id, messageId, conversationId: id, createdAt: seq });
+      }
+      await ctx.db.patch(id, { lastSeq: 1_500 });
+    });
+    expect((await work(t)).map((d) => d.recipient)).toEqual(["b"]);
+    const oldest = await t.run(async (ctx) => (await ctx.db.query("messages").collect()).find((m) => m.seq === 1)!._id);
+    expect((await t.query(api.inbox.unreadCount, { adminToken: ADMIN, human: "lee" })).unread).toBe(3);
+    expect(await del(t, [g])).toEqual({ deleted: 1 });
+    expect(await work(t)).toEqual([]);
+    // Its oldest inbox rows outlive the first pass, but no longer count as unread.
+    expect((await t.query(api.inbox.unreadCount, { adminToken: ADMIN, human: "lee" })).unread).toBe(0);
+    // An old message the first pass left behind is already gone to every reader and writer.
+    expect(await errorCode(t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: oldest, text: "late" }))).toBe("unknown_message");
+    expect(await errorCode(t.query(api.connector.messageStatus, { machine: m1, as: "b", messageId: oldest }))).toBe("unknown_message");
+    expect(await errorCode(t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["b"], text: "x", key: "k-oldest" }))).toBe("unknown_message");
+    expect((await t.query(api.conversations.list, { adminToken: ADMIN })).conversations).toEqual([]);
+    expect(await errorCode(t.query(api.conversations.view, { adminToken: ADMIN, conversationId: g }))).toBe("unknown_conversation");
+    const count = () => t.run(async (ctx) => (await ctx.db.query("messages").collect()).length + (await ctx.db.query("deliveries").collect()).length);
+    expect(await count()).toBeGreaterThan(0);
+    for (let pass = 0; pass < 10 && (await count()) > 0; pass++) await t.mutation(internal.conversations.purge, {});
+    expect(await count()).toBe(0);
+    expect(await t.run(async (ctx) => (await ctx.db.query("conversations").collect()).length)).toBe(0);
+  }, 60_000);
+
+  it("looks only at the deleted group's in-flight work, and refuses too much of it cleanly", async () => {
+    const t = await setup();
+    const empty = await group(t, ["lee", "a", "b"]);
+    const busy = await group(t, ["lee", "a", "b"]);
+    const other = await group(t, ["lee", "a", "b"]);
+    const fill = (g: string, n: number) =>
+      t.run(async (ctx) => {
+        const id = ctx.db.normalizeId("conversations", g)!;
+        const people = await ctx.db.query("participants").collect();
+        const [a, b] = ["a", "b"].map((name) => people.find((p) => p.name === name)!);
+        for (let seq = 1; seq <= n; seq++) {
+          const messageId = await ctx.db.insert("messages", { conversationId: id, seq, senderId: a._id, recipientIds: [b._id], kind: "request", text: "x", attachments: [], origin: { via: "cli" }, createdAt: seq } as never);
+          await ctx.db.insert("deliveries", { messageId, conversationId: id, recipientId: b._id, collect: true, state: "pending", at: seq, createdAt: seq });
+        }
+      });
+    await fill(other, 600);
+    await fill(busy, 501);
+    // 600 finished answers (delivered, never collected) don't count against the cap.
+    const answered = await group(t, ["lee", "a", "b"]);
+    await t.run(async (ctx) => {
+      const id = ctx.db.normalizeId("conversations", answered)!;
+      const people = await ctx.db.query("participants").collect();
+      const [a, b] = ["a", "b"].map((name) => people.find((p) => p.name === name)!);
+      for (let seq = 1; seq <= 600; seq++) {
+        const messageId = await ctx.db.insert("messages", { conversationId: id, seq, senderId: a._id, recipientIds: [b._id], kind: "answer", text: "x", attachments: [], origin: { via: "cli" }, createdAt: seq } as never);
+        await ctx.db.insert("deliveries", { messageId, conversationId: id, recipientId: b._id, collect: false, state: "delivered", at: seq, createdAt: seq });
+      }
+    });
+    expect(await del(t, [answered])).toEqual({ deleted: 1 });
+    expect(await del(t, [empty])).toEqual({ deleted: 1 });
+    expect(await errorCode(del(t, [busy]))).toBe("bad_request");
+    const ids = (await t.query(api.conversations.list, { adminToken: ADMIN })).conversations.map((c) => c.id);
+    expect(ids.sort()).toEqual([busy, other].sort());
+  }, 60_000);
+
+  it("refuses DMs, agents, a wrong token and oversized batches, deleting nothing", async () => {
+    const t = await setup();
+    const g = await group(t);
+    const dm = (await t.mutation(api.conversations.openDm, { adminToken: ADMIN, a: "lee", b: "a" })).conversation.id;
+    expect(await errorCode(del(t, [g, dm]))).toBe("bad_request");
+    expect(await errorCode(del(t, [g], { as: "a" }))).toBe("bad_request");
+    expect(await errorCode(del(t, [g], { adminToken: "wrong" }))).toBe("plain: admin token rejected");
+    expect(await errorCode(del(t, Array(101).fill(g)))).toBe("bad_request");
+    const ids = (await t.query(api.conversations.list, { adminToken: ADMIN })).conversations.map((c) => c.id);
+    expect(ids.sort()).toEqual([g, dm].sort());
   });
 });
