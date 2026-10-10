@@ -78,6 +78,8 @@ export const runDispatcher = (options: DispatcherOptions) =>
      * (a stop, say) needn't wait for a long turn to finish.
      */
     const background = new Set<string>();
+    /** Participant → how many of its turns we're following: a turn is running there, so an urgent delivery can join it. */
+    const turnsRunning = new Map<string, number>();
     /** Claims we hold, by delivery id: lets us resume without waiting out our own lease. */
     const held = new Map<string, Held>();
     /** Delivery id → don't look before this time. */
@@ -182,13 +184,25 @@ export const runDispatcher = (options: DispatcherOptions) =>
     // -----------------------------------------------------------------------
     // Tasks
 
-    const follow = (adapter: HarnessAdapter, h: Held, turnId: string) =>
-      Effect.gen(function* () {
+    const follow = (adapter: HarnessAdapter, h: Held, turnId: string) => {
+      const p = h.target.participant;
+      return Effect.gen(function* () {
+        turnsRunning.set(p, (turnsRunning.get(p) ?? 0) + 1);
+        wake();
         const outcome = yield* withLease(h, adapter.awaitOutcome(h.target, h.delivery, turnId));
         if (outcome._tag === "lost") return log(`${h.delivery.id}: lost sight of turn ${turnId} (${outcome.detail}); will check later`);
         yield* writeOutcome(h, turnId, outcome);
         yield* release(h);
-      });
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            const n = (turnsRunning.get(p) ?? 1) - 1;
+            if (n > 0) turnsRunning.set(p, n);
+            else turnsRunning.delete(p);
+          }),
+        ),
+      );
+    };
 
     /** Records `delivered`, and keeps our copy of the delivery current: recovery decides from it (2.1). */
     const markDelivered = (h: Held, turnId: string, cursor?: string) =>
@@ -371,7 +385,9 @@ export const runDispatcher = (options: DispatcherOptions) =>
         if (busy.has(participant) || urgentBusy.has(participant)) {
           // Another delivery holds the agent: only an urgent one goes now, one at a time.
           const urgent = items.find((i) => i.urgent && i.state !== "delivered");
-          if (!urgent || urgentBusy.has(participant) || (notBefore.get(urgent.id) ?? 0) > now) continue;
+          // And only once a turn is running there to join: a holder still handing over hasn't started one,
+          // and two handoffs to an idle thread would each start a run, the urgent one queued behind.
+          if (!urgent || urgentBusy.has(participant) || !turnsRunning.has(participant) || (notBefore.get(urgent.id) ?? 0) > now) continue;
           const adapter = adapters.get(urgent.harness);
           // Only an adapter that steers into a running turn (T3 protocol 2); others would queue it behind the turn anyway.
           if (!adapter?.steersIntoRunningTurn || !readiness.get(`${urgent.harness}/${participant}`)) continue;
