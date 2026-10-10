@@ -15,7 +15,7 @@ import {
 } from "@agent-comms/protocol";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { envelope, fail, ref, refById } from "./core";
+import { envelope, fail, getOr, ref, refById } from "./core";
 
 export const RETURNED_DETAIL = "returned to the waiting send";
 
@@ -82,7 +82,8 @@ export async function waitOn(ctx: QueryCtx, waiter: Doc<"participants">, message
 
 export async function requireWait(ctx: QueryCtx, waiter: Doc<"participants">, messageId: string): Promise<Doc<"waits">> {
   const id = ctx.db.normalizeId("messages", messageId);
-  if (!id || !(await ctx.db.get(id))) fail("unknown_message", `no message ${messageId}`);
+  if (!id) fail("unknown_message", `no message ${messageId}`);
+  await getOr(ctx, "messages", id);
   const wait = await waitOn(ctx, waiter, id);
   if (!wait) fail("conflict", `@${waiter.name} isn't waiting on ${messageId}`);
   return wait;

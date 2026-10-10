@@ -90,7 +90,7 @@ export const postAs = mutation({
 const MAX_DELETE_BATCH = 100;
 /**
  * How much one purge pass may touch, in reads and writes (each query or delete counts one),
- * and in bytes of message text, well under Convex's 4,096 index ranges and 16 MiB per
+ * and in bytes of message documents (text and attachments), well under Convex's 4,096 index ranges and 16 MiB per
  * transaction. A larger group is finished by the minute cron.
  */
 const PURGE_OPS = 2_000;
@@ -183,14 +183,16 @@ async function purgePass(ctx: MutationCtx, ids: Id<"conversations">[]): Promise<
     }
     let done = false;
     while (!full()) {
-      const messages = await take(ctx.db.query("messages").withIndex("by_conversation_seq", (q) => q.eq("conversationId", id)).order("desc"));
+      // Few at a time: a message with 20 attachments can be ~100 KB, and the byte budget is counted after the read.
+      ops++;
+      const messages = await ctx.db.query("messages").withIndex("by_conversation_seq", (q) => q.eq("conversationId", id)).order("desc").take(10);
       if (!messages.length) {
         done = true;
         break;
       }
       for (const m of messages) {
         if (full()) break;
-        bytes += encoder.encode(m.text).length + 1_024;
+        bytes += encoder.encode(JSON.stringify(m)).length + 1_024;
         // A delivery or wait goes only once none of its wait results are left (the fallback sweep reads them).
         for (const d of await take(ctx.db.query("deliveries").withIndex("by_message", (q) => q.eq("messageId", m._id)))) {
           for (const r of await take(ctx.db.query("waitResults").withIndex("by_delivery", (q) => q.eq("deliveryId", d._id)))) await remove(r._id);

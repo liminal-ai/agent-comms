@@ -586,7 +586,9 @@ describe("delete", () => {
     const oldest = await t.run(async (ctx) => (await ctx.db.query("messages").collect()).find((m) => m.seq === 1)!._id);
     expect(await del(t, [g])).toEqual({ deleted: 1 });
     expect(await work(t)).toEqual([]);
-    expect(await errorCode(t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: oldest, text: "late" }))).toBe("unknown_conversation");
+    // An old message the first pass left behind is already gone to every reader and writer.
+    expect(await errorCode(t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: oldest, text: "late" }))).toBe("unknown_message");
+    expect(await errorCode(t.query(api.connector.messageStatus, { machine: m1, as: "b", messageId: oldest }))).toBe("unknown_message");
     expect((await t.query(api.conversations.list, { adminToken: ADMIN })).conversations).toEqual([]);
     expect(await errorCode(t.query(api.conversations.view, { adminToken: ADMIN, conversationId: g }))).toBe("unknown_conversation");
     const count = () => t.run(async (ctx) => (await ctx.db.query("messages").collect()).length + (await ctx.db.query("deliveries").collect()).length);
