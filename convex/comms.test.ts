@@ -573,20 +573,24 @@ describe("delete", () => {
     await t.run(async (ctx) => {
       const id = ctx.db.normalizeId("conversations", g)!;
       const people = await ctx.db.query("participants").collect();
-      const [a, b] = ["a", "b"].map((n) => people.find((p) => p.name === n)!);
+      const [a, b, lee] = ["a", "b", "lee"].map((n) => people.find((p) => p.name === n)!);
       for (let seq = 1; seq <= 1_500; seq++) {
         // The oldest request is still pending: purged last, so it must go at delete time.
         const pending = seq === 1;
         const key = pending ? { idempotencyKey: "k-oldest" } : {};
         const messageId = await ctx.db.insert("messages", { conversationId: id, seq, senderId: a._id, recipientIds: [b._id], kind: "request", text: "x".repeat(200), attachments: [], origin: { via: "cli" }, createdAt: seq, ...key } as never);
         await ctx.db.insert("deliveries", { messageId, conversationId: id, recipientId: b._id, collect: pending, state: pending ? "pending" : "replied", at: seq, createdAt: seq });
+        if (seq <= 3) await ctx.db.insert("inbox", { humanId: lee._id, messageId, conversationId: id, createdAt: seq });
       }
       await ctx.db.patch(id, { lastSeq: 1_500 });
     });
     expect((await work(t)).map((d) => d.recipient)).toEqual(["b"]);
     const oldest = await t.run(async (ctx) => (await ctx.db.query("messages").collect()).find((m) => m.seq === 1)!._id);
+    expect((await t.query(api.inbox.unreadCount, { adminToken: ADMIN, human: "lee" })).unread).toBe(3);
     expect(await del(t, [g])).toEqual({ deleted: 1 });
     expect(await work(t)).toEqual([]);
+    // Its oldest inbox rows outlive the first pass, but no longer count as unread.
+    expect((await t.query(api.inbox.unreadCount, { adminToken: ADMIN, human: "lee" })).unread).toBe(0);
     // An old message the first pass left behind is already gone to every reader and writer.
     expect(await errorCode(t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: oldest, text: "late" }))).toBe("unknown_message");
     expect(await errorCode(t.query(api.connector.messageStatus, { machine: m1, as: "b", messageId: oldest }))).toBe("unknown_message");
