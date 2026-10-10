@@ -22,7 +22,8 @@ export async function harnessAdapters(config: StartConfig, log: (line: string) =
     if (config.t3.protocol === 2) {
       const { makeT3ClientV2 } = await import("@agent-comms/adapter-t3/v2/client");
       const { makeT3AdapterV2 } = await import("@agent-comms/adapter-t3/v2");
-      adapters.push(t3HarnessAdapter(makeT3AdapterV2({ client: makeT3ClientV2(t3), log })));
+      // Orchestration protocol 2 steers into a running turn; protocol 1 waits for idle.
+      adapters.push(t3HarnessAdapter(makeT3AdapterV2({ client: makeT3ClientV2(t3), log }), { steers: true }));
     } else {
       const { makeT3Client } = await import("@agent-comms/adapter-t3/client");
       const { makeT3Adapter } = await import("@agent-comms/adapter-t3");

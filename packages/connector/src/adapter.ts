@@ -59,6 +59,8 @@ export type Check =
 
 export interface HarnessAdapter {
   readonly harness: Harness;
+  /** Hands a delivery into a turn already running instead of waiting for it to end: only then can `--urgent` jump the queue. */
+  readonly steersIntoRunningTurn?: boolean;
   /** Whether deliveries can be handed to this participant now. The dispatcher claims nothing it can't hand over. */
   readonly ready: (target: Target) => Effect.Effect<boolean>;
   /**

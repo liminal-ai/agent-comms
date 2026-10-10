@@ -22,6 +22,7 @@ class Scripted {
   onCheck: () => Check = () => ({ _tag: "absent" });
   readonly adapter: HarnessAdapter = {
     harness: "t3",
+    steersIntoRunningTurn: true,
     ready: () => Effect.succeed(true),
     handOff: ((_target: Target, _delivery: Delivery, gate?: Gate) =>
       Effect.promise(async (signal: AbortSignal) => {

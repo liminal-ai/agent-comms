@@ -371,10 +371,10 @@ export const runDispatcher = (options: DispatcherOptions) =>
         if (busy.has(participant) || urgentBusy.has(participant)) {
           // Another delivery holds the agent: only an urgent one goes now, one at a time.
           const urgent = items.find((i) => i.urgent && i.state !== "delivered");
-          // T3 only: it steers into a running turn. Other harnesses would queue it behind the turn anyway.
-          if (!urgent || urgent.harness !== "t3" || urgentBusy.has(participant) || (notBefore.get(urgent.id) ?? 0) > now) continue;
+          if (!urgent || urgentBusy.has(participant) || (notBefore.get(urgent.id) ?? 0) > now) continue;
           const adapter = adapters.get(urgent.harness);
-          if (!adapter || !readiness.get(`${urgent.harness}/${participant}`)) continue;
+          // Only an adapter that steers into a running turn (T3 protocol 2); others would queue it behind the turn anyway.
+          if (!adapter?.steersIntoRunningTurn || !readiness.get(`${urgent.harness}/${participant}`)) continue;
           urgentBusy.set(participant, urgent.id);
           decide(urgent.id, "urgent", `not waiting for ${busy.get(participant) ?? "the current delivery"}`);
           yield* work(adapter, urgent, { participant, locator: urgent.locator }).pipe(

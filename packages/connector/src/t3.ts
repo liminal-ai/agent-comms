@@ -4,9 +4,10 @@ import type { T3Adapter } from "@agent-comms/adapter-t3";
 import * as Effect from "effect/Effect";
 import type { HarnessAdapter } from "./adapter.ts";
 
-export function t3HarnessAdapter(adapter: T3Adapter): HarnessAdapter {
+export function t3HarnessAdapter(adapter: T3Adapter, options: { steers?: boolean } = {}): HarnessAdapter {
   return {
     harness: "t3",
+    ...(options.steers ? { steersIntoRunningTurn: true } : {}),
     ready: (target) => Effect.promise(() => adapter.ready(target)),
     // The signal aborts a handoff still waiting (claim lost, connector stopping); the adapter re-checks the claim before sending (2.2).
     handOff: (target, delivery, gate) => Effect.promise((signal) => adapter.handOff(target, delivery, { confirm: gate.confirm, signal })),
