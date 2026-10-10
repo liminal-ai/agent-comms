@@ -485,6 +485,15 @@ describe("T3 V2 adapter: restart check (from one snapshot)", () => {
     assert.deepEqual(await after.check(target, delivery(), turnId), { _tag: "completed", turnId, outcome: { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] } });
   });
 
+  it("a second handoff of a delivery already steered into a running turn says steered (takeover race)", async () => {
+    const { t3, adapter } = setup();
+    t3.human("lee");
+    const { turnId } = (await adapter.handOff(target, delivery())) as { turnId: string };
+    const after = makeT3AdapterV2({ client: t3, ...options });
+    assert.deepEqual(await after.handOff(target, delivery()), { _tag: "accepted", turnId, steered: true });
+    t3.finish();
+  });
+
   it("running while its run runs, then completed with the outcome, in a new process", async () => {
     const { t3, adapter } = setup();
     const { turnId } = (await adapter.handOff(target, delivery())) as { turnId: string };

@@ -256,7 +256,8 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         if (find(before, messageId).present) {
           // Already there (an earlier handoff, maybe another process's): find its run, send nothing.
           const c = await check(target, delivery);
-          if (c._tag === "running" || c._tag === "completed") return { _tag: "accepted", turnId: c.turnId };
+          if (c._tag === "running") return { _tag: "accepted", turnId: c.turnId, ...(c.steered ? { steered: true } : {}) };
+          if (c._tag === "completed") return { _tag: "accepted", turnId: c.turnId };
           return { _tag: "lost", detail: `message ${messageId} is in the thread but its run is unclear (${c._tag})` };
         }
         if (gate?.signal.aborted) return { _tag: "aborted", detail: "cancelled before sending" };
