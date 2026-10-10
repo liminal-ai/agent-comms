@@ -20,6 +20,15 @@ describe("RunTracker", () => {
     assert.equal(t.status, "completed");
   });
 
+  it("ignores a snapshot older than the events already applied", () => {
+    const t = new RunTracker("m1");
+    t.load(thread("running", 5));
+    t.feed(runEvent("completed", 7));
+    t.load(thread("running", 6));
+    assert.equal(t.status, "completed");
+    assert.equal(t.lastSequence, 7);
+  });
+
   it("applies newer events", () => {
     const t = new RunTracker("m1");
     t.load(thread("running", 5));

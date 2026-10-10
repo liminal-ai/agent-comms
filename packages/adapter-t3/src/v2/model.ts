@@ -162,7 +162,9 @@ export class RunTracker {
 
   /** From a snapshot: the state of every run. */
   load(thread: V2Thread): void {
-    this.lastSequence = Math.max(this.lastSequence, thread.snapshotSequence);
+    // Older than what the stream already gave us: applying it would undo newer state.
+    if (thread.snapshotSequence < this.lastSequence) return;
+    this.lastSequence = thread.snapshotSequence;
     this.blocking.clear();
     this.active.clear();
     const steered = find(thread, this.messageId).steeredInto;
