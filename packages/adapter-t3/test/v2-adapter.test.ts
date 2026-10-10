@@ -45,6 +45,8 @@ class FakeV2 implements V2Client {
   lateSteer = false;
   /** With lateSteer: our fallback run also answers and completes at once, while the event stream is silent. */
   lateSteerDone = false;
+  /** A successful steer whose target run then finishes at once, while the event stream is silent. */
+  steerThenDone = false;
   /** Events are recorded but not delivered to subscribers (a lagging stream). */
   muted = false;
   failResubscribes = 0;
@@ -139,6 +141,11 @@ class FakeV2 implements V2Client {
       }
       this.thread.messages.push({ id: m.messageId, role: "user", runId: target.id });
       this.emit({ type: "message", message: { id: m.messageId, role: "user", runId: target.id } });
+      if (this.steerThenDone) {
+        this.muted = true;
+        this.setRun(target.id, "waiting");
+        this.setRun(target.id, "completed");
+      }
     } else this.newRun(m.messageId);
     const result = { sequence: this.seq };
     this.receipts.set(m.commandId, result);
@@ -332,6 +339,16 @@ describe("T3 V2 adapter: live", () => {
     assert.equal(h._tag, "accepted");
     const outcome = await Promise.race([adapter.awaitOutcome(target, delivery(), h.turnId), new Promise((r) => setTimeout(() => r("timeout"), 3_000))]);
     assert.deepEqual(outcome, { _tag: "replied", answer: "fallback answer" });
+  });
+
+  it("a steer whose target run finishes at once (stream silent) is followed from the snapshot, not waited on", async () => {
+    const { t3, adapter } = setup();
+    t3.human("lee");
+    t3.steerThenDone = true;
+    const h = (await adapter.handOff(target, delivery())) as { _tag: string; turnId: string; steered?: boolean };
+    assert.equal(h.steered, true);
+    const outcome = await Promise.race([adapter.awaitOutcome(target, delivery(), h.turnId), new Promise((r) => setTimeout(() => r("timeout"), 3_000))]);
+    assert.deepEqual(outcome, { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
   });
 
   it("losing the idle race queues our message as its own run: accepted, not ambiguous", async () => {

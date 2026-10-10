@@ -317,7 +317,11 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
             tracker.steeredRunId = undefined;
             tracker.runId = undefined;
             tracker.load(snapshot);
-          } else if (found?.steeredInto) steered = true;
+          } else if (found?.steeredInto && snapshot) {
+            // Follow the run it joined from the snapshot too, status included (it may already be over).
+            steered = true;
+            tracker.load(snapshot);
+          }
           else {
             f.stop();
             return { _tag: "lost", detail: `no run for message ${messageId} after ${acceptTimeoutMs} ms` };
