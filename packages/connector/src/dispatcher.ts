@@ -237,7 +237,8 @@ export const runDispatcher = (options: DispatcherOptions) =>
         switch (result._tag) {
           case "aborted":
             log(`${h.delivery.id}: not sent (${result.detail})`);
-            return yield* release(h);
+            // Keep holding the claim for immediate recovery/retry.
+            return;
           case "rejected":
             yield* write("failed", h.delivery.id, api.failed(h.delivery.id, h.claim.claimId, undefined, "rejected", result.detail));
             return yield* release(h);
@@ -367,9 +368,9 @@ export const runDispatcher = (options: DispatcherOptions) =>
       for (const [participant, all] of byParticipant) {
         const items = all.filter((i) => !working.has(i.id));
         if (items.length === 0) continue;
-        if (busy.has(participant)) {
+        if (busy.has(participant) || urgentBusy.has(participant)) {
           // Another delivery holds the agent: only an urgent one goes now, one at a time.
-          const urgent = items.find((i) => i.urgent && i.state === "pending");
+          const urgent = items.find((i) => i.urgent && i.state !== "delivered");
           // T3 only: it steers into a running turn. Other harnesses would queue it behind the turn anyway.
           if (!urgent || urgent.harness !== "t3" || urgentBusy.has(participant) || (notBefore.get(urgent.id) ?? 0) > now) continue;
           const adapter = adapters.get(urgent.harness);
@@ -387,24 +388,23 @@ export const runDispatcher = (options: DispatcherOptions) =>
           );
           continue;
         }
-        const first = items.find((i) => i.urgent && i.state === "pending") ?? items[0]!;
-        const adapter = adapters.get(first.harness);
+        // Prefer any in-flight work first; otherwise prefer an urgent pending item.
+        const inFlight = items.find((i) => i.state !== "pending");
+        const next = inFlight ?? (items.find((i) => i.urgent && i.state === "pending") ?? items[0]!);
+        const adapter = adapters.get(next.harness);
         if (!adapter) {
-          if (!unknownHarness.has(first.harness)) log(`no adapter for ${first.harness}; @${participant}'s deliveries wait`);
-          unknownHarness.add(first.harness);
+          if (!unknownHarness.has(next.harness)) log(`no adapter for ${next.harness}; @${participant}'s deliveries wait`);
+          unknownHarness.add(next.harness);
           continue;
         }
-        const target: Target = { participant, locator: first.locator };
-        // Anything already under way comes before anything new.
-        const inFlight = items.find((i) => i.state !== "pending");
-        const next = inFlight ?? first;
+        const target: Target = { participant, locator: next.locator };
         if ((notBefore.get(next.id) ?? 0) > now) continue;
         if (inFlight) {
           const ours = held.get(inFlight.id)?.claim.claimId === inFlight.claim?.claimId;
           const expired = !inFlight.claim || inFlight.claim.leaseExpiresAt <= now;
           if (!ours && !expired) continue;
         }
-        const key = `${first.harness}/${participant}`;
+        const key = `${next.harness}/${participant}`;
         if (!checkingReady.has(key)) {
           checkingReady.add(key);
           yield* adapter.ready(target).pipe(
