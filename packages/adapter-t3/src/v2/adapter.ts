@@ -273,6 +273,11 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
           f.stop();
           return { _tag: "aborted", detail: "T3's event stream is down; not sending" };
         }
+        // Steer-only with no turn to join: send nothing, before the gate records this home as the delivery's target.
+        if (gate?.steerOnly && !tracker.activeRunId) {
+          f.stop();
+          return { _tag: "aborted", detail: "no turn running to join; sent nothing" };
+        }
         const cursor = encodeCursor(tracker.lastSequence);
         // The last check before sending: the claim is still ours, and the cursor is recorded (2.2).
         if (gate && (gate.signal.aborted || !(await gate.confirm(cursor)) || gate.signal.aborted)) {
@@ -280,10 +285,6 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
           return { _tag: "aborted", detail: "claim not held, or cancelled, before sending" };
         }
         const steer = tracker.activeRunId;
-        if (gate?.steerOnly && !steer) {
-          f.stop();
-          return { _tag: "aborted", detail: "no turn running to join; sent nothing" };
-        }
         const sent = await send(
           threadId,
           {

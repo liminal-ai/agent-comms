@@ -351,6 +351,15 @@ describe("T3 V2 adapter: live", () => {
     assert.deepEqual(outcome, { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
   });
 
+  it("steer-only on an idle thread sends nothing and never confirms the gate (no target recorded)", async () => {
+    const { t3, adapter } = setup();
+    const confirmed: (string | undefined)[] = [];
+    const h = await adapter.handOff(target, delivery(), { confirm: async (c) => (confirmed.push(c), true), signal: new AbortController().signal, steerOnly: true });
+    assert.equal(h._tag, "aborted");
+    assert.equal(confirmed.length, 0);
+    assert.equal(t3.dispatched.length, 0);
+  });
+
   it("losing the idle race queues our message as its own run: accepted, not ambiguous", async () => {
     const { t3, adapter } = setup();
     const real = t3.dispatch.bind(t3);
