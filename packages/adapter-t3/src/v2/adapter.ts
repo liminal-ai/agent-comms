@@ -305,15 +305,18 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         if (steer) {
           const deadline = Date.now() + acceptTimeoutMs;
           let found: ReturnType<typeof find> | undefined;
+          let snapshot: V2Thread | null = null;
           while (Date.now() < deadline) {
-            const now = await client.getThread(threadId).catch(() => null);
-            found = now ? find(now, messageId) : undefined;
+            snapshot = await client.getThread(threadId).catch(() => null);
+            found = snapshot ? find(snapshot, messageId) : undefined;
             if (found?.run || found?.steeredInto) break;
             await new Promise((r) => setTimeout(r, 100));
           }
-          if (found?.run) {
+          if (found?.run && snapshot) {
+            // Follow our own run from the snapshot, status included: the stream may be behind or down.
             tracker.steeredRunId = undefined;
-            tracker.runId = found.run.id;
+            tracker.runId = undefined;
+            tracker.load(snapshot);
           } else if (found?.steeredInto) steered = true;
           else {
             f.stop();
