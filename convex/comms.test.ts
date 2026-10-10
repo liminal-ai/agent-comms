@@ -596,6 +596,29 @@ describe("delete", () => {
     expect(await t.run(async (ctx) => (await ctx.db.query("conversations").collect()).length)).toBe(0);
   }, 60_000);
 
+  it("looks only at the deleted group's in-flight work, and refuses too much of it cleanly", async () => {
+    const t = await setup();
+    const empty = await group(t, ["lee", "a", "b"]);
+    const busy = await group(t, ["lee", "a", "b"]);
+    const other = await group(t, ["lee", "a", "b"]);
+    const fill = (g: string, n: number) =>
+      t.run(async (ctx) => {
+        const id = ctx.db.normalizeId("conversations", g)!;
+        const people = await ctx.db.query("participants").collect();
+        const [a, b] = ["a", "b"].map((name) => people.find((p) => p.name === name)!);
+        for (let seq = 1; seq <= n; seq++) {
+          const messageId = await ctx.db.insert("messages", { conversationId: id, seq, senderId: a._id, recipientIds: [b._id], kind: "request", text: "x", attachments: [], origin: { via: "cli" }, createdAt: seq } as never);
+          await ctx.db.insert("deliveries", { messageId, conversationId: id, recipientId: b._id, collect: true, state: "pending", at: seq, createdAt: seq });
+        }
+      });
+    await fill(other, 600);
+    await fill(busy, 501);
+    expect(await del(t, [empty])).toEqual({ deleted: 1 });
+    expect(await errorCode(del(t, [busy]))).toBe("bad_request");
+    const ids = (await t.query(api.conversations.list, { adminToken: ADMIN })).conversations.map((c) => c.id);
+    expect(ids.sort()).toEqual([busy, other].sort());
+  }, 60_000);
+
   it("refuses DMs, agents, a wrong token and oversized batches, deleting nothing", async () => {
     const t = await setup();
     const g = await group(t);

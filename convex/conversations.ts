@@ -121,14 +121,24 @@ export const deleteConversation = mutation({
     for (const id of groups.keys()) await ctx.db.patch(id, { deletingAt: now });
     // Every delivery still in play goes now, whatever its age, so nothing claims, hands off
     // or wakes into a deleted group (sends and replies into it are refused in `post`).
-    for (const state of LIVE_STATES)
-      for (const d of await ctx.db.query("deliveries").withIndex("by_state_at", (q) => q.eq("state", state)).collect())
-        if (groups.has(d.conversationId)) await removeDelivery(ctx, d._id);
+    let live = 0;
+    for (const id of groups.keys())
+      for (const state of LIVE_STATES)
+        for (const d of await ctx.db
+          .query("deliveries")
+          .withIndex("by_conversation_state", (q) => q.eq("conversationId", id).eq("state", state))
+          .take(MAX_LIVE_DELIVERIES + 1 - live)) {
+          if (++live > MAX_LIVE_DELIVERIES)
+            fail("bad_request", `more than ${MAX_LIVE_DELIVERIES} deliveries are still in flight in these groups; delete fewer at a time`);
+          await removeDelivery(ctx, d._id);
+        }
     await purgePass(ctx, [...groups.keys()]);
     return { deleted: groups.size };
   },
 });
 
+/** How many in-flight deliveries one delete call removes at once (each also clears its wait results). */
+const MAX_LIVE_DELIVERIES = 500;
 /** Delivery states an agent, connector or relay can still act on. */
 const LIVE_STATES = ["pending", "claimed", "delivered", "ambiguous", "uncertain"] as const;
 
