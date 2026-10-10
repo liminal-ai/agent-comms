@@ -237,8 +237,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
         switch (result._tag) {
           case "aborted":
             log(`${h.delivery.id}: not sent (${result.detail})`);
-            // Keep holding the claim for immediate recovery/retry.
-            return;
+            return yield* release(h);
           case "rejected":
             yield* write("failed", h.delivery.id, api.failed(h.delivery.id, h.claim.claimId, undefined, "rejected", result.detail));
             return yield* release(h);
@@ -368,6 +367,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
       for (const [participant, all] of byParticipant) {
         const items = all.filter((i) => !working.has(i.id));
         if (items.length === 0) continue;
+        // An urgent handoff in progress holds the agent too: nothing overtakes it or races its handoff.
         if (busy.has(participant) || urgentBusy.has(participant)) {
           // Another delivery holds the agent: only an urgent one goes now, one at a time.
           const urgent = items.find((i) => i.urgent && i.state !== "delivered");
@@ -376,7 +376,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
           const adapter = adapters.get(urgent.harness);
           if (!adapter || !readiness.get(`${urgent.harness}/${participant}`)) continue;
           urgentBusy.set(participant, urgent.id);
-          decide(urgent.id, "urgent", `not waiting for ${busy.get(participant)}`);
+          decide(urgent.id, "urgent", `not waiting for ${busy.get(participant) ?? "the current delivery"}`);
           yield* work(adapter, urgent, { participant, locator: urgent.locator }).pipe(
             Effect.ensuring(
               Effect.sync(() => {
