@@ -78,6 +78,8 @@ export const runDispatcher = (options: DispatcherOptions) =>
      * (a stop, say) needn't wait for a long turn to finish.
      */
     const background = new Set<string>();
+    /** Urgent deliveries started beside a holder: their handoff may only join a running turn (never start a run that races the holder's). */
+    const steerOnly = new Set<string>();
     /** Participant and home (locator) → how many turns we're following there: an urgent delivery for that home can join one. */
     const turnsRunning = new Map<string, number>();
     const turnKey = (participant: string, locator: string) => `${participant}\u0000${locator}`;
@@ -232,6 +234,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
 
     /** Right before the adapter sends: the claim compare-and-set, recording home and cursor (2.2, 2.5). */
     const gateFor = (h: Held): Gate => ({
+      ...(steerOnly.has(h.delivery.id) ? { steerOnly: true } : {}),
       confirm: (cursor) =>
         Effect.runPromise(
           api.prepare(h.delivery.id, h.claim.claimId, cursor).pipe(
@@ -265,6 +268,8 @@ export const runDispatcher = (options: DispatcherOptions) =>
         switch (result._tag) {
           case "aborted":
             log(`${h.delivery.id}: not sent (${result.detail})`);
+            // A steer-only urgent found no turn to join: keep our claim, so it goes next in turn order without waiting out the lease.
+            if (steerOnly.has(h.delivery.id)) return;
             return yield* release(h);
           case "rejected":
             yield* write("failed", h.delivery.id, api.failed(h.delivery.id, h.claim.claimId, undefined, "rejected", result.detail));
@@ -399,11 +404,15 @@ export const runDispatcher = (options: DispatcherOptions) =>
           // Only an adapter that steers into a running turn (T3 protocol 2); others would queue it behind the turn anyway.
           if (!adapter?.steersIntoRunningTurn || !readiness.get(`${urgent.harness}/${participant}`)) continue;
           urgentBusy.set(participant, urgent.id);
+          steerOnly.add(urgent.id);
           decide(urgent.id, "urgent", `not waiting for ${busy.get(participant) ?? "the current delivery"}`);
           yield* work(adapter, urgent, { participant, locator: urgent.locator }).pipe(
             Effect.ensuring(
               Effect.sync(() => {
                 urgentBusy.delete(participant);
+                steerOnly.delete(urgent.id);
+                // If it sent nothing (the turn had ended), it goes next in turn order, after a moment.
+                notBefore.set(urgent.id, Date.now() + 1_000);
                 wake();
               }),
             ),

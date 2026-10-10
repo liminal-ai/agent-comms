@@ -280,6 +280,10 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
           return { _tag: "aborted", detail: "claim not held, or cancelled, before sending" };
         }
         const steer = tracker.activeRunId;
+        if (gate?.steerOnly && !steer) {
+          f.stop();
+          return { _tag: "aborted", detail: "no turn running to join; sent nothing" };
+        }
         const sent = await send(
           threadId,
           {

@@ -10,7 +10,7 @@ export function t3HarnessAdapter(adapter: T3Adapter, options: { steers?: boolean
     ...(options.steers ? { steersIntoRunningTurn: true } : {}),
     ready: (target) => Effect.promise(() => adapter.ready(target)),
     // The signal aborts a handoff still waiting (claim lost, connector stopping); the adapter re-checks the claim before sending (2.2).
-    handOff: (target, delivery, gate) => Effect.promise((signal) => adapter.handOff(target, delivery, { confirm: gate.confirm, signal })),
+    handOff: (target, delivery, gate) => Effect.promise((signal) => adapter.handOff(target, delivery, { confirm: gate.confirm, signal, ...(gate.steerOnly ? { steerOnly: true } : {}) })),
     awaitOutcome: (target, delivery, turnId) => Effect.promise(() => adapter.awaitOutcome(target, delivery, turnId)),
     check: (target, delivery, turnId) => Effect.promise(() => adapter.check(target, delivery, turnId)),
     notifyUnmatched: (target, delivery) => Effect.promise(() => adapter.notifyUnmatched(target, delivery)),

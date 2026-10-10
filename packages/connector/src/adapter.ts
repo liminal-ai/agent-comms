@@ -35,6 +35,8 @@ export type HandOff =
  */
 export interface Gate {
   readonly confirm: (cursor?: string) => Promise<boolean>;
+  /** Only join a turn already running: if the thread is idle, send nothing (`aborted`). For an urgent delivery that bypassed the agent's holder. */
+  readonly steerOnly?: boolean;
 }
 
 /** How our turn ended. */

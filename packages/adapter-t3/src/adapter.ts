@@ -46,6 +46,8 @@ export type HandOff =
 export interface Gate {
   confirm(cursor?: string): Promise<boolean>;
   signal: AbortSignal;
+  /** Only join a turn already running; on an idle thread send nothing and return `aborted`. */
+  steerOnly?: boolean;
 }
 export type Outcome =
   | { _tag: "replied"; answer: string }

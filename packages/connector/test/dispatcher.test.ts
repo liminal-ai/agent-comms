@@ -20,7 +20,7 @@ class Scripted {
   onHandOff: () => HandOff = () => ({ _tag: "accepted", turnId: "t1" });
   onOutcome: () => Outcome | Promise<Outcome> = () => ({ _tag: "lost", detail: "scripted" });
   onCheck: () => Check = () => ({ _tag: "absent" });
-  readonly adapter: HarnessAdapter = {
+  adapter: HarnessAdapter = {
     harness: "t3",
     steersIntoRunningTurn: true,
     ready: () => Effect.succeed(true),
@@ -137,6 +137,33 @@ describe("reaching a busy agent (Mira #371: a stop waited 75 minutes)", () => {
     if (!second.ok) throw new Error(second.error.message);
     await until("second handed over while the recovered turn runs", async () => s.sent === 2, 15_000);
     t1.end({ _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
+  }, 40_000);
+
+  it("an urgent delivery that bypasses the holder only joins a running turn; if none, it sends nothing then goes in turn", async () => {
+    const w = await world();
+    const s = new Scripted();
+    const t1 = turn();
+    const gates: (boolean | undefined)[] = [];
+    const inner = s.adapter.handOff;
+    s.adapter = { ...s.adapter, handOff: ((t: Target, d: Delivery, g: Gate & { steerOnly?: boolean }) => (gates.push(g?.steerOnly), inner(t, d, g))) as HarnessAdapter["handOff"] };
+    // Steer-only handoffs find no running turn (the thread went idle): aborted, nothing sent.
+    s.onHandOff = () => (gates.at(-1) ? { _tag: "aborted", detail: "no turn running to join" } : { _tag: "accepted", turnId: `run-${s.sent}` });
+    s.onOutcome = () => (s.sent === 1 ? t1.done : { _tag: "replied", answer: "ok" });
+    running.push(await startConnector(w.api, w.socket, 60_000, [s.adapter]));
+    const first = await call(w.socket, "send", { as: "a", to: ["tee"], text: "long job" });
+    if (!first.ok) throw new Error(first.error.message);
+    await until("first handed over", async () => s.sent === 1);
+    const stop = await call(w.socket, "send", { as: "a", to: ["tee"], text: "STOP", urgent: true });
+    if (!stop.ok) throw new Error(stop.error.message);
+    await until("urgent tried steer-only", async () => gates.includes(true), 10_000);
+    expect(s.sent).toBe(2);
+    t1.end({ _tag: "replied", answer: "done" });
+    await until("urgent handed over normally once the agent is free", async () => gates.filter((g) => !g).length >= 2 && s.sent >= 3, 15_000);
+    const row = await until("urgent settled", async () => {
+      const d = await deliveryRow(w.t, stop.message.conversationId, stop.message.id);
+      return d && ["replied", "ambiguous", "failed", "uncertain"].includes(d.state) ? d : undefined;
+    }, 15_000);
+    expect(row.state).toBe("replied");
   }, 40_000);
 
   it("an urgent delivery doesn't wait for the turn holding the agent; an ordinary one still does", async () => {
