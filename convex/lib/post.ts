@@ -4,7 +4,7 @@
 import { type AttachmentRef, MAX_TEXT_CHARS, type MessageMeta, type Origin, type SendResult } from "@agent-comms/protocol";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { advanceRead, envelope, fail, membership, stateRef } from "./core";
+import { advanceRead, envelope, fail, getOr, membership, stateRef } from "./core";
 
 export interface PostInput {
   sender: Doc<"participants">;
@@ -103,6 +103,7 @@ export async function replayed(ctx: MutationCtx, sender: Doc<"participants">, ke
     .withIndex("by_sender_key", (q) => q.eq("senderId", sender._id).eq("idempotencyKey", key))
     .first();
   if (!m) return null;
+  await getOr(ctx, "messages", m._id); // a message in a deleted group is gone, even to a retry
   const deliveries = await ctx.db
     .query("deliveries")
     .withIndex("by_message", (q) => q.eq("messageId", m._id))

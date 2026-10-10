@@ -575,9 +575,10 @@ describe("delete", () => {
       const people = await ctx.db.query("participants").collect();
       const [a, b] = ["a", "b"].map((n) => people.find((p) => p.name === n)!);
       for (let seq = 1; seq <= 1_500; seq++) {
-        const messageId = await ctx.db.insert("messages", { conversationId: id, seq, senderId: a._id, recipientIds: [b._id], kind: "request", text: "x".repeat(200), attachments: [], origin: { via: "cli" }, createdAt: seq } as never);
         // The oldest request is still pending: purged last, so it must go at delete time.
         const pending = seq === 1;
+        const key = pending ? { idempotencyKey: "k-oldest" } : {};
+        const messageId = await ctx.db.insert("messages", { conversationId: id, seq, senderId: a._id, recipientIds: [b._id], kind: "request", text: "x".repeat(200), attachments: [], origin: { via: "cli" }, createdAt: seq, ...key } as never);
         await ctx.db.insert("deliveries", { messageId, conversationId: id, recipientId: b._id, collect: pending, state: pending ? "pending" : "replied", at: seq, createdAt: seq });
       }
       await ctx.db.patch(id, { lastSeq: 1_500 });
@@ -589,6 +590,7 @@ describe("delete", () => {
     // An old message the first pass left behind is already gone to every reader and writer.
     expect(await errorCode(t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: oldest, text: "late" }))).toBe("unknown_message");
     expect(await errorCode(t.query(api.connector.messageStatus, { machine: m1, as: "b", messageId: oldest }))).toBe("unknown_message");
+    expect(await errorCode(t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["b"], text: "x", key: "k-oldest" }))).toBe("unknown_message");
     expect((await t.query(api.conversations.list, { adminToken: ADMIN })).conversations).toEqual([]);
     expect(await errorCode(t.query(api.conversations.view, { adminToken: ADMIN, conversationId: g }))).toBe("unknown_conversation");
     const count = () => t.run(async (ctx) => (await ctx.db.query("messages").collect()).length + (await ctx.db.query("deliveries").collect()).length);
