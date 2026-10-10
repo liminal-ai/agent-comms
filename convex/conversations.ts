@@ -1,9 +1,9 @@
 import { MAX_TITLE_CHARS } from "@agent-comms/protocol";
-// Conversations, membership, archiving and Lee's posts. Admin only (the web view).
+// Conversations, membership, deleting groups and Lee's posts. Admin only (the web view).
 
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
-import { type MutationCtx, mutation, query } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { mutation, query } from "./_generated/server";
 import { conversationRef, envelope, fail, getOr, participantByName, refById, requireAdmin, stateRef, summary } from "./lib/core";
 import { openDm as openDmBetween, post } from "./lib/post";
 
@@ -87,65 +87,71 @@ export const postAs = mutation({
   },
 });
 
-/** Every conversation, most recent first. Archived groups only with `includeArchived`. */
-export const list = query({
-  args: { adminToken: v.string(), includeArchived: v.optional(v.boolean()) },
+const MAX_DELETE_BATCH = 100;
+
+/**
+ * Delete groups as a person, all or nothing: the group, its members, messages, deliveries,
+ * inbox rows, and the waits and reminder fires on its messages. Undelivered work for it is
+ * gone, so nothing wakes into it; a later reply or report on its ids fails as unknown.
+ */
+export const deleteConversation = mutation({
+  args: { adminToken: v.string(), as: v.string(), conversationIds: v.array(v.string()) },
   handler: async (ctx, args) => {
     await requireAdmin(args.adminToken);
-    const all = (await ctx.db.query("conversations").collect()).filter(
-      (c) => args.includeArchived || c.archivedAt === undefined,
-    );
-    all.sort((a, b) => b.lastAt - a.lastAt);
-    return {
-      conversations: await Promise.all(
-        all.map(async (c) => ({
-          ...(await summary(ctx, c, c.lastSeq)),
-          ...(c.archivedAt !== undefined ? { archivedAt: c.archivedAt } : {}),
-          ...(c.archivedBy !== undefined ? { archivedBy: (await refById(ctx, c.archivedBy)).name } : {}),
-        })),
-      ),
-    };
+    const person = await participantByName(ctx, args.as);
+    if (person.kind !== "human") fail("bad_request", "only a person deletes conversations");
+    if (args.conversationIds.length > MAX_DELETE_BATCH)
+      fail("bad_request", `${args.conversationIds.length} conversations; the limit is ${MAX_DELETE_BATCH} per call`);
+    const groups = new Map<Id<"conversations">, Doc<"conversations">>();
+    for (const id of args.conversationIds) {
+      const c = await getOr(ctx, "conversations", id);
+      if (c.kind !== "group") fail("bad_request", "DMs can't be deleted");
+      groups.set(c._id, c);
+    }
+    const humans = (await ctx.db.query("participants").collect()).filter((p) => p.kind === "human");
+    for (const c of groups.values()) {
+      const messages = await ctx.db
+        .query("messages")
+        .withIndex("by_conversation_seq", (q) => q.eq("conversationId", c._id))
+        .collect();
+      for (const m of messages) {
+        for (const d of await ctx.db.query("deliveries").withIndex("by_message", (q) => q.eq("messageId", m._id)).collect()) {
+          for (const r of await ctx.db.query("waitResults").withIndex("by_delivery", (q) => q.eq("deliveryId", d._id)).collect())
+            await ctx.db.delete(r._id);
+          await ctx.db.delete(d._id);
+        }
+        for (const w of await ctx.db.query("waits").withIndex("by_message", (q) => q.eq("messageId", m._id)).collect()) {
+          for (const r of await ctx.db.query("waitResults").withIndex("by_wait", (q) => q.eq("waitId", w._id)).collect())
+            await ctx.db.delete(r._id);
+          await ctx.db.delete(w._id);
+        }
+        for (const f of await ctx.db.query("reminderFires").withIndex("by_message", (q) => q.eq("messageId", m._id)).collect())
+          await ctx.db.delete(f._id);
+        await ctx.db.delete(m._id);
+      }
+      for (const h of humans)
+        for (const i of await ctx.db
+          .query("inbox")
+          .withIndex("by_human_conversation", (q) => q.eq("humanId", h._id).eq("conversationId", c._id))
+          .collect())
+          await ctx.db.delete(i._id);
+      for (const m of await ctx.db.query("members").withIndex("by_conversation", (q) => q.eq("conversationId", c._id)).collect())
+        await ctx.db.delete(m._id);
+      await ctx.db.delete(c._id);
+    }
+    return { deleted: groups.size };
   },
 });
 
-const MAX_ARCHIVE_BATCH = 100;
-
-/** Archive or unarchive groups as a person, all or nothing. Already in that state is a no-op. */
-async function setArchived(
-  ctx: MutationCtx,
-  args: { adminToken: string; as: string; conversationIds: string[] },
-  archive: boolean,
-): Promise<number> {
-  await requireAdmin(args.adminToken);
-  const person = await participantByName(ctx, args.as);
-  if (person.kind !== "human") fail("bad_request", "only a person archives conversations");
-  if (args.conversationIds.length > MAX_ARCHIVE_BATCH)
-    fail("bad_request", `${args.conversationIds.length} conversations; the limit is ${MAX_ARCHIVE_BATCH} per call`);
-  const conversations = [];
-  for (const id of args.conversationIds) {
-    const c = await getOr(ctx, "conversations", id);
-    if (c.kind !== "group") fail("bad_request", "DMs can't be archived");
-    conversations.push(c);
-  }
-  let changed = 0;
-  for (const c of new Map(conversations.map((c) => [c._id, c])).values()) {
-    if ((c.archivedAt !== undefined) === archive) continue;
-    await ctx.db.patch(c._id, archive ? { archivedAt: Date.now(), archivedBy: person._id } : { archivedAt: undefined, archivedBy: undefined });
-    changed++;
-  }
-  return changed;
-}
-
-const archiveArgs = { adminToken: v.string(), as: v.string(), conversationIds: v.array(v.string()) };
-
-export const archiveConversation = mutation({
-  args: archiveArgs,
-  handler: async (ctx, args) => ({ archived: await setArchived(ctx, args, true) }),
-});
-
-export const unarchiveConversation = mutation({
-  args: archiveArgs,
-  handler: async (ctx, args) => ({ unarchived: await setArchived(ctx, args, false) }),
+/** Every conversation, most recent first. */
+export const list = query({
+  args: { adminToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireAdmin(args.adminToken);
+    const all = await ctx.db.query("conversations").collect();
+    all.sort((a, b) => b.lastAt - a.lastAt);
+    return { conversations: await Promise.all(all.map((c) => summary(ctx, c, c.lastSeq))) };
+  },
 });
 
 /** A conversation's latest messages, each with the state of every delivery it created. */

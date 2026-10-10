@@ -528,48 +528,54 @@ describe("web", () => {
   });
 });
 
-describe("archive", () => {
-  const ids = async (t: T, includeArchived?: boolean) =>
-    (await t.query(api.conversations.list, { adminToken: ADMIN, ...(includeArchived ? { includeArchived } : {}) })).conversations.map((c) => c.id);
+describe("delete", () => {
+  const del = (t: T, conversationIds: string[], over: Record<string, unknown> = {}) =>
+    t.mutation(api.conversations.deleteConversation, { adminToken: ADMIN, as: "lee", conversationIds, ...over });
 
-  it("hides archived groups from the list until unarchived, recording who and when", async () => {
-    const t = await setup();
-    const g1 = await group(t);
-    const g2 = await group(t);
-    expect(await t.mutation(api.conversations.archiveConversation, { adminToken: ADMIN, as: "lee", conversationIds: [g1, g2, g1] })).toEqual({ archived: 2 });
-    expect(await ids(t)).toEqual([]);
-    const all = (await t.query(api.conversations.list, { adminToken: ADMIN, includeArchived: true })).conversations;
-    expect(all.map((c) => [c.id, c.archivedBy, c.archivedAt]).sort()).toEqual(
-      [[g1, "lee", Date.parse("2026-09-30T12:00:00Z")], [g2, "lee", Date.parse("2026-09-30T12:00:00Z")]].sort(),
-    );
-    expect(await t.mutation(api.conversations.archiveConversation, { adminToken: ADMIN, as: "lee", conversationIds: [g1] })).toEqual({ archived: 0 });
-    expect(await t.mutation(api.conversations.unarchiveConversation, { adminToken: ADMIN, as: "lee", conversationIds: [g2] })).toEqual({ unarchived: 1 });
-    const listed = (await t.query(api.conversations.list, { adminToken: ADMIN })).conversations;
-    expect(listed.map((c) => c.id)).toEqual([g2]);
-    expect(listed[0]).not.toHaveProperty("archivedAt");
-    expect(listed[0]).not.toHaveProperty("archivedBy");
-  });
-
-  it("still opens and accepts posts in an archived group, without unarchiving it", async () => {
+  it("removes the group and everything in it, so nothing is left to deliver or wake", async () => {
     const t = await setup();
     const g = await group(t);
-    await t.mutation(api.conversations.archiveConversation, { adminToken: ADMIN, as: "lee", conversationIds: [g] });
-    await t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["b"], text: "still here" });
-    expect((await t.query(api.conversations.view, { adminToken: ADMIN, conversationId: g })).messages).toHaveLength(1);
-    expect(await ids(t)).toEqual([]);
-    expect(await ids(t, true)).toEqual([g]);
+    const keep = await group(t);
+    const sent = await t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["lee", "b", "c"], text: "status?" });
+    await t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: keep, to: ["b"], text: "other" });
+    expect((await work(t)).length + (await work(t, m2)).length).toBe(3);
+
+    expect(await del(t, [g, g])).toEqual({ deleted: 1 });
+
+    const ids = (await t.query(api.conversations.list, { adminToken: ADMIN })).conversations.map((c) => c.id);
+    expect(ids).toEqual([keep]);
+    expect((await work(t)).map((d) => d.recipient)).toEqual(["b"]);
+    expect(await work(t, m2)).toEqual([]);
+    const left = await t.run(async (ctx) => ({
+      messages: (await ctx.db.query("messages").collect()).filter((m) => m.conversationId === g).length,
+      deliveries: (await ctx.db.query("deliveries").collect()).filter((d) => d.conversationId === g).length,
+      inbox: (await ctx.db.query("inbox").collect()).filter((i) => i.conversationId === g).length,
+      members: (await ctx.db.query("members").collect()).filter((m) => m.conversationId === g).length,
+      waits: (await ctx.db.query("waits").collect()).filter((w) => w.messageId === sent.message.id).length,
+    }));
+    expect(left).toEqual({ messages: 0, deliveries: 0, inbox: 0, members: 0, waits: 0 });
+    expect(await errorCode(t.query(api.conversations.view, { adminToken: ADMIN, conversationId: g }))).toBe("unknown_conversation");
   });
 
-  it("refuses DMs, agents, a wrong token and oversized batches, changing nothing", async () => {
+  it("answers into a deleted group fail as unknown, not a crash", async () => {
+    const t = await setup();
+    const g = await group(t);
+    const sent = await t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["b"], text: "status?" });
+    await del(t, [g]);
+    expect(await errorCode(t.mutation(api.connector.reply, { machine: m1, as: "b", messageId: sent.message.id, text: "done" }))).toBe("unknown_message");
+    expect(await errorCode(t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["b"], text: "again" }))).toBe("unknown_conversation");
+    expect(await errorCode(del(t, [g]))).toBe("unknown_conversation");
+  });
+
+  it("refuses DMs, agents, a wrong token and oversized batches, deleting nothing", async () => {
     const t = await setup();
     const g = await group(t);
     const dm = (await t.mutation(api.conversations.openDm, { adminToken: ADMIN, a: "lee", b: "a" })).conversation.id;
-    const archive = (over: Record<string, unknown>) =>
-      errorCode(t.mutation(api.conversations.archiveConversation, { adminToken: ADMIN, as: "lee", conversationIds: [g], ...over }));
-    expect(await archive({ conversationIds: [g, dm] })).toBe("bad_request");
-    expect(await archive({ as: "a" })).toBe("bad_request");
-    expect(await archive({ adminToken: "wrong" })).toBe("plain: admin token rejected");
-    expect(await archive({ conversationIds: Array(101).fill(g) })).toBe("bad_request");
-    expect((await ids(t)).sort()).toEqual([g, dm].sort());
+    expect(await errorCode(del(t, [g, dm]))).toBe("bad_request");
+    expect(await errorCode(del(t, [g], { as: "a" }))).toBe("bad_request");
+    expect(await errorCode(del(t, [g], { adminToken: "wrong" }))).toBe("plain: admin token rejected");
+    expect(await errorCode(del(t, Array(101).fill(g)))).toBe("bad_request");
+    const ids = (await t.query(api.conversations.list, { adminToken: ADMIN })).conversations.map((c) => c.id);
+    expect(ids.sort()).toEqual([g, dm].sort());
   });
 });

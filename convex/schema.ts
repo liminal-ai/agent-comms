@@ -49,9 +49,6 @@ export default defineSchema({
     lastSeq: v.number(),
     lastAt: v.number(),
     createdAt: v.number(),
-    /** Groups only: when a person archived it. Archived groups leave the web list; posting still works. */
-    archivedAt: v.optional(v.number()),
-    archivedBy: v.optional(v.id("participants")),
   }).index("by_dmKey", ["dmKey"]),
 
   members: defineTable({
