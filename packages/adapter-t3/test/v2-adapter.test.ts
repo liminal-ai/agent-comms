@@ -47,6 +47,9 @@ class FakeV2 implements V2Client {
   lateSteerDone = false;
   /** A successful steer whose target run then finishes at once, while the event stream is silent. */
   steerThenDone = false;
+  /** A steer whose target finishes at once, its events delivered before the dispatch returns; the next snapshot read is stale. */
+  steerThenDoneLive = false;
+  private staleNext: V2Thread | undefined;
   /** Events are recorded but not delivered to subscribers (a lagging stream). */
   muted = false;
   failResubscribes = 0;
@@ -106,7 +109,13 @@ class FakeV2 implements V2Client {
     return true;
   }
   async getThread(id: string) {
-    return id === this.id ? structuredClone(this.thread) : null;
+    if (id !== this.id) return null;
+    if (this.staleNext) {
+      const stale = this.staleNext;
+      this.staleNext = undefined;
+      return stale;
+    }
+    return structuredClone(this.thread);
   }
   async dispatch(id: string, m: { commandId: string; messageId: string; text: string; steer?: string }) {
     if (this.unreachable > 0) {
@@ -141,6 +150,12 @@ class FakeV2 implements V2Client {
       }
       this.thread.messages.push({ id: m.messageId, role: "user", runId: target.id });
       this.emit({ type: "message", message: { id: m.messageId, role: "user", runId: target.id } });
+      if (this.steerThenDoneLive) {
+        this.staleNext = structuredClone(this.thread);
+        this.setRun(target.id, "waiting");
+        this.setRun(target.id, "completed");
+        await new Promise((r) => setTimeout(r, 30)); // the events reach the subscriber before we return
+      }
       if (this.steerThenDone) {
         this.muted = true;
         this.setRun(target.id, "waiting");
@@ -358,6 +373,16 @@ describe("T3 V2 adapter: live", () => {
     assert.equal(h._tag, "aborted");
     assert.equal(confirmed.length, 0);
     assert.equal(t3.dispatched.length, 0);
+  });
+
+  it("a steer whose run's end was already streamed is placed from a current snapshot, not a stale one", async () => {
+    const { t3, adapter } = setup();
+    t3.human("lee");
+    t3.steerThenDoneLive = true;
+    const h = (await adapter.handOff(target, delivery())) as { _tag: string; turnId: string; steered?: boolean };
+    assert.equal(h.steered, true);
+    const outcome = await Promise.race([adapter.awaitOutcome(target, delivery(), h.turnId), new Promise((r) => setTimeout(() => r("timeout"), 3_000))]);
+    assert.deepEqual(outcome, { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
   });
 
   it("losing the idle race queues our message as its own run: accepted, not ambiguous", async () => {

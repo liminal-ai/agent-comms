@@ -309,7 +309,10 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
           let snapshot: V2Thread | null = null;
           while (Date.now() < deadline) {
             snapshot = await client.getThread(threadId).catch(() => null);
-            found = snapshot ? find(snapshot, messageId) : undefined;
+            // Only a snapshot at least as new as the events already applied: an older one can't be loaded,
+            // and the run's terminal event may already have gone by before we adopted it.
+            const current = !!snapshot && snapshot.snapshotSequence >= tracker.lastSequence;
+            found = current ? find(snapshot!, messageId) : undefined;
             if (found?.run || found?.steeredInto) break;
             await new Promise((r) => setTimeout(r, 100));
           }
