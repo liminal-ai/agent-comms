@@ -214,10 +214,14 @@ export const receive = mutation({
     const oldest = (a: Doc<"deliveries">, b: Doc<"deliveries">) => a.createdAt - b.createdAt || a._creationTime - b._creationTime || a._id.localeCompare(b._id);
     const offers: Doc<"deliveries">[] = [];
     if (me.state === "active") {
-      offers.push(...(await ctx.db.query("deliveries")
-        .withIndex("by_recipient_state", (q) => q.eq("recipientId", me._id).eq("state", "pending"))
-        .filter((q) => q.or(q.eq(q.field("target"), undefined), q.eq(q.field("target"), me.home)))
-        .take(limit + 1)).filter(eligible));
+      const pending = () => ctx.db.query("deliveries")
+        .withIndex("by_recipient_state", (q) => q.eq("recipientId", me._id).eq("state", "pending"));
+      const home = (q: Parameters<Parameters<ReturnType<typeof pending>["filter"]>[0]>[0]) =>
+        q.or(q.eq(q.field("target"), undefined), q.eq(q.field("target"), me.home));
+      // Urgent ones (`comms send --urgent`) first, even behind a long queue of older work.
+      const urgent = (await pending().filter((q) => q.and(q.eq(q.field("urgent"), true), home(q))).take(limit + 1)).filter(eligible);
+      const seen = new Set(urgent.map((d) => d._id));
+      offers.push(...urgent, ...(await pending().filter(home).take(limit + 1)).filter((d) => eligible(d) && !seen.has(d._id)));
     }
     // A pause permits recovery of previously offered work. Retirement offers
     // nothing new; a previously forwarded claim can still be acknowledged.
@@ -230,7 +234,7 @@ export const receive = mutation({
         ))
         .take(limit + 1)).filter(eligible));
     }
-    offers.sort(oldest);
+    offers.sort((a, b) => Number(b.urgent === true) - Number(a.urgent === true) || oldest(a, b));
     const selected = offers.slice(0, limit);
     const deliveries: Responses["receive"]["deliveries"] = [];
     for (const d of selected) {

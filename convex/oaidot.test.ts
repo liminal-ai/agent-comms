@@ -73,6 +73,15 @@ describe("oaidot pull receipt lifecycle", () => {
     expect(await receive(t)).toEqual({ deliveries: [], hasMore: false });
   });
 
+  it("offers an urgent request before older ones, even behind a long queue", async () => {
+    const t = await setup();
+    for (let i = 0; i < 5; i++) { at(i); await send(t, `question ${i}`); }
+    at(10);
+    const stop = await t.mutation(api.connector.send, { machine: m1, as: "a", to: ["dot"], text: "STOP", urgent: true });
+    const first = await receive(t);
+    expect(first.deliveries.map((d) => d.id)).toEqual([stop.deliveries[0]!.id]);
+  });
+
   it("validates bounds, credentials, participant home, and first-class harness", async () => {
     const t = await setup();
     for (const limit of [0, 21, 1.5]) expect(await errorCode(receive(t, { limit }))).toBe("bad_request");
