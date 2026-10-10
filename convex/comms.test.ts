@@ -621,6 +621,18 @@ describe("delete", () => {
       });
     await fill(other, 600);
     await fill(busy, 501);
+    // 600 finished answers (delivered, never collected) don't count against the cap.
+    const answered = await group(t, ["lee", "a", "b"]);
+    await t.run(async (ctx) => {
+      const id = ctx.db.normalizeId("conversations", answered)!;
+      const people = await ctx.db.query("participants").collect();
+      const [a, b] = ["a", "b"].map((name) => people.find((p) => p.name === name)!);
+      for (let seq = 1; seq <= 600; seq++) {
+        const messageId = await ctx.db.insert("messages", { conversationId: id, seq, senderId: a._id, recipientIds: [b._id], kind: "answer", text: "x", attachments: [], origin: { via: "cli" }, createdAt: seq } as never);
+        await ctx.db.insert("deliveries", { messageId, conversationId: id, recipientId: b._id, collect: false, state: "delivered", at: seq, createdAt: seq });
+      }
+    });
+    expect(await del(t, [answered])).toEqual({ deleted: 1 });
     expect(await del(t, [empty])).toEqual({ deleted: 1 });
     expect(await errorCode(del(t, [busy]))).toBe("bad_request");
     const ids = (await t.query(api.conversations.list, { adminToken: ADMIN })).conversations.map((c) => c.id);

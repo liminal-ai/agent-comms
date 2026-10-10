@@ -125,8 +125,8 @@ export default defineSchema({
     .index("by_recipient_state_collect", ["recipientId", "state", "collect"])
     .index("by_target_state_collect", ["target.machine", "state", "collect"])
     .index("by_message", ["messageId"])
-    // Deleting a group: its deliveries still in flight.
-    .index("by_conversation_state", ["conversationId", "state"])
+    // Deleting a group: its deliveries still in flight (a `delivered` answer is finished: collect false).
+    .index("by_conversation_state_collect", ["conversationId", "state", "collect"])
     .index("by_state_at", ["state", "at"])
     // Alerts (follow-up 2, 3): what hasn't been reported yet, so every scan makes progress.
     .index("by_state_uncertainReported", ["state", "uncertainReported"])

@@ -126,7 +126,9 @@ export const deleteConversation = mutation({
       for (const state of LIVE_STATES)
         for (const d of await ctx.db
           .query("deliveries")
-          .withIndex("by_conversation_state", (q) => q.eq("conversationId", id).eq("state", state))
+          .withIndex("by_conversation_state_collect", (q) =>
+            state === "delivered" ? q.eq("conversationId", id).eq("state", state).eq("collect", true) : q.eq("conversationId", id).eq("state", state),
+          )
           .take(MAX_LIVE_DELIVERIES + 1 - live)) {
           if (++live > MAX_LIVE_DELIVERIES)
             fail("bad_request", `more than ${MAX_LIVE_DELIVERIES} deliveries are still in flight in these groups; delete fewer at a time`);
@@ -139,7 +141,7 @@ export const deleteConversation = mutation({
 
 /** How many in-flight deliveries one delete call removes at once (each also clears its wait results). */
 const MAX_LIVE_DELIVERIES = 500;
-/** Delivery states an agent, connector or relay can still act on. */
+/** Delivery states an agent, connector or relay can still act on (`delivered` only for requests, see above). */
 const LIVE_STATES = ["pending", "claimed", "delivered", "ambiguous", "uncertain"] as const;
 
 async function removeDelivery(ctx: MutationCtx, id: Id<"deliveries">): Promise<void> {
