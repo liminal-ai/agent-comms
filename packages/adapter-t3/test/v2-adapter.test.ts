@@ -41,6 +41,8 @@ class FakeV2 implements V2Client {
   forgetReceipts = false;
   /** Fail the next dispatches before they reach T3 (nothing committed). */
   unreachable = 0;
+  /** The steer target ends just before our dispatch: T3 turns steer_active into start_immediately. */
+  lateSteer = false;
   failResubscribes = 0;
   eventsGone = false;
   dispatched: { commandId: string; messageId: string; text: string; steer?: string }[] = [];
@@ -113,7 +115,8 @@ class FakeV2 implements V2Client {
     }
     assert.equal(id, this.id);
     this.dispatched.push(m);
-    if (m.steer) {
+    if (m.steer && this.lateSteer) this.newRun(m.messageId);
+    else if (m.steer) {
       const target = this.thread.runs.find((r) => r.id === m.steer);
       if (!target || !["starting", "running"].includes(target.status)) {
         this.receipts.set(m.commandId, { rejected: "target run is not active" });
@@ -292,6 +295,17 @@ describe("T3 V2 adapter: live", () => {
     assert.equal(t3.dispatched.at(-1)!.steer, undefined);
     assert.equal(t3.runOf(messageIdFor("d_1"))!.id, h.turnId);
     assert.doesNotMatch(t3.dispatched.at(-1)!.text, /inside your current turn/);
+  });
+
+  it("a steer T3 turned into its own run (target ended first) is not reported steered", async () => {
+    const { t3, adapter } = setup();
+    t3.human("lee");
+    t3.lateSteer = true;
+    const h = (await adapter.handOff(target, delivery())) as { _tag: string; turnId: string; steered?: boolean };
+    assert.equal(h._tag, "accepted");
+    assert.equal(h.steered, undefined);
+    assert.equal(t3.dispatched.at(-1)?.steer !== undefined, true);
+    assert.notEqual(h.turnId, (await t3.getThread(target.locator))!.runs[0]!.id);
   });
 
   it("losing the idle race queues our message as its own run: accepted, not ambiguous", async () => {

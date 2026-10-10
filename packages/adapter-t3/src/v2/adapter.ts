@@ -299,6 +299,27 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
           f.stop();
           return sent;
         }
+        // A steer can land as its own run: T3 turns a late steer_active into start_immediately when the
+        // target run ended first (docs/t3-v2-notes.md). Read where the message went before saying "steered".
+        let steered = false;
+        if (steer) {
+          const deadline = Date.now() + acceptTimeoutMs;
+          let found: ReturnType<typeof find> | undefined;
+          while (Date.now() < deadline) {
+            const now = await client.getThread(threadId).catch(() => null);
+            found = now ? find(now, messageId) : undefined;
+            if (found?.run || found?.steeredInto) break;
+            await new Promise((r) => setTimeout(r, 100));
+          }
+          if (found?.run) {
+            tracker.steeredRunId = undefined;
+            tracker.runId = found.run.id;
+          } else if (found?.steeredInto) steered = true;
+          else {
+            f.stop();
+            return { _tag: "lost", detail: `no run for message ${messageId} after ${acceptTimeoutMs} ms` };
+          }
+        }
         if (!(await f.wait(() => tracker.runId, acceptTimeoutMs))) {
           // The stream may be behind: T3 committed our message and its run together.
           const now = await client.getThread(threadId).catch(() => null);
@@ -312,7 +333,7 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         // An answer's delivery is never followed: stop its subscription now (3.3).
         if (delivery.message.kind === "request") following.set(delivery.id, f);
         else f.stop();
-        return { _tag: "accepted", turnId: (tracker.runId ?? tracker.steeredRunId)!, cursor, ...(steer || !tracker.runId ? { steered: true } : {}) };
+        return { _tag: "accepted", turnId: (tracker.runId ?? tracker.steeredRunId)!, cursor, ...(steered || !tracker.runId ? { steered: true } : {}) };
       } catch (error) {
         return { _tag: "lost", detail: message(error) };
       }
