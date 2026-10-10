@@ -37,6 +37,8 @@ export interface WorkItem {
   turnId?: string;
   cursor?: string;
   createdAt: number;
+  /** Sent with `--urgent`: handed over even while another delivery holds the agent. */
+  urgent?: boolean;
 }
 
 export interface ClaimResult {
@@ -191,6 +193,7 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
           ...(req.wait ? { wait: true } : {}),
           ...(req.waitMs !== undefined ? { waitMs: req.waitMs } : {}),
           ...(req.waiterTurnId !== undefined ? { waiterTurnId: req.waiterTurnId } : {}),
+          ...(req.urgent ? { urgent: true } : {}),
         }),
       ),
     reply: (req) =>

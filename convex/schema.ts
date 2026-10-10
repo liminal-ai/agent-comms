@@ -115,6 +115,8 @@ export default defineSchema({
     claimCount: v.optional(v.number()),
     /** The one fallback delivery of an answer already returned to a waiting send, unacknowledged. */
     fallback: v.optional(v.boolean()),
+    /** Sent with `--urgent`: the connector hands it over without waiting for the agent's current delivery. */
+    urgent: v.optional(v.boolean()),
     /** Follow-up 3: the alert scan has seen this delivery as uncertain / reclaimed (alerted, or an incident was already open). */
     uncertainReported: v.optional(v.boolean()),
     reclaimReported: v.optional(v.boolean()),

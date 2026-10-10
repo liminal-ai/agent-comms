@@ -370,6 +370,12 @@ const requestDecoders = {
      * one per invocation and reuses it when it retries after `unavailable`.
      */
     key: optional(idempotencyKey),
+    /**
+     * Urgent (a stop, say): each delivery skips the recipient's queue. The connector hands it
+     * over even while another delivery holds the agent, steering it into whatever turn is
+     * running; the agent answers it with `comms reply`.
+     */
+    urgent: optional(boolean),
   }),
 
   /**

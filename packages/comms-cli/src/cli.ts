@@ -36,6 +36,7 @@ export const USAGE = `usage:
   comms send  --as <me> @name "text"                         ask one participant (their DM) and wait for the answer
   comms send  --as <me> --conversation <id> [@name…] "text"  ask in a conversation; only @named members are woken
       --wait <duration>  how long to wait (default ${formatDuration(DEFAULT_WAIT_MS)}, at most ${formatDuration(MAX_WAIT_MS)}); --continue: don't wait
+      --urgent  reach a busy agent now (a stop): skips its queue and joins whatever turn it is running
   comms await --as <me> <message-id>                         wait on a send that's still waiting (from another shell)
   comms status --as <me> <message-id>                        each recipient's delivery and answer
   comms reply --as <me> <message-id> "text"                  answer a message (sets inReplyTo)
@@ -101,6 +102,7 @@ const OPTIONS = {
   json: { type: "boolean" },
   wait: { type: "string" },
   continue: { type: "boolean" },
+  urgent: { type: "boolean" },
   long: { type: "boolean" },
   every: { type: "string" },
   at: { type: "string" },
@@ -328,6 +330,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
           text: await text(rest.slice(i)),
           ...(values.conversation ? { conversationId: values.conversation } : {}),
           ...(values.continue ? {} : { wait: true, waitMs }),
+          ...(values.urgent ? { urgent: true } : {}),
         };
         let unsupported = false;
         let r = await request("send", body, { print: !body.wait, onUnsupported: () => (unsupported = true) });

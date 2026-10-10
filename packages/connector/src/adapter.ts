@@ -15,7 +15,13 @@ export interface Target {
 /** Handing a rendered delivery to the harness. */
 export type HandOff =
   /** The harness recorded our message; this is the turn it went into. `cursor`: where to resume watching after a restart. */
-  | { _tag: "accepted"; turnId: string; cursor?: string }
+  | {
+      _tag: "accepted";
+      turnId: string;
+      cursor?: string;
+      /** It joined a turn already running (not one of its own): its answer comes by `comms reply`, not from the turn. */
+      steered?: boolean;
+    }
   /** The harness refused it outright; it never ran. */
   | { _tag: "rejected"; detail: string }
   /** Not sent: the claim was lost (or the handoff cancelled) before sending. Certain it never reached the harness. */

@@ -307,7 +307,7 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         // An answer's delivery is never followed: stop its subscription now (3.3).
         if (delivery.message.kind === "request") following.set(delivery.id, f);
         else f.stop();
-        return { _tag: "accepted", turnId: (tracker.runId ?? tracker.steeredRunId)!, cursor };
+        return { _tag: "accepted", turnId: (tracker.runId ?? tracker.steeredRunId)!, cursor, ...(steer || !tracker.runId ? { steered: true } : {}) };
       } catch (error) {
         return { _tag: "lost", detail: message(error) };
       }

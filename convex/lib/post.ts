@@ -21,6 +21,8 @@ export interface PostInput {
   origin: Origin;
   /** A system participant's message: what it is (reminder fire, report, notice, alert). */
   meta?: MessageMeta;
+  /** Requests only: each delivery skips its recipient's queue (`comms send --urgent`). */
+  urgent?: boolean;
 }
 
 export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResult> {
@@ -89,6 +91,7 @@ export async function post(ctx: MutationCtx, input: PostInput): Promise<SendResu
       state: "pending",
       at: now,
       createdAt: now,
+      ...(input.urgent && input.kind === "request" ? { urgent: true } : {}),
     });
     result.deliveries.push(await stateRef(ctx, (await ctx.db.get(deliveryId))!));
   }

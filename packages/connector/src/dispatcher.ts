@@ -70,6 +70,14 @@ export const runDispatcher = (options: DispatcherOptions) =>
     let latest: WorkItem[] = [];
     /** Participant → the delivery we're working on for it. */
     const busy = new Map<string, string>();
+    /** Participant → an urgent delivery being handed over while another holds the agent. */
+    const urgentBusy = new Map<string, string>();
+    /**
+     * Deliveries steered into a turn already running, followed to that turn's end without
+     * holding their agent: the agent answers them with `comms reply`, so the next delivery
+     * (a stop, say) needn't wait for a long turn to finish.
+     */
+    const background = new Set<string>();
     /** Claims we hold, by delivery id: lets us resume without waiting out our own lease. */
     const held = new Map<string, Held>();
     /** Delivery id → don't look before this time. */
@@ -242,6 +250,17 @@ export const runDispatcher = (options: DispatcherOptions) =>
             }
             if (!(yield* markDelivered(h, result.turnId, result.cursor))) return yield* release(h);
             if (h.delivery.message.kind !== "request") return yield* release(h);
+            if (result.steered) {
+              const id = h.delivery.id;
+              background.add(id);
+              decide(id, "following", `steered into turn=${result.turnId}; agent released`);
+              yield* follow(adapter, h, result.turnId).pipe(
+                Effect.catchTag("ClaimLost", (e) => Effect.sync(() => (held.delete(e.deliveryId), log(`${e.deliveryId}: claim lost to another holder; stopped`)))),
+                Effect.ensuring(Effect.sync(() => (background.delete(id), wake()))),
+                Effect.forkScoped,
+              );
+              return;
+            }
             return yield* follow(adapter, h, result.turnId);
           }
         }
@@ -344,9 +363,31 @@ export const runDispatcher = (options: DispatcherOptions) =>
         list.push(item);
         byParticipant.set(item.recipient, list);
       }
-      for (const [participant, items] of byParticipant) {
-        if (busy.has(participant)) continue;
-        const first = items[0]!;
+      const working = new Set([...busy.values(), ...urgentBusy.values(), ...background]);
+      for (const [participant, all] of byParticipant) {
+        const items = all.filter((i) => !working.has(i.id));
+        if (items.length === 0) continue;
+        if (busy.has(participant)) {
+          // Another delivery holds the agent: only an urgent one goes now, one at a time.
+          const urgent = items.find((i) => i.urgent && i.state === "pending");
+          // T3 only: it steers into a running turn. Other harnesses would queue it behind the turn anyway.
+          if (!urgent || urgent.harness !== "t3" || urgentBusy.has(participant) || (notBefore.get(urgent.id) ?? 0) > now) continue;
+          const adapter = adapters.get(urgent.harness);
+          if (!adapter || !readiness.get(`${urgent.harness}/${participant}`)) continue;
+          urgentBusy.set(participant, urgent.id);
+          decide(urgent.id, "urgent", `not waiting for ${busy.get(participant)}`);
+          yield* work(adapter, urgent, { participant, locator: urgent.locator }).pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                urgentBusy.delete(participant);
+                wake();
+              }),
+            ),
+            Effect.forkScoped,
+          );
+          continue;
+        }
+        const first = items.find((i) => i.urgent && i.state === "pending") ?? items[0]!;
         const adapter = adapters.get(first.harness);
         if (!adapter) {
           if (!unknownHarness.has(first.harness)) log(`no adapter for ${first.harness}; @${participant}'s deliveries wait`);

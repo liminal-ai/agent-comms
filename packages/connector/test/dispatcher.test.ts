@@ -18,7 +18,7 @@ class Scripted {
   checks = 0;
   handOffWaitMs = 0;
   onHandOff: () => HandOff = () => ({ _tag: "accepted", turnId: "t1" });
-  onOutcome: () => Outcome = () => ({ _tag: "lost", detail: "scripted" });
+  onOutcome: () => Outcome | Promise<Outcome> = () => ({ _tag: "lost", detail: "scripted" });
   onCheck: () => Check = () => ({ _tag: "absent" });
   readonly adapter: HarnessAdapter = {
     harness: "t3",
@@ -87,5 +87,62 @@ describe("fix pass section 2: dispatcher", () => {
     });
     await sleep(3_000);
     expect(s.sent).toBe(0);
+  });
+});
+
+describe("reaching a busy agent (Mira #371: a stop waited 75 minutes)", () => {
+  /** An outcome that waits until the test ends the turn. */
+  const turn = () => {
+    let end!: (o: Outcome) => void;
+    const done = new Promise<Outcome>((r) => (end = r));
+    return { done, end };
+  };
+
+  it("a delivery steered into a running turn doesn't hold the agent: the next one is handed over at once", async () => {
+    const w = await world();
+    const s = new Scripted();
+    const t1 = turn();
+    s.onHandOff = () => ({ _tag: "accepted", turnId: "long-run", steered: true });
+    s.onOutcome = () => t1.done;
+    running.push(await startConnector(w.api, w.socket, 60_000, [s.adapter]));
+    const first = await call(w.socket, "send", { as: "a", to: ["tee"], text: "first" });
+    if (!first.ok) throw new Error(first.error.message);
+    await until("first handed over", async () => s.sent === 1);
+    const second = await call(w.socket, "send", { as: "a", to: ["tee"], text: "second" });
+    if (!second.ok) throw new Error(second.error.message);
+    // The long turn is still running, and the second goes in anyway.
+    await until("second handed over while the turn runs", async () => s.sent === 2, 10_000);
+    t1.end({ _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
+    const row = await until("first settled", async () => {
+      const d = await deliveryRow(w.t, first.message.conversationId, first.message.id);
+      return d?.state === "ambiguous" ? d : undefined;
+    }, 10_000);
+    expect(row.state).toBe("ambiguous");
+  });
+
+  it("an urgent delivery doesn't wait for the turn holding the agent; an ordinary one still does", async () => {
+    const w = await world();
+    const s = new Scripted();
+    const t1 = turn();
+    // The first request runs as its own turn (not steered): it holds the agent until the turn ends.
+    s.onHandOff = () => ({ _tag: "accepted", turnId: `run-${s.sent}`, ...(s.sent > 1 ? { steered: true } : {}) });
+    s.onOutcome = () => (s.sent === 1 ? t1.done : { _tag: "replied", answer: "ok" });
+    running.push(await startConnector(w.api, w.socket, 60_000, [s.adapter]));
+    const first = await call(w.socket, "send", { as: "a", to: ["tee"], text: "long job" });
+    if (!first.ok) throw new Error(first.error.message);
+    await until("first handed over", async () => s.sent === 1);
+    const ordinary = await call(w.socket, "send", { as: "a", to: ["tee"], text: "ordinary" });
+    if (!ordinary.ok) throw new Error(ordinary.error.message);
+    await sleep(2_000);
+    expect(s.sent).toBe(1);
+    const stop = await call(w.socket, "send", { as: "a", to: ["tee"], text: "STOP", urgent: true });
+    if (!stop.ok) throw new Error(stop.error.message);
+    await until("urgent handed over while the turn runs", async () => s.sent === 2, 10_000);
+    const urgentRow = await deliveryRow(w.t, stop.message.conversationId, stop.message.id);
+    expect(urgentRow?.state).not.toBe("pending");
+    const ordinaryRow = await deliveryRow(w.t, ordinary.message.conversationId, ordinary.message.id);
+    expect(ordinaryRow?.state).toBe("pending");
+    t1.end({ _tag: "replied", answer: "done" });
+    await until("ordinary goes once the turn ends", async () => s.sent === 3, 10_000);
   });
 });

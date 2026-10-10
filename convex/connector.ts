@@ -88,6 +88,7 @@ export const work = query({
       turnId?: string;
       cursor?: string;
       createdAt: number;
+      urgent?: boolean;
     }[] = [];
     const push = (d: Row, p: Doc<"participants">) => {
       if (seen.has(d._id)) return;
@@ -108,6 +109,7 @@ export const work = query({
         ...(d.turnId !== undefined ? { turnId: d.turnId } : {}),
         ...(d.cursor !== undefined ? { cursor: d.cursor } : {}),
         createdAt: d.createdAt,
+        ...(d.urgent ? { urgent: true } : {}),
       });
     };
     const ours = (d: Row) => (d.target ? d.target.machine === here : true);
@@ -549,6 +551,8 @@ export const send = mutation({
     waitMs: v.optional(v.number()),
     /** Fix pass 0.1: the waiter's running main turn, as its harness reported it to the connector. */
     waiterTurnId: v.optional(v.string()),
+    /** Each delivery skips its recipient's queue (a stop). */
+    urgent: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<Responses["send"]> => {
     const machine = await requireMachine(ctx, args.machine);
@@ -594,6 +598,7 @@ export const send = mutation({
       ...(args.attachments ? { attachments: args.attachments } : {}),
       ...(args.key !== undefined ? { idempotencyKey: args.key } : {}),
       origin: { via: args.via ?? "cli" },
+      ...(args.urgent ? { urgent: true } : {}),
     });
     if (!args.wait) return result;
     const registered = await registerWait(ctx, sender, result.message.id as Id<"messages">, waitMs, Date.now(), args.waiterTurnId);

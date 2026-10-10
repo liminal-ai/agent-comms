@@ -274,7 +274,7 @@ describe("T3 V2 adapter: live", () => {
     t3.human("lee-typed");
     const h = await adapter.handOff(target, delivery());
     const leeRun = t3.runOf("lee-typed")!.id;
-    assert.deepEqual(h, { _tag: "accepted", turnId: leeRun, cursor: (h as { cursor: string }).cursor });
+    assert.deepEqual(h, { _tag: "accepted", turnId: leeRun, cursor: (h as { cursor: string }).cursor, steered: true });
     assert.equal(t3.runOf(messageIdFor("d_1")), undefined, "no run of its own: nothing to queue");
     const sent = t3.dispatched.at(-1)!;
     assert.equal(sent.steer, leeRun);
