@@ -1,9 +1,9 @@
 import { MAX_TITLE_CHARS } from "@agent-comms/protocol";
-// Conversations, membership and Lee's posts. Admin only (the web view).
+// Conversations, membership, archiving and Lee's posts. Admin only (the web view).
 
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { type MutationCtx, mutation, query } from "./_generated/server";
 import { conversationRef, envelope, fail, getOr, participantByName, refById, requireAdmin, stateRef, summary } from "./lib/core";
 import { openDm as openDmBetween, post } from "./lib/post";
 
@@ -87,15 +87,65 @@ export const postAs = mutation({
   },
 });
 
-/** Every conversation, most recent first. */
+/** Every conversation, most recent first. Archived groups only with `includeArchived`. */
 export const list = query({
-  args: { adminToken: v.string() },
+  args: { adminToken: v.string(), includeArchived: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     await requireAdmin(args.adminToken);
-    const all = await ctx.db.query("conversations").collect();
+    const all = (await ctx.db.query("conversations").collect()).filter(
+      (c) => args.includeArchived || c.archivedAt === undefined,
+    );
     all.sort((a, b) => b.lastAt - a.lastAt);
-    return { conversations: await Promise.all(all.map((c) => summary(ctx, c, c.lastSeq))) };
+    return {
+      conversations: await Promise.all(
+        all.map(async (c) => ({
+          ...(await summary(ctx, c, c.lastSeq)),
+          ...(c.archivedAt !== undefined ? { archivedAt: c.archivedAt } : {}),
+          ...(c.archivedBy !== undefined ? { archivedBy: (await refById(ctx, c.archivedBy)).name } : {}),
+        })),
+      ),
+    };
   },
+});
+
+const MAX_ARCHIVE_BATCH = 100;
+
+/** Archive or unarchive groups as a person, all or nothing. Already in that state is a no-op. */
+async function setArchived(
+  ctx: MutationCtx,
+  args: { adminToken: string; as: string; conversationIds: string[] },
+  archive: boolean,
+): Promise<number> {
+  await requireAdmin(args.adminToken);
+  const person = await participantByName(ctx, args.as);
+  if (person.kind !== "human") fail("bad_request", "only a person archives conversations");
+  if (args.conversationIds.length > MAX_ARCHIVE_BATCH)
+    fail("bad_request", `${args.conversationIds.length} conversations; the limit is ${MAX_ARCHIVE_BATCH} per call`);
+  const conversations = [];
+  for (const id of args.conversationIds) {
+    const c = await getOr(ctx, "conversations", id);
+    if (c.kind !== "group") fail("bad_request", "DMs can't be archived");
+    conversations.push(c);
+  }
+  let changed = 0;
+  for (const c of new Map(conversations.map((c) => [c._id, c])).values()) {
+    if ((c.archivedAt !== undefined) === archive) continue;
+    await ctx.db.patch(c._id, archive ? { archivedAt: Date.now(), archivedBy: person._id } : { archivedAt: undefined, archivedBy: undefined });
+    changed++;
+  }
+  return changed;
+}
+
+const archiveArgs = { adminToken: v.string(), as: v.string(), conversationIds: v.array(v.string()) };
+
+export const archiveConversation = mutation({
+  args: archiveArgs,
+  handler: async (ctx, args) => ({ archived: await setArchived(ctx, args, true) }),
+});
+
+export const unarchiveConversation = mutation({
+  args: archiveArgs,
+  handler: async (ctx, args) => ({ unarchived: await setArchived(ctx, args, false) }),
 });
 
 /** A conversation's latest messages, each with the state of every delivery it created. */

@@ -527,3 +527,49 @@ describe("web", () => {
     );
   });
 });
+
+describe("archive", () => {
+  const ids = async (t: T, includeArchived?: boolean) =>
+    (await t.query(api.conversations.list, { adminToken: ADMIN, ...(includeArchived ? { includeArchived } : {}) })).conversations.map((c) => c.id);
+
+  it("hides archived groups from the list until unarchived, recording who and when", async () => {
+    const t = await setup();
+    const g1 = await group(t);
+    const g2 = await group(t);
+    expect(await t.mutation(api.conversations.archiveConversation, { adminToken: ADMIN, as: "lee", conversationIds: [g1, g2, g1] })).toEqual({ archived: 2 });
+    expect(await ids(t)).toEqual([]);
+    const all = (await t.query(api.conversations.list, { adminToken: ADMIN, includeArchived: true })).conversations;
+    expect(all.map((c) => [c.id, c.archivedBy, c.archivedAt]).sort()).toEqual(
+      [[g1, "lee", Date.parse("2026-09-30T12:00:00Z")], [g2, "lee", Date.parse("2026-09-30T12:00:00Z")]].sort(),
+    );
+    expect(await t.mutation(api.conversations.archiveConversation, { adminToken: ADMIN, as: "lee", conversationIds: [g1] })).toEqual({ archived: 0 });
+    expect(await t.mutation(api.conversations.unarchiveConversation, { adminToken: ADMIN, as: "lee", conversationIds: [g2] })).toEqual({ unarchived: 1 });
+    const listed = (await t.query(api.conversations.list, { adminToken: ADMIN })).conversations;
+    expect(listed.map((c) => c.id)).toEqual([g2]);
+    expect(listed[0]).not.toHaveProperty("archivedAt");
+    expect(listed[0]).not.toHaveProperty("archivedBy");
+  });
+
+  it("still opens and accepts posts in an archived group, without unarchiving it", async () => {
+    const t = await setup();
+    const g = await group(t);
+    await t.mutation(api.conversations.archiveConversation, { adminToken: ADMIN, as: "lee", conversationIds: [g] });
+    await t.mutation(api.connector.send, { machine: m1, as: "a", conversationId: g, to: ["b"], text: "still here" });
+    expect((await t.query(api.conversations.view, { adminToken: ADMIN, conversationId: g })).messages).toHaveLength(1);
+    expect(await ids(t)).toEqual([]);
+    expect(await ids(t, true)).toEqual([g]);
+  });
+
+  it("refuses DMs, agents, a wrong token and oversized batches, changing nothing", async () => {
+    const t = await setup();
+    const g = await group(t);
+    const dm = (await t.mutation(api.conversations.openDm, { adminToken: ADMIN, a: "lee", b: "a" })).conversation.id;
+    const archive = (over: Record<string, unknown>) =>
+      errorCode(t.mutation(api.conversations.archiveConversation, { adminToken: ADMIN, as: "lee", conversationIds: [g], ...over }));
+    expect(await archive({ conversationIds: [g, dm] })).toBe("bad_request");
+    expect(await archive({ as: "a" })).toBe("bad_request");
+    expect(await archive({ adminToken: "wrong" })).toBe("plain: admin token rejected");
+    expect(await archive({ conversationIds: Array(101).fill(g) })).toBe("bad_request");
+    expect((await ids(t)).sort()).toEqual([g, dm].sort());
+  });
+});
