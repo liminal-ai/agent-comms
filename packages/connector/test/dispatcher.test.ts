@@ -139,6 +139,74 @@ describe("reaching a busy agent (Mira #371: a stop waited 75 minutes)", () => {
     t1.end({ _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
   }, 40_000);
 
+  it("a recovered background turn doesn't let an ordinary delivery race a slow handoff; it joins once the holder's own turn runs", async () => {
+    const w = await world();
+    const s = new Scripted();
+    const backgroundTurn = turn();
+    const ownTurn = turn();
+    let backgroundFollowing = false;
+    let ownFollowing = false;
+    let finishHandOff!: () => void;
+    const handOffMayFinish = new Promise<void>((resolve) => { finishHandOff = resolve; });
+    const joins: { steerOnly: boolean | undefined; ownFollowing: boolean }[] = [];
+    const inner = s.adapter.handOff;
+    s.adapter = {
+      ...s.adapter,
+      handOff: (target, delivery, gate) => {
+        if (delivery.message.text === "third") joins.push({ steerOnly: gate.steerOnly, ownFollowing });
+        return inner(target, delivery, delivery.message.text === "second" ? {
+          ...gate,
+          confirm: async (cursor) => {
+            // Keep this handoff in progress even if the third send is slow on CI.
+            await handOffMayFinish;
+            return gate.confirm(cursor);
+          },
+        } : gate);
+      },
+    };
+    // Recovery finds the first delivery in someone else's long-running turn.
+    s.onHandOff = () => s.sent === 1
+      ? { _tag: "lost", detail: "connector restarted" }
+      : { _tag: "accepted", turnId: "own-run", ...(s.sent > 2 ? { steered: true } : {}) };
+    s.onCheck = () => ({ _tag: "running", turnId: "background-run", steered: true });
+    s.onOutcome = () => {
+      if (s.sent === 1) {
+        backgroundFollowing = true;
+        return backgroundTurn.done;
+      }
+      if (s.sent === 2) {
+        ownFollowing = true;
+        return ownTurn.done;
+      }
+      return { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] };
+    };
+    running.push(await startConnector(w.api, w.socket, 60_000, [s.adapter]));
+    const first = await call(w.socket, "send", { as: "a", to: ["tee"], text: "first" });
+    if (!first.ok) throw new Error(first.error.message);
+    await until("recovered turn followed in background", async () => backgroundFollowing);
+
+    s.handOffWaitMs = 2_000;
+    const second = await call(w.socket, "send", { as: "a", to: ["tee"], text: "second" });
+    if (!second.ok) throw new Error(second.error.message);
+    await until("second handoff started", async () => s.handOffs === 2);
+    // The second handoff captured its delay; a later join needn't wait again.
+    s.handOffWaitMs = 0;
+    const third = await call(w.socket, "send", { as: "a", to: ["tee"], text: "third" });
+    if (!third.ok) throw new Error(third.error.message);
+    await sleep(250);
+    expect(s.handOffs).toBe(2);
+    expect(s.sent).toBe(1);
+    expect((await deliveryRow(w.t, third.message.conversationId, third.message.id))?.state).toBe("pending");
+
+    finishHandOff();
+    await until("third joined after the holder's own turn started", async () => s.sent === 3);
+    expect(joins).toEqual([{ steerOnly: true, ownFollowing: true }]);
+    await until("third settled while both long turns still run", async () =>
+      (await deliveryRow(w.t, third.message.conversationId, third.message.id))?.state === "ambiguous");
+    backgroundTurn.end({ _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
+    ownTurn.end({ _tag: "replied", answer: "done" });
+  });
+
   it("an urgent delivery that bypasses the holder only joins a running turn; if none, it sends nothing then goes in turn", async () => {
     const w = await world();
     const s = new Scripted();
@@ -156,6 +224,7 @@ describe("reaching a busy agent (Mira #371: a stop waited 75 minutes)", () => {
     const stop = await call(w.socket, "send", { as: "a", to: ["tee"], text: "STOP", urgent: true });
     if (!stop.ok) throw new Error(stop.error.message);
     await until("urgent tried steer-only", async () => gates.includes(true), 10_000);
+    await until("urgent steer-only attempt completed", async () => s.sent === 2, 10_000);
     expect(s.sent).toBe(2);
     t1.end({ _tag: "replied", answer: "done" });
     await until("urgent handed over normally once the agent is free", async () => gates.filter((g) => !g).length >= 2 && s.sent >= 3, 15_000);

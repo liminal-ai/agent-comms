@@ -83,6 +83,8 @@ export const runDispatcher = (options: DispatcherOptions) =>
     /** Participant and home (locator) → how many turns we're following there: an urgent delivery for that home can join one. */
     const turnsRunning = new Map<string, number>();
     const turnKey = (participant: string, locator: string) => `${participant}\u0000${locator}`;
+    /** Deliveries holding their agent whose own turn is running (handed over and being followed): only then may another join it. */
+    const ownTurnRunning = new Set<string>();
     /** Claims we hold, by delivery id: lets us resume without waiting out our own lease. */
     const held = new Map<string, Held>();
     /** Delivery id → don't look before this time. */
@@ -191,6 +193,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
       const p = turnKey(h.target.participant, h.target.locator);
       return Effect.gen(function* () {
         turnsRunning.set(p, (turnsRunning.get(p) ?? 0) + 1);
+        if (!background.has(h.delivery.id)) ownTurnRunning.add(h.delivery.id);
         wake();
         const outcome = yield* withLease(h, adapter.awaitOutcome(h.target, h.delivery, turnId));
         if (outcome._tag === "lost") return log(`${h.delivery.id}: lost sight of turn ${turnId} (${outcome.detail}); will check later`);
@@ -199,6 +202,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
       }).pipe(
         Effect.ensuring(
           Effect.sync(() => {
+            ownTurnRunning.delete(h.delivery.id);
             const n = (turnsRunning.get(p) ?? 1) - 1;
             if (n > 0) turnsRunning.set(p, n);
             else turnsRunning.delete(p);
@@ -401,7 +405,11 @@ export const runDispatcher = (options: DispatcherOptions) =>
           // And only once a turn is running there, in the urgent's own home, to join: a holder still handing
           // over hasn't started one, a turn in an old home (after a rebind) isn't the one it would reach,
           // and two handoffs to an idle thread would each start a run, the urgent one queued behind.
-          if (!urgent || urgentBusy.has(participant) || !turnsRunning.has(turnKey(participant, urgent.locator)) || (notBefore.get(urgent.id) ?? 0) > now) continue;
+          // The holder's own turn must be running: a turn followed in the background (a steered delivery, say after a
+          // restart) doesn't count, or this would race the holder's handoff and break the order.
+          const holder = busy.get(participant);
+          if (!urgent || urgentBusy.has(participant) || !holder || !ownTurnRunning.has(holder)) continue;
+          if (!turnsRunning.has(turnKey(participant, urgent.locator)) || (notBefore.get(urgent.id) ?? 0) > now) continue;
           const adapter = adapters.get(urgent.harness);
           // Only an adapter that steers into a running turn (T3 protocol 2); others would queue it behind the turn anyway.
           if (!adapter?.steersIntoRunningTurn || !readiness.get(`${urgent.harness}/${participant}`)) continue;

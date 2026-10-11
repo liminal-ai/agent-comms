@@ -36,7 +36,7 @@ export const USAGE = `usage:
   comms send  --as <me> @name "text"                         ask one participant (their DM) and wait for the answer
   comms send  --as <me> --conversation <id> [@name…] "text"  ask in a conversation; only @named members are woken
       --wait <duration>  how long to wait (default ${formatDuration(DEFAULT_WAIT_MS)}, at most ${formatDuration(MAX_WAIT_MS)}); --continue: don't wait
-      --urgent  go first among this agent's waiting messages (a stop). On T3 every message already joins a busy agent's running turn
+      --urgent  go first among this agent's waiting messages (a stop). On T3 protocol 2 every message already joins a busy agent's running turn
   comms await --as <me> <message-id>                         wait on a send that's still waiting (from another shell)
   comms status --as <me> <message-id>                        each recipient's delivery and answer
   comms reply --as <me> <message-id> "text"                  answer a message (sets inReplyTo)
