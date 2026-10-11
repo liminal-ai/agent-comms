@@ -5,6 +5,7 @@ import {
   claim,
   conversationKind,
   deliveryState,
+  harness,
   home,
   messageKind,
   origin,
@@ -292,6 +293,8 @@ export default defineSchema({
     /** SHA-256 of an optional watch secret: accepted only by `connector:work`, so a watcher (agent-wake-relay) never holds the power to act as the machine. */
     watchSecretHash: v.optional(v.string()),
     lastSeenAt: v.optional(v.number()),
+    /** Harnesses whose adapter on this machine can deliver an urgent request into a running turn (reported by heartbeat). */
+    urgentHarnesses: v.optional(v.array(harness)),
     createdAt: v.number(),
   }).index("by_machineId", ["machineId"]),
 });

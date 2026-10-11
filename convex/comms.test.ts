@@ -657,7 +657,13 @@ describe("urgent", () => {
     const t = await setup();
     const send = (to: string) => t.mutation(api.connector.send, { machine: m1, as: "a", to: [to], text: "stop", urgent: true });
     expect(await errorCode(send("b"))).toBe("bad_request");
-    const ok = await t.mutation(api.connector.send, { machine: m2, as: "c", to: ["a"], text: "stop", urgent: true });
-    expect(ok.deliveries).toHaveLength(1);
+    // @a is a t3 home on m1: refused until m1's heartbeat says its t3 adapter can join a running turn.
+    const toA = () => t.mutation(api.connector.send, { machine: m2, as: "c", to: ["a"], text: "stop", urgent: true });
+    expect(await errorCode(toA())).toBe("bad_request");
+    await t.mutation(api.connector.heartbeat, { machine: m1, urgentHarnesses: ["t3"] });
+    expect((await toA()).deliveries).toHaveLength(1);
+    // A connector that can't (protocol 1, or an older connector) reports none, and it's refused again.
+    await t.mutation(api.connector.heartbeat, { machine: m1 });
+    expect(await errorCode(toA())).toBe("bad_request");
   });
 });

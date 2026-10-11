@@ -16,7 +16,7 @@ import { machineSeen, nextPresence, profilePatch, registryEntry } from "./lib/re
 import { confirm, endResult, markPrinted, registerWait, requireWait, takeAnswer, touch, waitOn, waitShape } from "./lib/waits";
 import { applyAction, createReminder, listFor, mayChange, mayRead, recordFireAnswer, reminderDetail, reminderShape } from "./lib/reminders";
 import { openDm, post, replayed } from "./lib/post";
-import { attachment, enteredInput, failureReason, machineAuth, reminderAction, via } from "./validators";
+import { attachment, enteredInput, failureReason, harness, machineAuth, reminderAction, via } from "./validators";
 
 export const DEFAULT_LEASE_MS = 60_000;
 const MAX_LEASE_MS = 10 * 60_000;
@@ -25,10 +25,10 @@ const MAX_LEASE_MS = 10 * 60_000;
 // Presence and directory
 
 export const heartbeat = mutation({
-  args: { machine: machineAuth },
+  args: { machine: machineAuth, urgentHarnesses: v.optional(v.array(harness)) },
   handler: async (ctx, args) => {
     const machine = await requireMachine(ctx, args.machine);
-    await ctx.db.patch(machine._id, { lastSeenAt: Date.now() });
+    await ctx.db.patch(machine._id, { lastSeenAt: Date.now(), urgentHarnesses: args.urgentHarnesses ?? [] });
     return {};
   },
 });
@@ -586,8 +586,14 @@ export const send = mutation({
       recipients.push(normalized);
     }
     if (args.urgent) {
-      // Only homes whose delivery path honors it: T3 steers into the running turn, oaidot offers it first.
-      const unsupported = recipients.filter((r) => r.kind === "agent" && r.home && r.home.harness !== "t3" && r.home.harness !== "oaidot");
+      // Only homes whose delivery path honors it: oaidot offers it first (here, in receive); a connector adapter only
+      // when its machine's heartbeat says it can join a running turn (T3 protocol 2 on a connector that knows urgent).
+      const unsupported: Doc<"participants">[] = [];
+      for (const r of recipients) {
+        if (r.kind !== "agent" || !r.home || r.home.harness === "oaidot") continue;
+        const m = await ctx.db.query("machines").withIndex("by_machineId", (q) => q.eq("machineId", r.home!.machine)).unique();
+        if (!m?.urgentHarnesses?.includes(r.home.harness)) unsupported.push(r);
+      }
       if (unsupported.length > 0) {
         fail("bad_request", `--urgent can't reach ${unsupported.map((r) => `@${r.name} (${r.home!.harness})`).join(", ")} ahead of its current work; send without --urgent`);
       }

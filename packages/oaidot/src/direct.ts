@@ -56,7 +56,8 @@ export async function makeNativeTransport(
         }
         // This asserts only that the machine transport is alive. A native host
         // must never advertise the actual parent's presence on its behalf.
-        yield* api.heartbeat.pipe(
+        // oaidot's urgent ordering is the server's (receive), not a connector adapter's.
+        yield* api.heartbeat([]).pipe(
           Effect.catch(() => Effect.sync(() => log("machine heartbeat unavailable"))),
           Effect.repeat(Schedule.spaced(options.heartbeatMs)),
           Effect.forkScoped,
