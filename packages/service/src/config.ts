@@ -2,7 +2,7 @@
 //
 // local:  { "mode": "local", "dataDir": "...", "owner": "lee", "web": { "port": 15990 },
 //           "machine"?: "local", "environment"?: "local", "socket"?: "...",
-//           "adapters"?: ["t3"], "t3"?: {...}, "leaseMs"?, "pollWaitMs"? }
+//           "adapters"?: ["t3", "claude-cloud"], "t3"?: {...}, "claudeCloud"?: {"bin"?: "..."}, "leaseMs"?, "pollWaitMs"? }
 // convex: { "mode": "convex", "connector": "<connector.json>", "web"?: "<web.json>" }
 //         (the existing configs, unchanged)
 
