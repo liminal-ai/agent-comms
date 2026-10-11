@@ -563,7 +563,11 @@ export class Coordinator {
         // receiver that processed it and only lost the response would dedupe, so the waker forgets it and the
         // retry's event for it is a new one. (A refusal or give-up drops it in wakeAgainForHandoffs instead.)
         const stale = rest.filter((id) => this.owedAfterWake.has(id));
-        if (stale.length) this.o.retire?.(stale);
+        if (stale.length) {
+          this.o.retire?.(stale);
+          // The wake id too: the retry covers the same ids, so it would otherwise reuse the failed attempt's id.
+          this.wakeId = null;
+        }
         this.schedule(delay);
       }
     } finally {

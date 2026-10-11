@@ -285,6 +285,31 @@ describe("coordinator", () => {
       assert.equal(calls.length, 2);
     });
 
+    it("an overdue notice handed over while its overdue wake is out, which then fails, is retried as a new event", async () => {
+      const timers = new FakeTimers();
+      const calls: { ids: string[]; wakeId: string }[] = [];
+      let release: (e: Error) => void = () => {};
+      const c = new Coordinator({
+        participant: "grok", timers, log: () => {}, renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000,
+        wake: async (ids, opts) => {
+          calls.push({ ids, wakeId: opts?.wakeId ?? "" });
+          if (calls.length === 1) await new Promise<void>((_, reject) => (release = reject));
+        },
+      });
+      c.update([st("n1", "pending", { collect: false })]);
+      await timers.advance(5 * 60_000 + 2_000);
+      assert.equal(calls.length, 1, "the overdue wake is out");
+      c.update([]); // handed over while it is out
+      release(new Error("socket hang up")); // the receiver may have processed it
+      await new Promise((r) => setImmediate(r));
+      await timers.advance(30_000);
+      assert.equal(calls.length, 2);
+      assert.deepEqual(calls[1]!.ids, ["n1"]);
+      assert.notEqual(calls[1]!.wakeId, calls[0]!.wakeId, "the retry carrying the handoff is a new event");
+      await timers.advance(60 * 60_000);
+      assert.equal(calls.length, 2);
+    });
+
     it("an overdue request woken before its handoff that then vanishes (answered or rejected) owes nothing more", async () => {
       const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
       c.update([st("r1", "pending")]);
