@@ -188,7 +188,10 @@ export class Coordinator {
       const taken = this.o.wakeAt === "delivered" ? this.collectOf.get(id) !== true : last !== "pending";
       // Woken because its handoff was overdue (before it reached the inbox): its handoff still owes the agent a wake.
       const overdueWoken = this.o.wakeAt === "delivered" && this.overdue.has(id) && (this.outstanding.get(id) ?? 0) > 0;
-      if (this.transitioned.has(id) || ((this.outstanding.get(id) === 0 || overdueWoken) && taken)) {
+      // With `wakeAt: "delivered"` a request that vanishes was collected (or rejected): never owed, even if its handoff
+      // was noted during a wake (`transitioned`).
+      const collected = this.o.wakeAt === "delivered" && this.collectOf.get(id) === true;
+      if ((this.transitioned.has(id) && !collected) || ((this.outstanding.get(id) === 0 || overdueWoken) && taken)) {
         this.owed.add(id);
         // A wake still out for it was built before this handoff (an overdue wake, while it waited for the connector):
         // that wake doesn't pay the debt; the next one does.
