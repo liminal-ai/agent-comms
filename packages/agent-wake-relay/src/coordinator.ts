@@ -388,6 +388,7 @@ export class Coordinator {
       this.outstanding.set(id, 0);
       this.stateAtWake.set(id, "delivered");
       this.handedOver.add(id);
+      this.overdue.delete(id); // handed over: the wake scheduled here is its handoff wake
       again.push(id);
     }
     if (!again.length) return;
