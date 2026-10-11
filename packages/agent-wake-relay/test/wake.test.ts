@@ -263,6 +263,28 @@ describe("coordinator", () => {
       assert.equal(wakes.length, 2, "its disappearance owes nothing more");
     });
 
+    it("an overdue notice handed over while its failed overdue wake awaits a retry is woken with a new event", async () => {
+      const timers = new FakeTimers();
+      const calls: { ids: string[]; wakeId: string }[] = [];
+      const c = new Coordinator({
+        participant: "grok", timers, log: () => {}, renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000,
+        wake: async (ids, opts) => {
+          calls.push({ ids, wakeId: opts?.wakeId ?? "" });
+          if (calls.length === 1) throw new Error("socket hang up"); // the receiver may have processed it
+        },
+      });
+      c.update([st("n1", "pending", { collect: false })]);
+      await timers.advance(5 * 60_000 + 2_000);
+      assert.equal(calls.length, 1, "the overdue wake went out and its response was lost");
+      c.update([]); // handed over during the retry backoff
+      await timers.advance(30_000);
+      assert.equal(calls.length, 2);
+      assert.deepEqual(calls[1]!.ids, ["n1"]);
+      assert.notEqual(calls[1]!.wakeId, calls[0]!.wakeId, "the handoff wake is a new event, not the retained one");
+      await timers.advance(60 * 60_000);
+      assert.equal(calls.length, 2);
+    });
+
     it("an overdue request woken before its handoff that then vanishes (answered or rejected) owes nothing more", async () => {
       const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
       c.update([st("r1", "pending")]);

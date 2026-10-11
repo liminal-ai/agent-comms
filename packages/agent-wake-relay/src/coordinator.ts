@@ -194,6 +194,9 @@ export class Coordinator {
         // that wake doesn't pay the debt; the next one does.
         const overdueInFlight = this.o.wakeAt === "delivered" && this.overdue.has(id) && this.inFlightStates?.has(id) === true;
         if (this.transitioned.has(id) || overdueInFlight) this.owedAfterWake.add(id);
+        // Not in flight but waiting on a retry: the retained event predates this handoff, so the wake for it must be a
+        // new event (a receiver that processed the earlier attempt and only lost the response would dedupe it).
+        else if (this.o.wakeAt === "delivered" && this.overdue.has(id)) handoffs.push(id);
         if (!this.inFlightStates?.has(id)) fresh++;
       }
       this.outstanding.delete(id);
