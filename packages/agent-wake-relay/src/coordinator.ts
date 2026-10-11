@@ -562,7 +562,16 @@ export class Coordinator {
         // An id handed over and gone while the wake was out: the retry would resend the same event, which a
         // receiver that processed it and only lost the response would dedupe, so the waker forgets it and the
         // retry's event for it is a new one. (A refusal or give-up drops it in wakeAgainForHandoffs instead.)
-        const stale = rest.filter((id) => this.owedAfterWake.has(id));
+        // An id handed over while the wake was out but still listed (`transitioned`, e.g. a request now `delivered`):
+        // the retry is the handoff wake, so it must be a new event too, and needs no separate wake after it.
+        const handed = rest.filter((id) => this.transitioned.has(id));
+        for (const id of handed) {
+          this.transitioned.delete(id);
+          this.stateAtWake.set(id, "delivered");
+          this.handedOver.add(id);
+          this.overdue.delete(id);
+        }
+        const stale = rest.filter((id) => this.owedAfterWake.has(id) || handed.includes(id));
         if (stale.length) {
           this.o.retire?.(stale);
           // The wake id too: the retry covers the same ids, so it would otherwise reuse the failed attempt's id.

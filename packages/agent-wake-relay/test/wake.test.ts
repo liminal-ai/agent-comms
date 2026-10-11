@@ -310,6 +310,31 @@ describe("coordinator", () => {
       assert.equal(calls.length, 2);
     });
 
+    it("an overdue request seen delivered while its overdue wake is out, which then fails, is retried once as a new event", async () => {
+      const timers = new FakeTimers();
+      const calls: { ids: string[]; wakeId: string }[] = [];
+      let release: (e: Error) => void = () => {};
+      const c = new Coordinator({
+        participant: "grok", timers, log: () => {}, renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000,
+        wake: async (ids, opts) => {
+          calls.push({ ids, wakeId: opts?.wakeId ?? "" });
+          if (calls.length === 1) await new Promise<void>((_, reject) => (release = reject));
+        },
+      });
+      c.update([st("r1", "pending")]);
+      await timers.advance(5 * 60_000 + 2_000);
+      assert.equal(calls.length, 1, "the overdue wake is out");
+      c.update([st("r1", "delivered")]); // handed over while it is out
+      release(new Error("socket hang up"));
+      await new Promise((r) => setImmediate(r));
+      await timers.advance(30_000);
+      assert.equal(calls.length, 2);
+      assert.notEqual(calls[1]!.wakeId, calls[0]!.wakeId, "the retry carrying the handoff is a new event");
+      c.update([st("r1", "delivered")]);
+      await timers.advance(5 * 60_000);
+      assert.equal(calls.length, 2, "and no separate handoff wake after it");
+    });
+
     it("an overdue request woken before its handoff that then vanishes (answered or rejected) owes nothing more", async () => {
       const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
       c.update([st("r1", "pending")]);
@@ -919,7 +944,7 @@ describe("coordinator", () => {
     assert.ok(wakes.length >= 3, "b's retries went on without a");
   });
 
-  it("a handoff that lands during a failing pre-handoff wake is carried by the retry despite the live claim (#27 review)", async () => {
+  it("a handoff that lands during a failing pre-handoff wake is carried by the retry, as a new event, despite the live claim (#27 review; #32)", async () => {
     const { timers, wakes, c, lease, fail } = failingFirstWake();
     c.update([{ ...d("a"), state: "pending" }]);
     await timers.advance(2_000); // the wake is out, built from pending
@@ -929,12 +954,12 @@ describe("coordinator", () => {
     await timers.advance(30_000);
     assert.deepEqual(wakes, [["a"], ["a"]], "the retry went out under the live claim: nothing has reached the agent yet");
     await timers.advance(2_001);
-    assert.equal(wakes.length, 3, "the retry was built from pending, so the handoff got its own wake after it");
+    assert.equal(wakes.length, 2, "the retry was rebuilt after the handoff (a new event), so it is the handoff wake: none separately");
     for (let i = 0; i < 60; i++) {
       await timers.advance(30_000);
       c.update([{ ...d("a"), state: "delivered", claim: lease() }]);
     }
-    assert.equal(wakes.length, 3, "once a wake landed, the lease holds the renudges");
+    assert.equal(wakes.length, 2, "once a wake landed, the lease holds the renudges");
   });
 
   it("a handoff noted during a failing wake and seen again on a lease renewal is woken for once, not twice", async () => {
@@ -947,7 +972,9 @@ describe("coordinator", () => {
     await timers.advance(10_000);
     c.update([{ ...d("a"), state: "delivered", claim: lease() }]); // the dispatcher renewed the claim: same handoff, seen outside a wake
     await timers.advance(2_001);
-    assert.deepEqual(wakes, [["a"], ["a"]], "the handoff pulled the retry forward to the coalesce delay");
+    assert.deepEqual(wakes, [["a"]], "the handoff was already folded into the retry; seeing it again doesn't add a wake");
+    await timers.advance(20_000);
+    assert.deepEqual(wakes, [["a"], ["a"]], "the retry, on its backoff, is the one handoff wake");
     await timers.advance(60_000);
     assert.equal(wakes.length, 2, "and isn't woken for a second time off the stale in-flight note");
   });
