@@ -186,9 +186,20 @@ export class Coordinator {
       // nothing new in the inbox, the same as today.
       const last = this.stateAtWake.get(id);
       const taken = this.o.wakeAt === "delivered" ? this.collectOf.get(id) !== true : last !== "pending";
-      if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && taken)) {
+      // Woken because its handoff was overdue (before it reached the inbox): its handoff still owes the agent a wake.
+      const overdueWoken = this.o.wakeAt === "delivered" && this.overdue.has(id) && (this.outstanding.get(id) ?? 0) > 0;
+      // With `wakeAt: "delivered"` a request that vanishes was collected (or rejected): never owed, even if its handoff
+      // was noted during a wake (`transitioned`).
+      const collected = this.o.wakeAt === "delivered" && this.collectOf.get(id) === true;
+      if ((this.transitioned.has(id) && !collected) || ((this.outstanding.get(id) === 0 || overdueWoken) && taken)) {
         this.owed.add(id);
-        if (this.transitioned.has(id)) this.owedAfterWake.add(id);
+        // A wake still out for it was built before this handoff (an overdue wake, while it waited for the connector):
+        // that wake doesn't pay the debt; the next one does.
+        const overdueInFlight = this.o.wakeAt === "delivered" && this.overdue.has(id) && this.inFlightStates?.has(id) === true;
+        if (this.transitioned.has(id) || overdueInFlight) this.owedAfterWake.add(id);
+        // Not in flight but waiting on a retry: the retained event predates this handoff, so the wake for it must be a
+        // new event (a receiver that processed the earlier attempt and only lost the response would dedupe it).
+        else if (this.o.wakeAt === "delivered" && this.overdue.has(id)) handoffs.push(id);
         if (!this.inFlightStates?.has(id)) fresh++;
       }
       this.outstanding.delete(id);
@@ -259,6 +270,7 @@ export class Coordinator {
         this.outstanding.set(d.id, 0);
         this.stateAtWake.set(d.id, d.state);
         this.handedOver.add(d.id);
+        this.overdue.delete(d.id); // the handoff wake is this one; a later disappearance owes nothing more
         handoffs.push(d.id);
         fresh++;
       }
@@ -290,7 +302,11 @@ export class Coordinator {
     return this.o.wakeAt === "delivered" && d.state !== "delivered";
   }
 
-  /** Reports, once each, deliveries whose handoff is overdue; the agent is not woken (its inbox has nothing yet). */
+  /**
+   * Deliveries whose handoff is overdue are reported once each and woken for: the machine's connector may be
+   * asleep (a paused VM), and waking the agent is what resumes it. From then on they follow the normal renudge
+   * schedule, and the handoff, when it lands, wakes once more (the agent then has it in its inbox).
+   */
   private scheduleHandoffCheck(): void {
     if (this.handoffTimer) this.o.timers.clear(this.handoffTimer);
     this.handoffTimer = null;
@@ -303,14 +319,21 @@ export class Coordinator {
       const at = since + this.o.handoffTimeoutMs;
       if (at <= now) {
         this.overdue.add(id);
-        const line = `@${this.o.participant}: handoff overdue: delivery ${id} has waited ${Math.round((now - since) / 60_000)} min for the connector on its machine; not waking (nothing in the inbox yet); it wakes once the handoff lands`;
+        this.awaitingHandoff.delete(id);
+        const line = `@${this.o.participant}: handoff overdue: delivery ${id} has waited ${Math.round((now - since) / 60_000)} min for the connector on its machine; waking the agent (its machine may be asleep) as soon as no live lease holds it, and again once the handoff lands`;
         this.o.log(line);
         lines.push(line);
       } else next = Math.min(next, at);
     }
     // One alert per check, however many fell due together (a connector outage can strand a large backlog at once).
     if (lines.length === 1) this.o.alert?.(lines[0]!);
-    else if (lines.length > 1) this.o.alert?.(`@${this.o.participant}: handoff overdue for ${lines.length} deliveries waiting for the connector on its machine; not waking (nothing in the inbox yet); each wakes once its handoff lands. See the relay log for the ids.`);
+    else if (lines.length > 1) this.o.alert?.(`@${this.o.participant}: handoff overdue for ${lines.length} deliveries waiting for the connector on its machine; waking the agent (its machine may be asleep) as soon as no live lease holds each one, and again as each handoff lands. See the relay log for the ids.`);
+    if (lines.length) {
+      // Due now (never woken, no longer awaiting the handoff); coalesced like any wake.
+      this.failures = 0;
+      this.gaveUp = false;
+      this.schedule(this.o.coalesceMs);
+    }
     if (next === Infinity) return;
     this.handoffTimer = this.o.timers.set(() => {
       this.handoffTimer = null;
@@ -371,6 +394,7 @@ export class Coordinator {
       this.outstanding.set(id, 0);
       this.stateAtWake.set(id, "delivered");
       this.handedOver.add(id);
+      this.overdue.delete(id); // handed over: the wake scheduled here is its handoff wake
       again.push(id);
     }
     if (!again.length) return;
@@ -541,8 +565,21 @@ export class Coordinator {
         // An id handed over and gone while the wake was out: the retry would resend the same event, which a
         // receiver that processed it and only lost the response would dedupe, so the waker forgets it and the
         // retry's event for it is a new one. (A refusal or give-up drops it in wakeAgainForHandoffs instead.)
-        const stale = rest.filter((id) => this.owedAfterWake.has(id));
-        if (stale.length) this.o.retire?.(stale);
+        // An id handed over while the wake was out but still listed (`transitioned`, e.g. a request now `delivered`):
+        // the retry is the handoff wake, so it must be a new event too, and needs no separate wake after it.
+        const handed = rest.filter((id) => this.transitioned.has(id));
+        for (const id of handed) {
+          this.transitioned.delete(id);
+          this.stateAtWake.set(id, "delivered");
+          this.handedOver.add(id);
+          this.overdue.delete(id);
+        }
+        const stale = rest.filter((id) => this.owedAfterWake.has(id) || handed.includes(id));
+        if (stale.length) {
+          this.o.retire?.(stale);
+          // The wake id too: the retry covers the same ids, so it would otherwise reuse the failed attempt's id.
+          this.wakeId = null;
+        }
         this.schedule(delay);
       }
     } finally {
