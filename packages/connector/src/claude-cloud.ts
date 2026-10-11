@@ -15,7 +15,7 @@ export interface ClaudeCloudOptions {
 
 const TIMEOUT_MS = 120_000;
 const tail = (text: string) => text.slice(-2_000).trim();
-const LOCATOR = /^(?:session_[A-Za-z0-9]+|https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+(?:\?.*)?)$/;
+const LOCATOR = /^(?:(?:session|cse)_[A-Za-z0-9]+|(?:https:\/\/)?claude\.ai\/code\/(?:session|cse)_[A-Za-z0-9]+(?:\?.*)?)$/;
 const windowsShim = (bin: string) => process.platform === "win32" && /\.(cmd|bat)$/i.test(bin);
 
 /** Resolve without invoking the CLI, which may have side effects even for a probe. */
@@ -82,8 +82,8 @@ export function claudeCloudHarnessAdapter(options: ClaudeCloudOptions = {}): Har
     handOff: (target, delivery, gate) => Effect.promise(async (effectSignal) => {
       const signal = gate.signal ? AbortSignal.any([effectSignal, gate.signal]) : effectSignal;
       if (signal.aborted) return { _tag: "aborted", detail: "cancelled before sending" };
-      if (!LOCATOR.test(target.locator) || /[\r\n\u2028\u2029]/.test(target.locator)) {
-        return { _tag: "rejected", detail: "claude-cloud: locator must be a session_<alphanumeric id> or https://claude.ai/code/session_<alphanumeric id> URL" };
+      if (!LOCATOR.test(target.locator) || /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(target.locator)) {
+        return { _tag: "rejected", detail: "claude-cloud: locator must be a session_<alphanumeric id> or cse_<alphanumeric id>, or its claude.ai/code/<id> URL with optional https:// and query string, without control characters" };
       }
       if (windowsShim(resolved ?? bin)) {
         return { _tag: "rejected", detail: "claude-cloud: Windows requires claudeCloud.bin pointing at the native executable, not a .cmd/.bat shim" };

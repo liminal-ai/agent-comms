@@ -115,17 +115,43 @@ describe("claude-cloud adapter", () => {
     expect((await handing)._tag).toBe("lost");
   });
 
-  it.each(["session_ABC123", "https://claude.ai/code/session_ABC123?from=cli&m=0"])("accepts valid cloud locator %s", async (locator) => {
+  it.each([
+    "session_ABC123", "cse_ABC123",
+    "https://claude.ai/code/session_ABC123", "https://claude.ai/code/cse_ABC123",
+    "https://claude.ai/code/session_ABC123?from=cli&m=0", "https://claude.ai/code/cse_ABC123?from=cli&m=0",
+    "claude.ai/code/session_ABC123", "claude.ai/code/cse_ABC123",
+    "claude.ai/code/session_ABC123?from=cli&m=0", "claude.ai/code/cse_ABC123?from=cli&m=0",
+  ])("accepts valid cloud locator %s", async (locator) => {
     const run = vi.fn(async () => receipt);
     expect((await Effect.runPromise(fakeAdapter(run).handOff({ ...target, locator }, delivery, { confirm: async () => true })))._tag).toBe("accepted");
     expect(run).toHaveBeenCalledWith(["-p", "--cloud", locator, "--output-format", "json"], expect.any(AbortSignal), expect.any(String));
   });
 
-  it.each(["", "session_abc_def", "session_abc\n", "--option", "https://evil.test/code/session_abc", "https://claude.ai/code/session_abc/extra"])("rejects invalid locator %s before confirming or spawning", async (locator) => {
+  it.each([
+    "", "session_abc_def", "session_abc\n", "--option",
+    "https://evil.test/code/session_abc", "evil.test/code/cse_abc",
+    "https://claude.ai.evil.test/code/cse_abc", "claude.ai.evil.test/code/cse_abc",
+    "https://claude.ai@evil.test/code/cse_abc", "claude.ai@evil.test/code/cse_abc",
+    "https://claude.ai:443/code/cse_abc", "http://claude.ai/code/cse_abc",
+    "https://claude.ai/code/session_abc/extra", "claude.ai/code/cse_abc/extra",
+    "claude.ai/other/cse_abc", "claude.ai/code/cse_abc#fragment",
+  ])("rejects invalid locator %s before confirming or spawning", async (locator) => {
     const run = vi.fn(async () => receipt);
     const confirm = vi.fn(async () => true);
     const result = await Effect.runPromise(fakeAdapter(run).handOff({ ...target, locator }, delivery, { confirm }));
     expect(result).toMatchObject({ _tag: "rejected", detail: expect.stringContaining("locator must be") });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it.each([0x00, 0x09, 0x0a, 0x0d, 0x1f, 0x7f, 0x85, 0x9f, 0x2028, 0x2029])("rejects control character %i in a locator query before confirming or spawning", async (code) => {
+    const run = vi.fn(async () => receipt);
+    const confirm = vi.fn(async () => true);
+    for (const prefix of ["https://", ""]) {
+      const locator = `${prefix}claude.ai/code/cse_ABC123?from=${String.fromCharCode(code)}cli`;
+      const result = await Effect.runPromise(fakeAdapter(run).handOff({ ...target, locator }, delivery, { confirm }));
+      expect(result).toMatchObject({ _tag: "rejected", detail: expect.stringContaining("without control characters") });
+    }
     expect(confirm).not.toHaveBeenCalled();
     expect(run).not.toHaveBeenCalled();
   });
