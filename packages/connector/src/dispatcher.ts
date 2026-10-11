@@ -394,8 +394,10 @@ export const runDispatcher = (options: DispatcherOptions) =>
         if (items.length === 0) continue;
         // An urgent handoff in progress holds the agent too: nothing overtakes it or races its handoff.
         if (busy.has(participant) || urgentBusy.has(participant)) {
-          // Another delivery holds the agent: only an urgent one goes now, one at a time.
-          const urgent = items.find((i) => i.urgent && i.state !== "delivered");
+          // Another delivery holds the agent (its own turn is running): the next one joins that turn now, one at a
+          // time, and the agent answers it with `comms reply`; nothing queues behind a comms-started turn (Mira #433).
+          // An urgent one goes first.
+          const urgent = items.find((i) => i.urgent && i.state !== "delivered") ?? items.find((i) => i.state !== "delivered");
           // And only once a turn is running there, in the urgent's own home, to join: a holder still handing
           // over hasn't started one, a turn in an old home (after a rebind) isn't the one it would reach,
           // and two handoffs to an idle thread would each start a run, the urgent one queued behind.
@@ -405,7 +407,7 @@ export const runDispatcher = (options: DispatcherOptions) =>
           if (!adapter?.steersIntoRunningTurn || !readiness.get(`${urgent.harness}/${participant}`)) continue;
           urgentBusy.set(participant, urgent.id);
           steerOnly.add(urgent.id);
-          decide(urgent.id, "urgent", `not waiting for ${busy.get(participant) ?? "the current delivery"}`);
+          decide(urgent.id, urgent.urgent ? "urgent" : "joining", `not waiting for ${busy.get(participant) ?? "the current delivery"}`);
           yield* work(adapter, urgent, { participant, locator: urgent.locator }).pipe(
             Effect.ensuring(
               Effect.sync(() => {

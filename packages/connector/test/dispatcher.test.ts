@@ -166,7 +166,7 @@ describe("reaching a busy agent (Mira #371: a stop waited 75 minutes)", () => {
     expect(row.state).toBe("replied");
   }, 40_000);
 
-  it("an urgent delivery doesn't wait for the turn holding the agent; an ordinary one still does", async () => {
+  it("an ordinary delivery doesn't wait for the turn holding the agent either: it joins that turn", async () => {
     const w = await world();
     const s = new Scripted();
     const t1 = turn();
@@ -179,16 +179,12 @@ describe("reaching a busy agent (Mira #371: a stop waited 75 minutes)", () => {
     await until("first handed over", async () => s.sent === 1);
     const ordinary = await call(w.socket, "send", { as: "a", to: ["tee"], text: "ordinary" });
     if (!ordinary.ok) throw new Error(ordinary.error.message);
-    await sleep(2_000);
-    expect(s.sent).toBe(1);
-    const stop = await call(w.socket, "send", { as: "a", to: ["tee"], text: "STOP", urgent: true });
-    if (!stop.ok) throw new Error(stop.error.message);
-    await until("urgent handed over while the turn runs", async () => s.sent === 2, 10_000);
-    const urgentRow = await deliveryRow(w.t, stop.message.conversationId, stop.message.id);
-    expect(urgentRow?.state).not.toBe("pending");
+    await until("ordinary joined the running turn", async () => s.sent === 2, 10_000);
     const ordinaryRow = await deliveryRow(w.t, ordinary.message.conversationId, ordinary.message.id);
-    expect(ordinaryRow?.state).toBe("pending");
+    expect(ordinaryRow?.state).not.toBe("pending");
+    const second = await call(w.socket, "send", { as: "a", to: ["tee"], text: "another" });
+    if (!second.ok) throw new Error(second.error.message);
+    await until("and the next one too, one at a time", async () => s.sent === 3, 10_000);
     t1.end({ _tag: "replied", answer: "done" });
-    await until("ordinary goes once the turn ends", async () => s.sent === 3, 10_000);
   });
 });
