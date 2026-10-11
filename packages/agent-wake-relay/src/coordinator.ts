@@ -186,7 +186,9 @@ export class Coordinator {
       // nothing new in the inbox, the same as today.
       const last = this.stateAtWake.get(id);
       const taken = this.o.wakeAt === "delivered" ? this.collectOf.get(id) !== true : last !== "pending";
-      if (this.transitioned.has(id) || (this.outstanding.get(id) === 0 && taken)) {
+      // Woken because its handoff was overdue (before it reached the inbox): its handoff still owes the agent a wake.
+      const overdueWoken = this.o.wakeAt === "delivered" && this.overdue.has(id) && (this.outstanding.get(id) ?? 0) > 0;
+      if (this.transitioned.has(id) || ((this.outstanding.get(id) === 0 || overdueWoken) && taken)) {
         this.owed.add(id);
         if (this.transitioned.has(id)) this.owedAfterWake.add(id);
         if (!this.inFlightStates?.has(id)) fresh++;
@@ -259,6 +261,7 @@ export class Coordinator {
         this.outstanding.set(d.id, 0);
         this.stateAtWake.set(d.id, d.state);
         this.handedOver.add(d.id);
+        this.overdue.delete(d.id); // the handoff wake is this one; a later disappearance owes nothing more
         handoffs.push(d.id);
         fresh++;
       }
@@ -308,14 +311,14 @@ export class Coordinator {
       if (at <= now) {
         this.overdue.add(id);
         this.awaitingHandoff.delete(id);
-        const line = `@${this.o.participant}: handoff overdue: delivery ${id} has waited ${Math.round((now - since) / 60_000)} min for the connector on its machine; waking the agent now (its machine may be asleep), and again once the handoff lands`;
+        const line = `@${this.o.participant}: handoff overdue: delivery ${id} has waited ${Math.round((now - since) / 60_000)} min for the connector on its machine; waking the agent (its machine may be asleep) as soon as no live lease holds it, and again once the handoff lands`;
         this.o.log(line);
         lines.push(line);
       } else next = Math.min(next, at);
     }
     // One alert per check, however many fell due together (a connector outage can strand a large backlog at once).
     if (lines.length === 1) this.o.alert?.(lines[0]!);
-    else if (lines.length > 1) this.o.alert?.(`@${this.o.participant}: handoff overdue for ${lines.length} deliveries waiting for the connector on its machine; waking the agent now (its machine may be asleep), and again as each handoff lands. See the relay log for the ids.`);
+    else if (lines.length > 1) this.o.alert?.(`@${this.o.participant}: handoff overdue for ${lines.length} deliveries waiting for the connector on its machine; waking the agent (its machine may be asleep) as soon as no live lease holds each one, and again as each handoff lands. See the relay log for the ids.`);
     if (lines.length) {
       // Due now (never woken, no longer awaiting the handoff); coalesced like any wake.
       this.failures = 0;

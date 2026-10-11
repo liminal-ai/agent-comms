@@ -188,7 +188,7 @@ describe("coordinator", () => {
       assert.deepEqual(wakes, [], "no wake before the timeout");
       await timers.advance(1);
       assert.equal(alerts.length, 1, "one alert when the timeout passes");
-      assert.match(alerts[0]!, /@grok: handoff overdue: delivery r1 has waited 5 min .*waking the agent now/);
+      assert.match(alerts[0]!, /@grok: handoff overdue: delivery r1 has waited 5 min .*waking the agent/);
       assert.ok(logs.some((l) => l.includes("handoff overdue")), "and it is logged");
       await timers.advance(2_000);
       assert.deepEqual(wakes, [["r1"]], "woken once the timeout passes (coalesced)");
@@ -202,6 +202,28 @@ describe("coordinator", () => {
       assert.deepEqual(wakes, [["r1"], ["r1"], ["r1"]], "the handoff wakes once more");
       await timers.advance(60_000);
       assert.equal(wakes.length, 3);
+    });
+
+    it("an overdue notice woken before its handoff still gets the handoff wake when it leaves the list without a delivered snapshot", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
+      c.update([st("n1", "pending", { collect: false })]);
+      await timers.advance(5 * 60_000 + 2_000);
+      assert.deepEqual(wakes, [["n1"]], "woken when overdue");
+      c.update([]); // handed over: a notice leaves the work list at its handoff
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["n1"], ["n1"]], "the handoff still wakes the agent");
+      await timers.advance(60 * 60_000);
+      assert.equal(wakes.length, 2, "and nothing more");
+    });
+
+    it("an overdue request woken before its handoff that then vanishes (answered or rejected) owes nothing more", async () => {
+      const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
+      c.update([st("r1", "pending")]);
+      await timers.advance(5 * 60_000 + 2_000);
+      assert.deepEqual(wakes, [["r1"]]);
+      c.update([]);
+      await timers.advance(60 * 60_000);
+      assert.deepEqual(wakes, [["r1"]]);
     });
 
     it("an overdue request still claimed under a live lease (the connector is working on it) isn't woken until the lease lapses", async () => {
