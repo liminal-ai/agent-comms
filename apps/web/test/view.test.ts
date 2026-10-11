@@ -114,6 +114,16 @@ describe("W registry, promotion (R1 API)", () => {
     assert.equal(parsePromotion({ ...base, owner: "cedar" }, ["lee"]).ok, false);
     assert.equal(parsePromotion({ ...base, owner: "" }, ["lee"]).ok, false);
   });
+
+  it("promotes a Claude cloud session with its locator and requires one", () => {
+    const form = { ...base, harness: "claude-cloud" as const, locator: " https://claude.ai/code/session_test " };
+    assert.deepEqual(parsePromotion(form, ["lee"]), {
+      ok: true,
+      value: { name: "oak", kind: "agent", home: { machine: "lim-builder", harness: "claude-cloud", locator: form.locator.trim() }, owner: "lee" },
+    });
+    assert.deepEqual(parsePromotion({ ...form, locator: " " }, ["lee"]), { ok: false, error: "Give the cloud session id or URL." });
+    assert.equal(presenceView(entry({ harness: "claude-cloud", presence: { status: "offline", at: NOW, stale: false } }), NOW).label, "offline (Claude cloud CLI unavailable)");
+  });
 });
 
 describe("W registry, live", () => {

@@ -169,7 +169,7 @@ function Main({ token }: { token: string }) {
 function Promote({ token, machines, people }: { token: string; machines: string[]; people: string[] }) {
   const promote = useMutation(api.directory.promote);
   const [name, setName] = useState("");
-  const [harness, setHarness] = useState<"t3" | "claude-code" | "muse">("t3");
+  const [harness, setHarness] = useState<"t3" | "claude-code" | "muse" | "claude-cloud">("t3");
   const [machine, setMachine] = useState(machines[0] ?? "");
   const [locator, setLocator] = useState("");
   const [owner, setOwner] = useState(people.includes("lee") ? "lee" : people[0] ?? "");
@@ -209,10 +209,11 @@ function Promote({ token, machines, people }: { token: string; machines: string[
       </label>
       <label>
         Lives in
-        <select value={harness} onChange={(e) => setHarness(e.target.value as "t3" | "claude-code" | "muse")}>
+        <select value={harness} onChange={(e) => setHarness(e.target.value as "t3" | "claude-code" | "muse" | "claude-cloud")}>
           <option value="t3">a T3 thread</option>
           <option value="claude-code">a Claude Code terminal</option>
           <option value="muse">a Muse connector</option>
+          <option value="claude-cloud">a Claude Code cloud session</option>
         </select>
       </label>
       <label>
@@ -220,9 +221,9 @@ function Promote({ token, machines, people }: { token: string; machines: string[
         <input list="machines" value={machine} onChange={(e) => setMachine(e.target.value)} />
         <datalist id="machines">{machines.map((m) => <option key={m} value={m} />)}</datalist>
       </label>
-      {(harness === "t3" || harness === "muse") && (
+      {(harness === "t3" || harness === "muse" || harness === "claude-cloud") && (
         <label>
-          {harness === "muse" ? "Connector locator" : "T3 thread id"}{" "}
+          {harness === "claude-cloud" ? "Cloud session id or URL" : harness === "muse" ? "Connector locator" : "T3 thread id"}{" "}
           <input value={locator} onChange={(e) => setLocator(e.target.value)} />
         </label>
       )}

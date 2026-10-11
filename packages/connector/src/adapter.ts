@@ -35,6 +35,8 @@ export type HandOff =
  */
 export interface Gate {
   readonly confirm: (cursor?: string) => Promise<boolean>;
+  /** Optional caller cancellation; Effect interruption also cancels a handoff. */
+  readonly signal?: AbortSignal;
   /** Only join a turn already running: if the thread is idle, send nothing (`aborted`). For an urgent delivery that bypassed the agent's holder. */
   readonly steerOnly?: boolean;
 }

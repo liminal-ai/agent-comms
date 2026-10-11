@@ -2,7 +2,7 @@
 //
 // local:  { "mode": "local", "dataDir": "...", "owner": "lee", "web": { "port": 15990 },
 //           "machine"?: "local", "environment"?: "local", "socket"?: "...",
-//           "adapters"?: ["t3"], "t3"?: {...}, "leaseMs"?, "pollWaitMs"? }
+//           "adapters"?: ["t3", "claude-cloud"], "t3"?: {...}, "claudeCloud"?: {"bin"?: "..."}, "leaseMs"?, "pollWaitMs"? }
 // convex: { "mode": "convex", "connector": "<connector.json>", "web"?: "<web.json>" }
 //         (the existing configs, unchanged)
 
@@ -20,7 +20,8 @@ export interface LocalConfig {
   machine: string;
   socket: string;
   web: { port: number };
-  adapters?: "t3"[];
+  adapters?: ConnectorConfig["adapters"];
+  claudeCloud?: ConnectorConfig["claudeCloud"];
   t3?: ConnectorConfig["t3"];
   leaseMs?: number;
   pollWaitMs?: number;
@@ -34,7 +35,7 @@ export interface ConvexModeConfig {
 
 export type ServiceConfig = LocalConfig | ConvexModeConfig;
 
-const LOCAL_KEYS = new Set(["mode", "environment", "dataDir", "owner", "machine", "socket", "web", "adapters", "t3", "leaseMs", "pollWaitMs"]);
+const LOCAL_KEYS = new Set(["mode", "environment", "dataDir", "owner", "machine", "socket", "web", "adapters", "t3", "claudeCloud", "leaseMs", "pollWaitMs"]);
 // Fields of a Convex connector or web config: in a local config they mean it's the wrong file.
 const CONVEX_ONLY = ["convexUrl", "secretFile", "adminTokenFile"];
 
@@ -78,7 +79,11 @@ export function loadServiceConfig(path: string): ServiceConfig {
   const environment = raw.environment ?? "local";
   if (typeof environment !== "string" || !/^[A-Za-z0-9 _.-]{1,40}$/.test(environment)) throw new Error(`${where}: "environment" is a short label`);
   const adapters = raw.adapters as LocalConfig["adapters"];
-  if (adapters !== undefined && (!Array.isArray(adapters) || adapters.some((a) => a !== "t3"))) throw new Error(`${where}: "adapters" may only list "t3"`);
+  if (adapters !== undefined && (!Array.isArray(adapters) || adapters.some((a) => a !== "t3" && a !== "claude-cloud"))) throw new Error(`${where}: "adapters" may only list "t3" or "claude-cloud"`);
+  const claudeCloud = raw.claudeCloud as LocalConfig["claudeCloud"];
+  if (claudeCloud !== undefined && (!claudeCloud || typeof claudeCloud !== "object" || Array.isArray(claudeCloud) || (claudeCloud.bin !== undefined && (typeof claudeCloud.bin !== "string" || !claudeCloud.bin)))) {
+    throw new Error(`${where}: "claudeCloud" must be { "bin"?: <CLI path> }`);
+  }
   const t3 = raw.t3 as LocalConfig["t3"];
   if (adapters?.includes("t3")) {
     if (!t3 || typeof t3.baseUrl !== "string" || typeof t3.authFile !== "string") throw new Error(`${where}: the t3 adapter needs "t3": { "baseUrl", "authFile", "environmentId" }`);
@@ -97,6 +102,7 @@ export function loadServiceConfig(path: string): ServiceConfig {
     socket,
     web: { port: web.port as number },
     ...(adapters ? { adapters } : {}),
+    ...(claudeCloud ? { claudeCloud } : {}),
     ...(t3 ? { t3: { ...t3, authFile: expand(t3.authFile) } } : {}),
     ...(raw.leaseMs ? { leaseMs: raw.leaseMs as number } : {}),
     ...(raw.pollWaitMs ? { pollWaitMs: raw.pollWaitMs as number } : {}),

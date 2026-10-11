@@ -3,7 +3,7 @@
 //
 //   service.mjs [run] --config <file>                 run until SIGINT/SIGTERM (mode from the config)
 //   service.mjs web-url --config <file>               local: print the web view's link (it carries the admin token)
-//   service.mjs register --config <file> <name> --harness t3|claude-code --locator <thread id|session name>
+//   service.mjs register --config <file> <name> --harness t3|claude-code|claude-cloud --locator <thread id|session name|cloud id or URL>
 //                        [--owner <person>] [--description "…"] [--rebind]
 //   service.mjs seed --config <file> <seed.json>      local: people, agents and groups (dev-setup's format)
 //   service.mjs admin --config <file> <module:function> ['<json args>']
@@ -25,7 +25,7 @@ import { startLocal } from "./local.ts";
 const USAGE = `usage:
   service.mjs [run] --config <file>
   service.mjs web-url --config <file>
-  service.mjs register --config <file> <name> --harness t3|claude-code --locator <id> [--owner <person>] [--description "…"] [--rebind]
+  service.mjs register --config <file> <name> --harness t3|claude-code|claude-cloud --locator <id or URL> [--owner <person>] [--description "…"] [--rebind]
   service.mjs seed --config <file> <seed.json>
   service.mjs admin --config <file> <module:function> ['<json args>']`;
 
@@ -152,7 +152,7 @@ async function adminCommand(config: LocalConfig) {
   if (command === "register") {
     const name = positionals[0]?.replace(/^@/, "");
     const harness = values.harness;
-    if (!name || (harness !== "t3" && harness !== "claude-code") || !values.locator) fail(USAGE);
+    if (!name || (harness !== "t3" && harness !== "claude-code" && harness !== "claude-cloud") || !values.locator) fail(USAGE);
     const home = { machine: config.machine, harness, locator: values.locator };
     if (values.rebind) {
       await call("mutation", "directory:rebind", { name, home });

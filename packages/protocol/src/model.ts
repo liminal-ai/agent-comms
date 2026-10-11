@@ -30,7 +30,7 @@ export function isName(value: unknown): value is ParticipantName {
 /** `system`: the deploy-time senders `reminders` and `alerts`; no home, no presence, never addressed or delivered to. */
 export type ParticipantKind = "human" | "agent" | "system";
 export type ParticipantState = "active" | "paused" | "retired";
-export type Harness = "t3" | "claude-code" | "web" | "muse" | "oaidot";
+export type Harness = "t3" | "claude-code" | "web" | "muse" | "oaidot" | "claude-cloud";
 
 /** How a participant is referred to inside messages and deliveries. */
 export interface ParticipantRef {
@@ -44,7 +44,7 @@ export interface Home {
   /** Machine id of the connector that delivers to this participant. */
   machine: string;
   harness: Harness;
-  /** Harness-specific: a T3 thread id; for Claude Code, the terminal participant name; for oaidot, the configured parent binding. */
+  /** Harness-specific: a T3 thread id; for Claude Code, the terminal participant name; for oaidot, the configured parent binding; for Claude cloud, its session id or URL. */
   locator: string;
 }
 
@@ -62,7 +62,7 @@ export interface ConversationRef {
 
 /** Where a message entered the system. */
 /** `system`: posted by a system participant (a reminder fire, a report, an alert). */
-export type Via = "t3" | "claude-code" | "cli" | "web" | "system" | "muse" | "oaidot";
+export type Via = "t3" | "claude-code" | "cli" | "web" | "system" | "muse" | "oaidot" | "claude-cloud";
 
 export interface Origin {
   via: Via;
@@ -147,7 +147,7 @@ export type MessageMeta =
  * - `claimed`: a connector holds a lease on it and may hand it to the harness.
  * - `delivered`: the harness accepted our message, or an oaidot parent explicitly acknowledged its receipt (without a turn id).
  * - `replied`: the answer was collected automatically, or completed with `comms reply` after being ambiguous.
- * - `ambiguous`: something else entered our turn, so the reply can't be matched; the agent answers with `comms reply`.
+ * - `ambiguous`: the reply can't be collected (other input entered, or the harness only reports receipt); the agent answers with `comms reply`.
  * - `uncertain`: after a restart or takeover the connector couldn't tell whether it ran. Never re-run; surfaced to Lee.
  * - `failed`: the turn was aborted, refused or errored, or the delivery couldn't be handed over.
  *

@@ -194,14 +194,18 @@ With the service running, register each agent where it lives:
 service="node $base/current/service.mjs"
 $service register --config "$base/config/service.json" kit --harness t3 --locator "$THREAD_ID" --description "Comms manager"
 $service register --config "$base/config/service.json" scout --harness claude-code --locator scout
+$service register --config "$base/config/service.json" cloud --harness claude-cloud --locator "$CLOUD_SESSION_ID_OR_URL"
 "$HOME/lim/bin/comms-local" status
 ```
 
 - T3 agents: `--locator` is the thread ID.
 - Claude Code terminals: `--locator` is the agent's own name, the same value as its
   `AGENT_COMMS_PARTICIPANT`.
+- Claude cloud sessions: enable `"claude-cloud"` in the config's `adapters`; `--locator` is
+  a `session_...` or `cse_...` ID, or its exact `claude.ai/code/<id>` URL with optional
+  `https://` and query string. Registration records the home; it does not verify a cloud reply.
 - The owner defaults to the config's `owner`; `--owner` names another person (who must exist).
-- To move an existing agent to another thread or terminal, use the same command with `--rebind`.
+- To move an existing agent to another thread, terminal, or cloud session, use the same command with `--rebind`.
 - Add more people with the web view, or `service.mjs seed --config ... seed.json` (the format
   of `scripts/dev-setup.ts`; `home.machine` may be left out).
 

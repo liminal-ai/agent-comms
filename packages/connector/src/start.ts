@@ -10,10 +10,15 @@ import type { ConnectorConfig } from "./config.ts";
 import { runConnector } from "./connector.ts";
 import type { ServerApiShape } from "./server-api.ts";
 
-export type StartConfig = Pick<ConnectorConfig, "machine" | "adapters" | "t3" | "leaseMs" | "pollWaitMs"> & { socket: string };
+export type StartConfig = Pick<ConnectorConfig, "machine" | "adapters" | "t3" | "claudeCloud" | "leaseMs" | "pollWaitMs"> & { socket: string };
 
 export async function harnessAdapters(config: StartConfig, log: (line: string) => void): Promise<HarnessAdapter[]> {
   const adapters: HarnessAdapter[] = [];
+  if (config.adapters?.includes("claude-cloud")) {
+    const { claudeCloudHarnessAdapter } = await import("./claude-cloud.ts");
+    adapters.push(claudeCloudHarnessAdapter(config.claudeCloud));
+    log(`Claude cloud adapter: ${config.claudeCloud?.bin ?? "claude"}`);
+  }
   if (config.adapters?.includes("t3")) {
     if (!config.t3) throw new Error(`config: "adapters" includes t3 but there's no "t3" section`);
     // Loaded only when configured.

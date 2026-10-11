@@ -2,13 +2,17 @@
 // crons, connector socket and web API. Restart durability, the startup
 // refusals, and the web API's protections.
 
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { call as rawCall } from "@agent-comms/comms-cli/client";
-import type { Op, Requests, Responses } from "@agent-comms/protocol";
+import type { Home, Op, ParticipantRef, Requests, Responses } from "@agent-comms/protocol";
 import { loadConfig } from "@agent-comms/connector/config";
+import { build } from "esbuild";
 import { afterEach, describe, expect, it } from "vitest";
 import { windowsEndpoint } from "../../windows-pipe/src/index.mjs";
 import { type LocalConfig, loadServiceConfig } from "../src/config.ts";
@@ -63,6 +67,52 @@ async function register(r: RunningLocal, config: LocalConfig, name: string) {
 }
 
 describe("a local service", () => {
+  it.each([false, true])("the real register command stores a Claude cloud home (rebind=%s)", async (rebind) => {
+    const config = fixture();
+    config.adapters = ["claude-cloud"];
+    config.claudeCloud = { bin: join(config.dataDir, "missing-claude") };
+    const r = await start(config);
+    try {
+      if (rebind) await register(r, config, "cloud");
+      const adminToken = credential(config.dataDir, ADMIN_TOKEN_FILE);
+      const listing = { kind: "query", name: "directory:list", args: { adminToken } };
+      type DirectoryView = { value: { participants: (ParticipantRef & { home?: Home })[] } };
+      const beforeView = await (await api(r, config, "/api/call", listing)).json() as DirectoryView;
+      const before = beforeView.value.participants.find((p) => p.name === "cloud");
+      const configFile = join(config.dataDir, "..", "config.json");
+      writeFileSync(configFile, JSON.stringify({ ...config, web: { port: r.port } }));
+      const locator = rebind ? "claude.ai/code/cse_REBOUND123?from=cli" : "session_CREATED123";
+      // Exercise the released command: Convex's extensionless imports require bundling.
+      const entry = join(config.dataDir, "..", "service.mjs");
+      await build({
+        entryPoints: [fileURLToPath(new URL("../src/main.ts", import.meta.url))], outfile: entry,
+        bundle: true, platform: "node", format: "esm", target: "node24", logLevel: "silent",
+        banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
+      });
+      if (process.platform === "win32") for (const name of ["validate-secret.ps1", "SecretFile.cs"]) {
+        copyFileSync(fileURLToPath(new URL(`../../windows-pipe/src/${name}`, import.meta.url)), join(config.dataDir, "..", name));
+      }
+      const { stdout } = await promisify(execFile)(process.execPath, [
+        entry, "register", "--config", configFile, "@cloud", "--harness", "claude-cloud", "--locator", locator,
+        ...(rebind ? ["--rebind"] : []),
+      ], { timeout: 20_000 });
+      expect(stdout).toContain(rebind ? "@cloud: moved to" : "@cloud: registered");
+      expect(stdout).toContain(`claude-cloud ${locator} on ${config.machine}`);
+      const response = await api(r, config, "/api/call", listing);
+      expect(response.status).toBe(200);
+      const view = await response.json() as DirectoryView;
+      const participant = view.value.participants.find((p) => p.name === "cloud");
+      expect(participant).toMatchObject({ name: "cloud", kind: "agent", home: { machine: config.machine, harness: "claude-cloud", locator } });
+      if (rebind) {
+        expect(before?.home?.harness).toBe("claude-code");
+        expect(participant?.id).toBe(before?.id);
+      } else expect(before).toBeUndefined();
+    } finally {
+      await stop(r);
+      rmSync(join(config.dataDir, ".."), { recursive: true, force: true });
+    }
+  });
+
   it("delivers through its own connector, and pending work survives a restart", async () => {
     const config = fixture();
     let r = await start(config);
@@ -256,5 +306,12 @@ describe("configs", () => {
 
   it("a local config given to the Convex connector is refused", () => {
     expect(() => loadConfig(write({ mode: "local", dataDir: "/tmp/x", owner: "lee", web: { port: 1 } }))).toThrow(/run it with service\.mjs/);
+  });
+
+  it("loads Claude cloud adapter config in local mode", () => {
+    const base = { mode: "local", dataDir: "/tmp/x", owner: "lee", web: { port: 1 }, adapters: ["claude-cloud"] };
+    expect(loadServiceConfig(write(base))).toMatchObject({ adapters: ["claude-cloud"] });
+    expect(loadServiceConfig(write({ ...base, claudeCloud: { bin: process.execPath } }))).toMatchObject({ claudeCloud: { bin: process.execPath } });
+    expect(() => loadServiceConfig(write({ ...base, claudeCloud: { bin: 123 } }))).toThrow(/claudeCloud/);
   });
 });

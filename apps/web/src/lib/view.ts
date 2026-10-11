@@ -70,6 +70,7 @@ export function presenceView(e: RegistryEntry, now: number): { status: PresenceS
   if (p.stale) return { status: "stale", label: `connector not heard from (last update ${clockTime(p.at)})` };
   if (p.status === "offline") {
     if (e.harness === "claude-code") return { status: "unconnected", label: "mod not connected" };
+    if (e.harness === "claude-cloud") return { status: "offline", label: "offline (Claude cloud CLI unavailable)" };
     if (e.harness === "muse") return { status: "offline", label: "offline (muse connector unreachable)" };
     return { status: "offline", label: "offline (T3 or its thread unreachable)" };
   }
@@ -90,9 +91,9 @@ export function liveStale(e: RegistryEntry, machineSeen: number | null, now: num
 
 export interface PromotionForm {
   name: string;
-  harness: "t3" | "claude-code" | "muse";
+  harness: "t3" | "claude-code" | "muse" | "claude-cloud";
   machine: string;
-  /** The T3 thread id; ignored for a Claude Code terminal (its locator is its name). */
+  /** The harness locator; ignored for a Claude Code terminal (its locator is its name). */
   locator: string;
   /** A person's name. */
   owner: string;
@@ -102,13 +103,13 @@ export interface PromotionForm {
 export function parsePromotion(
   f: PromotionForm,
   people: readonly string[],
-): Parsed<{ name: string; kind: "agent"; home: { machine: string; harness: "t3" | "claude-code" | "muse"; locator: string }; owner: string }> {
+): Parsed<{ name: string; kind: "agent"; home: { machine: string; harness: "t3" | "claude-code" | "muse" | "claude-cloud"; locator: string }; owner: string }> {
   if (!NAME_PATTERN.test(f.name)) return { ok: false, error: "Names are lowercase letters, digits, - and _." };
   if (RESERVED_NAMES.includes(f.name)) return { ok: false, error: `@${f.name} is reserved.` };
   const machine = f.machine.trim();
   if (!machine) return { ok: false, error: "Give the machine it lives on." };
   const locator = f.harness === "claude-code" ? f.name : f.locator.trim();
-  if (!locator) return { ok: false, error: "Give the T3 thread id." };
+  if (!locator) return { ok: false, error: f.harness === "claude-cloud" ? "Give the cloud session id or URL." : "Give the T3 thread id." };
   if (!people.includes(f.owner)) return { ok: false, error: "Pick its owner (a person)." };
   return { ok: true, value: { name: f.name, kind: "agent", home: { machine, harness: f.harness, locator }, owner: f.owner } };
 }
