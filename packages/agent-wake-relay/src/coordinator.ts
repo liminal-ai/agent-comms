@@ -190,7 +190,10 @@ export class Coordinator {
       const overdueWoken = this.o.wakeAt === "delivered" && this.overdue.has(id) && (this.outstanding.get(id) ?? 0) > 0;
       if (this.transitioned.has(id) || ((this.outstanding.get(id) === 0 || overdueWoken) && taken)) {
         this.owed.add(id);
-        if (this.transitioned.has(id)) this.owedAfterWake.add(id);
+        // A wake still out for it was built before this handoff (an overdue wake, while it waited for the connector):
+        // that wake doesn't pay the debt; the next one does.
+        const overdueInFlight = this.o.wakeAt === "delivered" && this.overdue.has(id) && this.inFlightStates?.has(id) === true;
+        if (this.transitioned.has(id) || overdueInFlight) this.owedAfterWake.add(id);
         if (!this.inFlightStates?.has(id)) fresh++;
       }
       this.outstanding.delete(id);

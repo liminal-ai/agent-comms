@@ -216,6 +216,29 @@ describe("coordinator", () => {
       assert.equal(wakes.length, 2, "and nothing more");
     });
 
+    it("an overdue notice whose handoff lands while its overdue wake is still out gets the handoff wake after it", async () => {
+      const timers = new FakeTimers();
+      const wakes: string[][] = [];
+      let release: () => void = () => {};
+      const c = new Coordinator({
+        participant: "grok", timers, log: () => {}, renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000,
+        wake: async (ids) => {
+          wakes.push(ids);
+          if (wakes.length === 1) await new Promise<void>((r) => (release = r));
+        },
+      });
+      c.update([st("n1", "pending", { collect: false })]);
+      await timers.advance(5 * 60_000 + 2_000);
+      assert.deepEqual(wakes, [["n1"]], "the overdue wake is out, still in flight");
+      c.update([]); // the box woke and the connector handed the notice over while that wake was out
+      release();
+      await new Promise((r) => setImmediate(r));
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["n1"], ["n1"]], "the handoff gets its own wake after the overdue one");
+      await timers.advance(60 * 60_000);
+      assert.equal(wakes.length, 2);
+    });
+
     it("an overdue request woken before its handoff that then vanishes (answered or rejected) owes nothing more", async () => {
       const { timers, wakes, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
       c.update([st("r1", "pending")]);
