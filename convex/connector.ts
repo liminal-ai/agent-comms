@@ -585,6 +585,13 @@ export const send = mutation({
       if (!normalized) fail("unknown_participant", `no participant named @${name}`);
       recipients.push(normalized);
     }
+    if (args.urgent) {
+      // Only homes whose delivery path honors it: T3 steers into the running turn, oaidot offers it first.
+      const unsupported = recipients.filter((r) => r.kind === "agent" && r.home && r.home.harness !== "t3" && r.home.harness !== "oaidot");
+      if (unsupported.length > 0) {
+        fail("bad_request", `--urgent can't reach ${unsupported.map((r) => `@${r.name} (${r.home!.harness})`).join(", ")} ahead of its current work; send without --urgent`);
+      }
+    }
     let conversation: Doc<"conversations">;
     if (args.conversationId !== undefined) {
       conversation = await getOr(ctx, "conversations", args.conversationId);

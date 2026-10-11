@@ -651,3 +651,13 @@ describe("delete", () => {
     expect(ids.sort()).toEqual([g, dm].sort());
   });
 });
+
+describe("urgent", () => {
+  it("is refused for a home that can't honor it (claude-code), and accepted for t3", async () => {
+    const t = await setup();
+    const send = (to: string) => t.mutation(api.connector.send, { machine: m1, as: "a", to: [to], text: "stop", urgent: true });
+    expect(await errorCode(send("b"))).toBe("bad_request");
+    const ok = await t.mutation(api.connector.send, { machine: m2, as: "c", to: ["a"], text: "stop", urgent: true });
+    expect(ok.deliveries).toHaveLength(1);
+  });
+});
