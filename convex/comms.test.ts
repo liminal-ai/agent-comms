@@ -662,8 +662,11 @@ describe("urgent", () => {
     expect(await errorCode(toA())).toBe("bad_request");
     await t.mutation(api.connector.heartbeat, { machine: m1, urgentHarnesses: ["t3"] });
     expect((await toA()).deliveries).toHaveLength(1);
-    // A connector that can't (protocol 1, or an older connector) reports none, and it's refused again.
+    // A presence-only heartbeat (oaidot sharing the machine) leaves the connector's report alone.
     await t.mutation(api.connector.heartbeat, { machine: m1 });
+    expect((await toA()).deliveries).toHaveLength(1);
+    // A connector that can't (protocol 1) reports none, and it's refused again.
+    await t.mutation(api.connector.heartbeat, { machine: m1, urgentHarnesses: [] });
     expect(await errorCode(toA())).toBe("bad_request");
   });
 });

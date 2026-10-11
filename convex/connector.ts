@@ -28,7 +28,8 @@ export const heartbeat = mutation({
   args: { machine: machineAuth, urgentHarnesses: v.optional(v.array(harness)) },
   handler: async (ctx, args) => {
     const machine = await requireMachine(ctx, args.machine);
-    await ctx.db.patch(machine._id, { lastSeenAt: Date.now(), urgentHarnesses: args.urgentHarnesses ?? [] });
+    // Only a connector reports capabilities; a presence-only heartbeat (oaidot) on the same machine leaves them alone.
+    await ctx.db.patch(machine._id, { lastSeenAt: Date.now(), ...(args.urgentHarnesses !== undefined ? { urgentHarnesses: args.urgentHarnesses } : {}) });
     return {};
   },
 });
