@@ -20,7 +20,11 @@ export interface ConnectorConfig {
   leaseMs?: number;
   pollWaitMs?: number;
   /** Harness adapters to load besides Claude Code's, which is always on. */
-  adapters?: "t3"[];
+  adapters?: ("t3" | "claude-cloud")[];
+  claudeCloud?: {
+    /** The locally authenticated Claude Code CLI; default: claude on PATH. */
+    bin?: string;
+  };
   t3?: {
     /** e.g. ws://127.0.0.1:3780 */
     baseUrl: string;

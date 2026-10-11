@@ -257,4 +257,11 @@ describe("configs", () => {
   it("a local config given to the Convex connector is refused", () => {
     expect(() => loadConfig(write({ mode: "local", dataDir: "/tmp/x", owner: "lee", web: { port: 1 } }))).toThrow(/run it with service\.mjs/);
   });
+
+  it("loads Claude cloud adapter config in local mode", () => {
+    const base = { mode: "local", dataDir: "/tmp/x", owner: "lee", web: { port: 1 }, adapters: ["claude-cloud"] };
+    expect(loadServiceConfig(write(base))).toMatchObject({ adapters: ["claude-cloud"] });
+    expect(loadServiceConfig(write({ ...base, claudeCloud: { bin: process.execPath } }))).toMatchObject({ claudeCloud: { bin: process.execPath } });
+    expect(() => loadServiceConfig(write({ ...base, claudeCloud: { bin: 123 } }))).toThrow(/claudeCloud/);
+  });
 });

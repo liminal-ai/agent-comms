@@ -16,6 +16,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { ConvexHttpClient } from "convex/browser";
+import type { Harness } from "@agent-comms/protocol";
 import { api } from "../convex/_generated/api.js";
 
 const { values } = parseArgs({
@@ -30,7 +31,7 @@ const adminToken = readFileSync(expand(values["admin-token-file"]), "utf8").trim
 const seed = JSON.parse(readFileSync(expand(values.seed), "utf8")) as {
   machine?: { id: string; secretFile: string };
   /** People first: an agent's owner (default "lee") must exist when it's promoted. */
-  participants?: { name: string; kind: "human" | "agent"; owner?: string; home?: { machine: string; harness: "t3" | "claude-code" | "web"; locator: string } }[];
+  participants?: { name: string; kind: "human" | "agent"; owner?: string; home?: { machine: string; harness: Harness; locator: string } }[];
   groups?: { title: string; members: string[] }[];
 };
 const client = new ConvexHttpClient(values.url);
