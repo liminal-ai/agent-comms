@@ -290,7 +290,11 @@ export class Coordinator {
     return this.o.wakeAt === "delivered" && d.state !== "delivered";
   }
 
-  /** Reports, once each, deliveries whose handoff is overdue; the agent is not woken (its inbox has nothing yet). */
+  /**
+   * Deliveries whose handoff is overdue are reported once each and woken for: the machine's connector may be
+   * asleep (a paused VM), and waking the agent is what resumes it. From then on they follow the normal renudge
+   * schedule, and the handoff, when it lands, wakes once more (the agent then has it in its inbox).
+   */
   private scheduleHandoffCheck(): void {
     if (this.handoffTimer) this.o.timers.clear(this.handoffTimer);
     this.handoffTimer = null;
@@ -303,14 +307,21 @@ export class Coordinator {
       const at = since + this.o.handoffTimeoutMs;
       if (at <= now) {
         this.overdue.add(id);
-        const line = `@${this.o.participant}: handoff overdue: delivery ${id} has waited ${Math.round((now - since) / 60_000)} min for the connector on its machine; not waking (nothing in the inbox yet); it wakes once the handoff lands`;
+        this.awaitingHandoff.delete(id);
+        const line = `@${this.o.participant}: handoff overdue: delivery ${id} has waited ${Math.round((now - since) / 60_000)} min for the connector on its machine; waking the agent now (its machine may be asleep), and again once the handoff lands`;
         this.o.log(line);
         lines.push(line);
       } else next = Math.min(next, at);
     }
     // One alert per check, however many fell due together (a connector outage can strand a large backlog at once).
     if (lines.length === 1) this.o.alert?.(lines[0]!);
-    else if (lines.length > 1) this.o.alert?.(`@${this.o.participant}: handoff overdue for ${lines.length} deliveries waiting for the connector on its machine; not waking (nothing in the inbox yet); each wakes once its handoff lands. See the relay log for the ids.`);
+    else if (lines.length > 1) this.o.alert?.(`@${this.o.participant}: handoff overdue for ${lines.length} deliveries waiting for the connector on its machine; waking the agent now (its machine may be asleep), and again as each handoff lands. See the relay log for the ids.`);
+    if (lines.length) {
+      // Due now (never woken, no longer awaiting the handoff); coalesced like any wake.
+      this.failures = 0;
+      this.gaveUp = false;
+      this.schedule(this.o.coalesceMs);
+    }
     if (next === Infinity) return;
     this.handoffTimer = this.o.timers.set(() => {
       this.handoffTimer = null;

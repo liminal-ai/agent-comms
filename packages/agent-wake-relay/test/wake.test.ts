@@ -175,27 +175,43 @@ describe("coordinator", () => {
       assert.equal(alerts.length, 1, "one alert for the whole backlog");
       assert.match(alerts[0]!, /handoff overdue for 50 deliveries/);
       assert.equal(logs.filter((l) => /handoff overdue: delivery r\d+/.test(l)).length, 50);
-      assert.deepEqual(wakes, []);
+      await timers.advance(2_000);
+      assert.equal(wakes.length, 1, "one coalesced wake for the whole backlog");
+      assert.equal(wakes[0]!.length, 50);
     });
 
-    it("reports an overdue handoff once, without waking; the handoff later wakes exactly once", async () => {
+    it("an overdue handoff is reported once and wakes the agent (its machine may be asleep); renudged as usual; the handoff wakes once more", async () => {
       const { timers, wakes, logs, alerts, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
       c.update([st("r1", "pending")]);
       await timers.advance(5 * 60_000 - 1);
       assert.deepEqual(alerts, []);
+      assert.deepEqual(wakes, [], "no wake before the timeout");
       await timers.advance(1);
       assert.equal(alerts.length, 1, "one alert when the timeout passes");
-      assert.match(alerts[0]!, /@grok: handoff overdue: delivery r1 has waited 5 min/);
+      assert.match(alerts[0]!, /@grok: handoff overdue: delivery r1 has waited 5 min .*waking the agent now/);
       assert.ok(logs.some((l) => l.includes("handoff overdue")), "and it is logged");
-      assert.deepEqual(wakes, [], "no wake: the inbox has nothing yet");
-      await timers.advance(20 * 60_000);
+      await timers.advance(2_000);
+      assert.deepEqual(wakes, [["r1"]], "woken once the timeout passes (coalesced)");
+      await timers.advance(9 * 60_000);
+      assert.deepEqual(wakes, [["r1"]], "nothing more before the first renudge");
+      await timers.advance(60_000);
+      assert.deepEqual(wakes, [["r1"], ["r1"]], "renudged on the usual schedule while the machine stays down");
       assert.equal(alerts.length, 1, "reported once, not every check");
-      assert.deepEqual(wakes, []);
       c.update([st("r1", "delivered")]);
       await timers.advance(2_000);
-      assert.deepEqual(wakes, [["r1"]], "the handoff wakes once");
+      assert.deepEqual(wakes, [["r1"], ["r1"], ["r1"]], "the handoff wakes once more");
       await timers.advance(60_000);
-      assert.deepEqual(wakes, [["r1"]]);
+      assert.equal(wakes.length, 3);
+    });
+
+    it("an overdue request still claimed under a live lease (the connector is working on it) isn't woken until the lease lapses", async () => {
+      const { timers, wakes, alerts, c } = setup({ renudgeMs: 10 * 60_000, wakeAt: "delivered", handoffTimeoutMs: 5 * 60_000 });
+      c.update([st("r1", "claimed", { claim: { leaseExpiresAt: timers.t + 7 * 60_000 } })]);
+      await timers.advance(5 * 60_000 + 2_000);
+      assert.equal(alerts.length, 1, "reported when overdue");
+      assert.deepEqual(wakes, [], "not woken under the live lease");
+      await timers.advance(2 * 60_000);
+      assert.deepEqual(wakes, [["r1"]], "woken once the lease lapses");
     });
 
     it("a never-woken pending request that is withdrawn is neither reported nor woken for", async () => {
