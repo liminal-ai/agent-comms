@@ -36,7 +36,15 @@ function resolveBinary(bin: string): string | undefined {
 
 function runCli(bin: string, args: string[], signal: AbortSignal): ReturnType<NonNullable<ClaudeCloudOptions["run"]>> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"], signal, timeout: TIMEOUT_MS, killSignal: "SIGKILL" });
+    const lower = bin.toLowerCase();
+    const needsShell = process.platform === "win32" && (lower.endsWith(".cmd") || lower.endsWith(".bat"));
+    const child = spawn(bin, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      signal,
+      timeout: TIMEOUT_MS,
+      killSignal: "SIGKILL",
+      ...(needsShell ? { shell: true } : {}),
+    });
     let stdout = "";
     let stderr = "";
     // Receipts are small. Bound captured output even if the CLI misbehaves.
@@ -56,6 +64,8 @@ export function claudeCloudHarnessAdapter(options: ClaudeCloudOptions = {}): Har
     steersIntoRunningTurn: false,
     // Cache success; a missing binary or failed handoff is checked again next time.
     ready: () => Effect.sync(() => Boolean(resolved ?? (resolved = resolveBinary(bin)))),
+    // Presence for registry: CLI available => idle, otherwise offline.
+    presence: () => Effect.sync(() => (resolved ?? (resolved = resolveBinary(bin)) ? "idle" : "offline")),
     handOff: (target, delivery, gate) => Effect.promise(async (effectSignal) => {
       const signal = gate.signal ? AbortSignal.any([effectSignal, gate.signal]) : effectSignal;
       const text = renderDelivery(delivery, {
