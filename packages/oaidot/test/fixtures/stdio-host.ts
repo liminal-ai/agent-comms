@@ -54,7 +54,7 @@ const api = {
     () => Effect.sync(() => { counters.unsubscribes++; clearTimeout(timer); emit = () => {}; }),
   )),
   homed: Effect.succeed({ participants: [{ participant: recipient, home: { machine: "fixture", harness: "oaidot" as const, locator }, state: "active" as const }] }),
-  heartbeat: Effect.sync(() => { counters.heartbeats++; }),
+  heartbeat: () => Effect.sync(() => { counters.heartbeats++; }),
   presence: () => Effect.sync(() => { counters.presence++; }),
   receive: (request: Requests["receive"]) => Effect.suspend(() => {
     counters.receives++;

@@ -651,3 +651,29 @@ describe("delete", () => {
     expect(ids.sort()).toEqual([g, dm].sort());
   });
 });
+
+describe("urgent", () => {
+  it("is refused for a home that can't honor it (claude-code), and accepted for t3", async () => {
+    const t = await setup();
+    const send = (to: string) => t.mutation(api.connector.send, { machine: m1, as: "a", to: [to], text: "stop", urgent: true });
+    expect(await errorCode(send("b"))).toBe("bad_request");
+    // @a is a t3 home on m1: refused until m1's heartbeat says its t3 adapter can join a running turn.
+    const toA = () => t.mutation(api.connector.send, { machine: m2, as: "c", to: ["a"], text: "stop", urgent: true });
+    expect(await errorCode(toA())).toBe("bad_request");
+    await t.mutation(api.connector.heartbeat, { machine: m1, urgentHarnesses: ["t3"] });
+    expect((await toA()).deliveries).toHaveLength(1);
+    // A presence-only heartbeat (oaidot sharing the machine) leaves the connector's report alone.
+    await t.mutation(api.connector.heartbeat, { machine: m1 });
+    expect((await toA()).deliveries).toHaveLength(1);
+    // A connector that can't (protocol 1) reports none, and it's refused again.
+    await t.mutation(api.connector.heartbeat, { machine: m1, urgentHarnesses: [] });
+    expect(await errorCode(toA())).toBe("bad_request");
+    // A retired recipient (here a claude-code home, which can't take urgent) is skipped as usual, not a reason to refuse the others.
+    await t.mutation(api.connector.heartbeat, { machine: m1, urgentHarnesses: ["t3"] });
+    await t.mutation(api.directory.setState, { adminToken: ADMIN, name: "b", state: "retired" });
+    const g = await group(t);
+    const mixed = await t.mutation(api.connector.send, { machine: m2, as: "c", conversationId: g, to: ["a", "b"], text: "stop", urgent: true });
+    expect(mixed.deliveries.map((d) => d.recipient)).toEqual(["a"]);
+    expect(mixed.skipped).toEqual([{ name: "b", reason: "retired" }]);
+  });
+});

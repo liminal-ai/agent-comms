@@ -15,7 +15,13 @@ export interface Target {
 /** Handing a rendered delivery to the harness. */
 export type HandOff =
   /** The harness recorded our message; this is the turn it went into. `cursor`: where to resume watching after a restart. */
-  | { _tag: "accepted"; turnId: string; cursor?: string }
+  | {
+      _tag: "accepted";
+      turnId: string;
+      cursor?: string;
+      /** It joined a turn already running (not one of its own): its answer comes by `comms reply`, not from the turn. */
+      steered?: boolean;
+    }
   /** The harness refused it outright; it never ran. */
   | { _tag: "rejected"; detail: string }
   /** Not sent: the claim was lost (or the handoff cancelled) before sending. Certain it never reached the harness. */
@@ -29,6 +35,8 @@ export type HandOff =
  */
 export interface Gate {
   readonly confirm: (cursor?: string) => Promise<boolean>;
+  /** Only join a turn already running: if the thread is idle, send nothing (`aborted`). For an urgent delivery that bypassed the agent's holder. */
+  readonly steerOnly?: boolean;
 }
 
 /** How our turn ended. */
@@ -44,7 +52,8 @@ export type Outcome =
 /** The restart question: does the harness have this delivery, and what happened to its turn? */
 export type Check =
   | { _tag: "absent" }
-  | { _tag: "running"; turnId: string }
+  /** `steered`: it joined a turn that wasn't its own, so the agent needn't be held while it runs. */
+  | { _tag: "running"; turnId: string; steered?: boolean }
   /** `outcome` absent: the turn finished but its outcome isn't known (fine for an answer's delivery; a request's becomes uncertain). */
   | { _tag: "completed"; turnId: string; outcome?: Exclude<Outcome, { _tag: "lost" }> }
   | { _tag: "unknown"; detail: string }
@@ -53,6 +62,8 @@ export type Check =
 
 export interface HarnessAdapter {
   readonly harness: Harness;
+  /** Hands a delivery into a turn already running instead of waiting for it to end: only then can `--urgent` jump the queue. */
+  readonly steersIntoRunningTurn?: boolean;
   /** Whether deliveries can be handed to this participant now. The dispatcher claims nothing it can't hand over. */
   readonly ready: (target: Target) => Effect.Effect<boolean>;
   /**

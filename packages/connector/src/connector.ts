@@ -333,7 +333,8 @@ export const runConnector = (options: ConnectorOptions) =>
     );
 
     yield* Effect.sync(() => sessions.sweep()).pipe(Effect.repeat(Schedule.spaced(Duration.seconds(5))), Effect.forkScoped);
-    yield* api.heartbeat.pipe(
+    const urgentHarnesses = (options.adapters ?? []).filter((a) => a.steersIntoRunningTurn).map((a) => a.harness);
+    yield* api.heartbeat(urgentHarnesses).pipe(
       Effect.catch((e) => Effect.sync(() => log(`heartbeat: ${e.message}`))),
       Effect.repeat(Schedule.spaced(Duration.seconds(30))),
       Effect.forkScoped,

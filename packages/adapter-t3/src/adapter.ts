@@ -35,7 +35,8 @@ export interface Target {
 }
 
 export type HandOff =
-  | { _tag: "accepted"; turnId: string; cursor?: string }
+  /** `steered`: it joined a run already going (its answer comes by comms reply, not the turn). */
+  | { _tag: "accepted"; turnId: string; cursor?: string; steered?: boolean }
   | { _tag: "rejected"; detail: string }
   /** Never sent: the gate said no or the handoff was cancelled before sending. */
   | { _tag: "aborted"; detail: string }
@@ -45,6 +46,8 @@ export type HandOff =
 export interface Gate {
   confirm(cursor?: string): Promise<boolean>;
   signal: AbortSignal;
+  /** Only join a turn already running; on an idle thread send nothing and return `aborted`. */
+  steerOnly?: boolean;
 }
 export type Outcome =
   | { _tag: "replied"; answer: string }
@@ -54,7 +57,7 @@ export type Outcome =
   | { _tag: "uncertain"; detail: string };
 export type Check =
   | { _tag: "absent" }
-  | { _tag: "running"; turnId: string }
+  | { _tag: "running"; turnId: string; steered?: boolean }
   | { _tag: "completed"; turnId: string; outcome: Outcome }
   | { _tag: "unknown"; detail: string }
   | { _tag: "later"; detail: string };

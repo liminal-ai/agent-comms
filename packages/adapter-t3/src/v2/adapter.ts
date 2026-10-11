@@ -230,7 +230,7 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
     const ran = run ?? steeredInto;
     if (!ran) return { _tag: "later", detail: "our message isn't in a run yet" };
     const outcome = outcomeOf(thread, messageId, ran.status !== "waiting");
-    if (!outcome) return { _tag: "running", turnId: ran.id };
+    if (!outcome) return { _tag: "running", turnId: ran.id, ...(!run ? { steered: true } : {}) };
     if (outcome._tag === "uncertain") return { _tag: "unknown", detail: outcome.detail };
     return { _tag: "completed", turnId: ran.id, outcome };
   }
@@ -256,7 +256,8 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         if (find(before, messageId).present) {
           // Already there (an earlier handoff, maybe another process's): find its run, send nothing.
           const c = await check(target, delivery);
-          if (c._tag === "running" || c._tag === "completed") return { _tag: "accepted", turnId: c.turnId };
+          if (c._tag === "running") return { _tag: "accepted", turnId: c.turnId, ...(c.steered ? { steered: true } : {}) };
+          if (c._tag === "completed") return { _tag: "accepted", turnId: c.turnId };
           return { _tag: "lost", detail: `message ${messageId} is in the thread but its run is unclear (${c._tag})` };
         }
         if (gate?.signal.aborted) return { _tag: "aborted", detail: "cancelled before sending" };
@@ -271,6 +272,11 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         if (downTooLong(f)) {
           f.stop();
           return { _tag: "aborted", detail: "T3's event stream is down; not sending" };
+        }
+        // Steer-only with no turn to join: send nothing, before the gate records this home as the delivery's target.
+        if (gate?.steerOnly && !tracker.activeRunId) {
+          f.stop();
+          return { _tag: "aborted", detail: "no turn running to join; sent nothing" };
         }
         const cursor = encodeCursor(tracker.lastSequence);
         // The last check before sending: the claim is still ours, and the cursor is recorded (2.2).
@@ -294,6 +300,37 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
           f.stop();
           return sent;
         }
+        // A steer can land as its own run: T3 turns a late steer_active into start_immediately when the
+        // target run ended first (docs/t3-v2-notes.md). Read where the message went before saying "steered".
+        let steered = false;
+        if (steer) {
+          const deadline = Date.now() + acceptTimeoutMs;
+          let found: ReturnType<typeof find> | undefined;
+          let snapshot: V2Thread | null = null;
+          while (Date.now() < deadline) {
+            snapshot = await client.getThread(threadId).catch(() => null);
+            // Only a snapshot at least as new as the events already applied: an older one can't be loaded,
+            // and the run's terminal event may already have gone by before we adopted it.
+            const current = !!snapshot && snapshot.snapshotSequence >= tracker.lastSequence;
+            found = current ? find(snapshot!, messageId) : undefined;
+            if (found?.run || found?.steeredInto) break;
+            await new Promise((r) => setTimeout(r, 100));
+          }
+          if (found?.run && snapshot) {
+            // Follow our own run from the snapshot, status included: the stream may be behind or down.
+            tracker.steeredRunId = undefined;
+            tracker.runId = undefined;
+            tracker.load(snapshot);
+          } else if (found?.steeredInto && snapshot) {
+            // Follow the run it joined from the snapshot too, status included (it may already be over).
+            steered = true;
+            tracker.load(snapshot);
+          }
+          else {
+            f.stop();
+            return { _tag: "lost", detail: `no run for message ${messageId} after ${acceptTimeoutMs} ms` };
+          }
+        }
         if (!(await f.wait(() => tracker.runId, acceptTimeoutMs))) {
           // The stream may be behind: T3 committed our message and its run together.
           const now = await client.getThread(threadId).catch(() => null);
@@ -307,7 +344,7 @@ export function makeT3AdapterV2(options: T3AdapterV2Options): T3Adapter {
         // An answer's delivery is never followed: stop its subscription now (3.3).
         if (delivery.message.kind === "request") following.set(delivery.id, f);
         else f.stop();
-        return { _tag: "accepted", turnId: (tracker.runId ?? tracker.steeredRunId)!, cursor };
+        return { _tag: "accepted", turnId: (tracker.runId ?? tracker.steeredRunId)!, cursor, ...(steered || !tracker.runId ? { steered: true } : {}) };
       } catch (error) {
         return { _tag: "lost", detail: message(error) };
       }

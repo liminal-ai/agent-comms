@@ -28,7 +28,8 @@ export type RunStatus =
   | "rolled_back";
 
 /** A run a message can be steered into. */
-export const STEERABLE: readonly RunStatus[] = ["starting", "running"];
+/** T3 accepts a steer only into a `running` run (docs/t3-v2-notes.md, busy thread); a `starting` one rejects it. */
+export const STEERABLE: readonly RunStatus[] = ["running"];
 
 /** A run that keeps the thread busy (a dispatch would queue behind it). */
 export const BLOCKING: readonly RunStatus[] = ["preparing", "queued", "starting", "running", "waiting"];
@@ -162,7 +163,9 @@ export class RunTracker {
 
   /** From a snapshot: the state of every run. */
   load(thread: V2Thread): void {
-    this.lastSequence = Math.max(this.lastSequence, thread.snapshotSequence);
+    // Older than what the stream already gave us: applying it would undo newer state.
+    if (thread.snapshotSequence < this.lastSequence) return;
+    this.lastSequence = thread.snapshotSequence;
     this.blocking.clear();
     this.active.clear();
     const steered = find(thread, this.messageId).steeredInto;
@@ -177,7 +180,9 @@ export class RunTracker {
   }
 
   feed(event: V2Event): void {
-    this.lastSequence = Math.max(this.lastSequence, event.sequence);
+    // Already covered by a snapshot loaded out of band (a lagging stream): applying it would undo newer state.
+    if (event.sequence <= this.lastSequence) return;
+    this.lastSequence = event.sequence;
     if (event.type === "run") this.run(event.run);
   }
 

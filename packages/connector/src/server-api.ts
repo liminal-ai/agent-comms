@@ -37,6 +37,8 @@ export interface WorkItem {
   turnId?: string;
   cursor?: string;
   createdAt: number;
+  /** Sent with `--urgent`: handed over even while another delivery holds the agent. */
+  urgent?: boolean;
 }
 
 export interface ClaimResult {
@@ -65,7 +67,8 @@ export interface ServerApiShape {
   ) => Effect.Effect<StateResult, ApiError>;
   readonly uncertain: (deliveryId: string, claimId: string, detail: string) => Effect.Effect<StateResult, ApiError>;
   readonly presence: (participant: string, status: "idle" | "busy" | "offline") => Effect.Effect<void, ApiError>;
-  readonly heartbeat: Effect.Effect<void, ApiError>;
+  /** A connector passes the harnesses whose adapter here can deliver an urgent request into a running turn; a presence-only client passes none and leaves them unchanged. */
+  readonly heartbeat: (urgentHarnesses?: readonly Harness[]) => Effect.Effect<void, ApiError>;
   readonly homed: Effect.Effect<Pick<Responses["status"], "participants">, ApiError>;
   readonly send: (req: Requests["send"] & { waiterTurnId?: string }) => Effect.Effect<Responses["send"], ApiError>;
   readonly answerSeen: (participant: string, turnId: string, proofs: AnswerProof[]) => Effect.Effect<{ confirmed: number }, ApiError>;
@@ -175,7 +178,8 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
       call("uncertain", () => transport.mutation(api.connector.uncertain, { machine, deliveryId, claimId, detail })),
     presence: (participant, status) =>
       call("presence", () => transport.mutation(api.connector.presence, { machine, participant, status })).pipe(Effect.asVoid),
-    heartbeat: call("heartbeat", () => transport.mutation(api.connector.heartbeat, { machine })).pipe(Effect.asVoid),
+    heartbeat: (urgentHarnesses) =>
+      call("heartbeat", () => transport.mutation(api.connector.heartbeat, { machine, ...(urgentHarnesses ? { urgentHarnesses: [...urgentHarnesses] } : {}) })).pipe(Effect.asVoid),
     homed: call("homed", () => transport.query(api.connector.homed, { machine })),
     send: (req) =>
       call("send", () =>
@@ -191,6 +195,7 @@ export function makeServerApi(transport: ConvexTransport, options: ServerApiOpti
           ...(req.wait ? { wait: true } : {}),
           ...(req.waitMs !== undefined ? { waitMs: req.waitMs } : {}),
           ...(req.waiterTurnId !== undefined ? { waiterTurnId: req.waiterTurnId } : {}),
+          ...(req.urgent ? { urgent: true } : {}),
         }),
       ),
     reply: (req) =>

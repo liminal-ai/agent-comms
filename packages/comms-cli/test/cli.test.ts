@@ -199,12 +199,14 @@ describe("fix pass 1.7: a dropped send keeps its key", () => {
   async function dropProxy(path: string, target: string, drops: number) {
     let dropped = 0;
     const keys: string[] = [];
+    const sends: Record<string, unknown>[] = [];
     const server = createServer((req, res) => {
       let body = "";
       req.on("data", (c) => (body += c));
       req.on("end", () => {
         const isSend = req.url === "/v1/send";
         if (isSend) keys.push(JSON.parse(body).key);
+        if (isSend) sends.push(JSON.parse(body));
         const forward = httpRequest({ socketPath: target, path: req.url, method: "POST", headers: req.headers }, (up) => {
           let out = "";
           up.on("data", (c) => (out += c));
@@ -222,8 +224,23 @@ describe("fix pass 1.7: a dropped send keeps its key", () => {
       });
     });
     await new Promise<void>((r) => server.listen(path, r));
-    return { keys, close: () => new Promise<void>((r) => server.close(() => r())) };
+    return { keys, sends, close: () => new Promise<void>((r) => server.close(() => r())) };
   }
+
+  it("--urgent reaches the connector's send request; a plain send carries no urgent", async () => {
+    const proxySock = testEndpoint("urgent.sock");
+    const proxy = await dropProxy(proxySock, socket, 0);
+    try {
+      const opts = { env: {}, stdout: () => {}, stderr: () => {}, readStdin: async () => "" };
+      assert.equal(await run(["--socket", proxySock, "send", "--as", "cedar", "--continue", "--urgent", "@hazel", "stop now"], opts), EXIT.ok);
+      assert.equal(await run(["--socket", proxySock, "send", "--as", "cedar", "--continue", "@hazel", "ordinary"], opts), EXIT.ok);
+      assert.equal(proxy.sends.length, 2);
+      assert.equal(proxy.sends[0]!.urgent, true);
+      assert.equal(proxy.sends[1]!.urgent, undefined);
+    } finally {
+      await proxy.close();
+    }
+  });
 
   it("a connector that drops after reading the send: the retry, with the same key, posts once", async () => {
     const proxySock = testEndpoint("drop-once.sock");

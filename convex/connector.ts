@@ -16,7 +16,7 @@ import { machineSeen, nextPresence, profilePatch, registryEntry } from "./lib/re
 import { confirm, endResult, markPrinted, registerWait, requireWait, takeAnswer, touch, waitOn, waitShape } from "./lib/waits";
 import { applyAction, createReminder, listFor, mayChange, mayRead, recordFireAnswer, reminderDetail, reminderShape } from "./lib/reminders";
 import { openDm, post, replayed } from "./lib/post";
-import { attachment, enteredInput, failureReason, machineAuth, reminderAction, via } from "./validators";
+import { attachment, enteredInput, failureReason, harness, machineAuth, reminderAction, via } from "./validators";
 
 export const DEFAULT_LEASE_MS = 60_000;
 const MAX_LEASE_MS = 10 * 60_000;
@@ -25,10 +25,11 @@ const MAX_LEASE_MS = 10 * 60_000;
 // Presence and directory
 
 export const heartbeat = mutation({
-  args: { machine: machineAuth },
+  args: { machine: machineAuth, urgentHarnesses: v.optional(v.array(harness)) },
   handler: async (ctx, args) => {
     const machine = await requireMachine(ctx, args.machine);
-    await ctx.db.patch(machine._id, { lastSeenAt: Date.now() });
+    // Only a connector reports capabilities; a presence-only heartbeat (oaidot) on the same machine leaves them alone.
+    await ctx.db.patch(machine._id, { lastSeenAt: Date.now(), ...(args.urgentHarnesses !== undefined ? { urgentHarnesses: args.urgentHarnesses } : {}) });
     return {};
   },
 });
@@ -88,6 +89,7 @@ export const work = query({
       turnId?: string;
       cursor?: string;
       createdAt: number;
+      urgent?: boolean;
     }[] = [];
     const push = (d: Row, p: Doc<"participants">) => {
       if (seen.has(d._id)) return;
@@ -108,6 +110,7 @@ export const work = query({
         ...(d.turnId !== undefined ? { turnId: d.turnId } : {}),
         ...(d.cursor !== undefined ? { cursor: d.cursor } : {}),
         createdAt: d.createdAt,
+        ...(d.urgent ? { urgent: true } : {}),
       });
     };
     const ours = (d: Row) => (d.target ? d.target.machine === here : true);
@@ -212,10 +215,14 @@ export const receive = mutation({
     const oldest = (a: Doc<"deliveries">, b: Doc<"deliveries">) => a.createdAt - b.createdAt || a._creationTime - b._creationTime || a._id.localeCompare(b._id);
     const offers: Doc<"deliveries">[] = [];
     if (me.state === "active") {
-      offers.push(...(await ctx.db.query("deliveries")
-        .withIndex("by_recipient_state", (q) => q.eq("recipientId", me._id).eq("state", "pending"))
-        .filter((q) => q.or(q.eq(q.field("target"), undefined), q.eq(q.field("target"), me.home)))
-        .take(limit + 1)).filter(eligible));
+      const pending = () => ctx.db.query("deliveries")
+        .withIndex("by_recipient_state", (q) => q.eq("recipientId", me._id).eq("state", "pending"));
+      const home = (q: Parameters<Parameters<ReturnType<typeof pending>["filter"]>[0]>[0]) =>
+        q.or(q.eq(q.field("target"), undefined), q.eq(q.field("target"), me.home));
+      // Urgent ones (`comms send --urgent`) first, even behind a long queue of older work.
+      const urgent = (await pending().filter((q) => q.and(q.eq(q.field("urgent"), true), home(q))).take(limit + 1)).filter(eligible);
+      const seen = new Set(urgent.map((d) => d._id));
+      offers.push(...urgent, ...(await pending().filter(home).take(limit + 1)).filter((d) => eligible(d) && !seen.has(d._id)));
     }
     // A pause permits recovery of previously offered work. Retirement offers
     // nothing new; a previously forwarded claim can still be acknowledged.
@@ -228,7 +235,7 @@ export const receive = mutation({
         ))
         .take(limit + 1)).filter(eligible));
     }
-    offers.sort(oldest);
+    offers.sort((a, b) => Number(b.urgent === true) - Number(a.urgent === true) || oldest(a, b));
     const selected = offers.slice(0, limit);
     const deliveries: Responses["receive"]["deliveries"] = [];
     for (const d of selected) {
@@ -549,6 +556,8 @@ export const send = mutation({
     waitMs: v.optional(v.number()),
     /** Fix pass 0.1: the waiter's running main turn, as its harness reported it to the connector. */
     waiterTurnId: v.optional(v.string()),
+    /** Each delivery skips its recipient's queue (a stop). */
+    urgent: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<Responses["send"]> => {
     const machine = await requireMachine(ctx, args.machine);
@@ -577,6 +586,20 @@ export const send = mutation({
       if (!normalized) fail("unknown_participant", `no participant named @${name}`);
       recipients.push(normalized);
     }
+    if (args.urgent) {
+      // Only homes whose delivery path honors it: oaidot offers it first (here, in receive); a connector adapter only
+      // when its machine's heartbeat says it can join a running turn (T3 protocol 2 on a connector that knows urgent).
+      const unsupported: Doc<"participants">[] = [];
+      for (const r of recipients) {
+        // Retired recipients are skipped by post() as in any send, not refused here.
+        if (r.kind !== "agent" || r.state === "retired" || !r.home || r.home.harness === "oaidot") continue;
+        const m = await ctx.db.query("machines").withIndex("by_machineId", (q) => q.eq("machineId", r.home!.machine)).unique();
+        if (!m?.urgentHarnesses?.includes(r.home.harness)) unsupported.push(r);
+      }
+      if (unsupported.length > 0) {
+        fail("bad_request", `--urgent can't reach ${unsupported.map((r) => `@${r.name} (${r.home!.harness})`).join(", ")} ahead of its current work; send without --urgent`);
+      }
+    }
     let conversation: Doc<"conversations">;
     if (args.conversationId !== undefined) {
       conversation = await getOr(ctx, "conversations", args.conversationId);
@@ -594,6 +617,7 @@ export const send = mutation({
       ...(args.attachments ? { attachments: args.attachments } : {}),
       ...(args.key !== undefined ? { idempotencyKey: args.key } : {}),
       origin: { via: args.via ?? "cli" },
+      ...(args.urgent ? { urgent: true } : {}),
     });
     if (!args.wait) return result;
     const registered = await registerWait(ctx, sender, result.message.id as Id<"messages">, waitMs, Date.now(), args.waiterTurnId);

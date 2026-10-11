@@ -41,6 +41,19 @@ class FakeV2 implements V2Client {
   forgetReceipts = false;
   /** Fail the next dispatches before they reach T3 (nothing committed). */
   unreachable = 0;
+  /** The steer target ends just before our dispatch: T3 turns steer_active into start_immediately. */
+  lateSteer = false;
+  /** New runs stay `starting` (the provider turn hasn't begun). */
+  holdStarting = false;
+  /** With lateSteer: our fallback run also answers and completes at once, while the event stream is silent. */
+  lateSteerDone = false;
+  /** A successful steer whose target run then finishes at once, while the event stream is silent. */
+  steerThenDone = false;
+  /** A steer whose target finishes at once, its events delivered before the dispatch returns; the next snapshot read is stale. */
+  steerThenDoneLive = false;
+  private staleNext: V2Thread | undefined;
+  /** Events are recorded but not delivered to subscribers (a lagging stream). */
+  muted = false;
   failResubscribes = 0;
   eventsGone = false;
   dispatched: { commandId: string; messageId: string; text: string; steer?: string }[] = [];
@@ -55,6 +68,7 @@ class FakeV2 implements V2Client {
     const event = { ...e, sequence: ++this.seq } as V2Event;
     this.log.push(event);
     this.thread.snapshotSequence = this.seq;
+    if (this.muted) return;
     for (const f of [...this.listeners]) setTimeout(() => f({ kind: "event", event: structuredClone(event) }), 1);
   }
   private active() {
@@ -88,7 +102,7 @@ class FakeV2 implements V2Client {
     this.emit({ type: "run", run: { ...run } });
     this.thread.attempts.push({ runId, reason: "initial" });
     this.emit({ type: "attempt", attempt: { runId, reason: "initial" } });
-    if (!busy) this.setRun(runId, "running");
+    if (!busy && !this.holdStarting) this.setRun(runId, "running");
     return runId;
   }
 
@@ -97,7 +111,13 @@ class FakeV2 implements V2Client {
     return true;
   }
   async getThread(id: string) {
-    return id === this.id ? structuredClone(this.thread) : null;
+    if (id !== this.id) return null;
+    if (this.staleNext) {
+      const stale = this.staleNext;
+      this.staleNext = undefined;
+      return stale;
+    }
+    return structuredClone(this.thread);
   }
   async dispatch(id: string, m: { commandId: string; messageId: string; text: string; steer?: string }) {
     if (this.unreachable > 0) {
@@ -113,14 +133,36 @@ class FakeV2 implements V2Client {
     }
     assert.equal(id, this.id);
     this.dispatched.push(m);
-    if (m.steer) {
+    if (m.steer && this.lateSteer) {
+      if (this.lateSteerDone) {
+        this.muted = true;
+        this.setRun(m.steer, "completed");
+        this.newRun(m.messageId);
+        this.assistant("fallback answer");
+        const run = this.active()!;
+        this.setRun(run.id, "waiting");
+        this.setRun(run.id, "completed");
+      } else this.newRun(m.messageId);
+    }
+    else if (m.steer) {
       const target = this.thread.runs.find((r) => r.id === m.steer);
-      if (!target || !["starting", "running"].includes(target.status)) {
+      if (!target || target.status !== "running") {
         this.receipts.set(m.commandId, { rejected: "target run is not active" });
         throw new Error("target run is not active");
       }
       this.thread.messages.push({ id: m.messageId, role: "user", runId: target.id });
       this.emit({ type: "message", message: { id: m.messageId, role: "user", runId: target.id } });
+      if (this.steerThenDoneLive) {
+        this.staleNext = structuredClone(this.thread);
+        this.setRun(target.id, "waiting");
+        this.setRun(target.id, "completed");
+        await new Promise((r) => setTimeout(r, 30)); // the events reach the subscriber before we return
+      }
+      if (this.steerThenDone) {
+        this.muted = true;
+        this.setRun(target.id, "waiting");
+        this.setRun(target.id, "completed");
+      }
     } else this.newRun(m.messageId);
     const result = { sequence: this.seq };
     this.receipts.set(m.commandId, result);
@@ -274,7 +316,7 @@ describe("T3 V2 adapter: live", () => {
     t3.human("lee-typed");
     const h = await adapter.handOff(target, delivery());
     const leeRun = t3.runOf("lee-typed")!.id;
-    assert.deepEqual(h, { _tag: "accepted", turnId: leeRun, cursor: (h as { cursor: string }).cursor });
+    assert.deepEqual(h, { _tag: "accepted", turnId: leeRun, cursor: (h as { cursor: string }).cursor, steered: true });
     assert.equal(t3.runOf(messageIdFor("d_1")), undefined, "no run of its own: nothing to queue");
     const sent = t3.dispatched.at(-1)!;
     assert.equal(sent.steer, leeRun);
@@ -292,6 +334,68 @@ describe("T3 V2 adapter: live", () => {
     assert.equal(t3.dispatched.at(-1)!.steer, undefined);
     assert.equal(t3.runOf(messageIdFor("d_1"))!.id, h.turnId);
     assert.doesNotMatch(t3.dispatched.at(-1)!.text, /inside your current turn/);
+  });
+
+  it("a steer T3 turned into its own run (target ended first) is not reported steered", async () => {
+    const { t3, adapter } = setup();
+    t3.human("lee");
+    t3.lateSteer = true;
+    const h = (await adapter.handOff(target, delivery())) as { _tag: string; turnId: string; steered?: boolean };
+    assert.equal(h._tag, "accepted");
+    assert.equal(h.steered, undefined);
+    assert.equal(t3.dispatched.at(-1)?.steer !== undefined, true);
+    assert.notEqual(h.turnId, (await t3.getThread(target.locator))!.runs[0]!.id);
+  });
+
+  it("a late-steer fallback run already finished (stream silent) is followed from the snapshot, not waited on", async () => {
+    const { t3, adapter } = setup();
+    t3.human("lee");
+    t3.lateSteer = true;
+    t3.lateSteerDone = true;
+    const h = (await adapter.handOff(target, delivery())) as { _tag: string; turnId: string };
+    assert.equal(h._tag, "accepted");
+    const outcome = await Promise.race([adapter.awaitOutcome(target, delivery(), h.turnId), new Promise((r) => setTimeout(() => r("timeout"), 3_000))]);
+    assert.deepEqual(outcome, { _tag: "replied", answer: "fallback answer" });
+  });
+
+  it("a steer whose target run finishes at once (stream silent) is followed from the snapshot, not waited on", async () => {
+    const { t3, adapter } = setup();
+    t3.human("lee");
+    t3.steerThenDone = true;
+    const h = (await adapter.handOff(target, delivery())) as { _tag: string; turnId: string; steered?: boolean };
+    assert.equal(h.steered, true);
+    const outcome = await Promise.race([adapter.awaitOutcome(target, delivery(), h.turnId), new Promise((r) => setTimeout(() => r("timeout"), 3_000))]);
+    assert.deepEqual(outcome, { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
+  });
+
+  it("steer-only while the turn is still starting sends nothing (T3 rejects a steer into a starting run)", async () => {
+    const { t3, adapter } = setup();
+    t3.holdStarting = true;
+    t3.human("lee");
+    const confirmed: (string | undefined)[] = [];
+    const h = await adapter.handOff(target, delivery(), { confirm: async (c) => (confirmed.push(c), true), signal: new AbortController().signal, steerOnly: true });
+    assert.equal(h._tag, "aborted");
+    assert.equal(confirmed.length, 0);
+    assert.equal(t3.dispatched.length, 0);
+  });
+
+  it("steer-only on an idle thread sends nothing and never confirms the gate (no target recorded)", async () => {
+    const { t3, adapter } = setup();
+    const confirmed: (string | undefined)[] = [];
+    const h = await adapter.handOff(target, delivery(), { confirm: async (c) => (confirmed.push(c), true), signal: new AbortController().signal, steerOnly: true });
+    assert.equal(h._tag, "aborted");
+    assert.equal(confirmed.length, 0);
+    assert.equal(t3.dispatched.length, 0);
+  });
+
+  it("a steer whose run's end was already streamed is placed from a current snapshot, not a stale one", async () => {
+    const { t3, adapter } = setup();
+    t3.human("lee");
+    t3.steerThenDoneLive = true;
+    const h = (await adapter.handOff(target, delivery())) as { _tag: string; turnId: string; steered?: boolean };
+    assert.equal(h.steered, true);
+    const outcome = await Promise.race([adapter.awaitOutcome(target, delivery(), h.turnId), new Promise((r) => setTimeout(() => r("timeout"), 3_000))]);
+    assert.deepEqual(outcome, { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
   });
 
   it("losing the idle race queues our message as its own run: accepted, not ambiguous", async () => {
@@ -479,10 +583,19 @@ describe("T3 V2 adapter: restart check (from one snapshot)", () => {
     t3.human("lee");
     const { turnId } = (await adapter.handOff(target, delivery())) as { turnId: string };
     const after = makeT3AdapterV2({ client: t3, ...options });
-    assert.deepEqual(await after.check(target, delivery(), turnId), { _tag: "running", turnId });
+    assert.deepEqual(await after.check(target, delivery(), turnId), { _tag: "running", turnId, steered: true });
     t3.finish();
     await tick(60);
     assert.deepEqual(await after.check(target, delivery(), turnId), { _tag: "completed", turnId, outcome: { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] } });
+  });
+
+  it("a second handoff of a delivery already steered into a running turn says steered (takeover race)", async () => {
+    const { t3, adapter } = setup();
+    t3.human("lee");
+    const { turnId } = (await adapter.handOff(target, delivery())) as { turnId: string };
+    const after = makeT3AdapterV2({ client: t3, ...options });
+    assert.deepEqual(await after.handOff(target, delivery()), { _tag: "accepted", turnId, steered: true });
+    t3.finish();
   });
 
   it("running while its run runs, then completed with the outcome, in a new process", async () => {
