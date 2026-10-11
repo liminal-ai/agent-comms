@@ -591,7 +591,8 @@ export const send = mutation({
       // when its machine's heartbeat says it can join a running turn (T3 protocol 2 on a connector that knows urgent).
       const unsupported: Doc<"participants">[] = [];
       for (const r of recipients) {
-        if (r.kind !== "agent" || !r.home || r.home.harness === "oaidot") continue;
+        // Retired recipients are skipped by post() as in any send, not refused here.
+        if (r.kind !== "agent" || r.state === "retired" || !r.home || r.home.harness === "oaidot") continue;
         const m = await ctx.db.query("machines").withIndex("by_machineId", (q) => q.eq("machineId", r.home!.machine)).unique();
         if (!m?.urgentHarnesses?.includes(r.home.harness)) unsupported.push(r);
       }

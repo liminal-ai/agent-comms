@@ -668,5 +668,12 @@ describe("urgent", () => {
     // A connector that can't (protocol 1) reports none, and it's refused again.
     await t.mutation(api.connector.heartbeat, { machine: m1, urgentHarnesses: [] });
     expect(await errorCode(toA())).toBe("bad_request");
+    // A retired recipient (here a claude-code home, which can't take urgent) is skipped as usual, not a reason to refuse the others.
+    await t.mutation(api.connector.heartbeat, { machine: m1, urgentHarnesses: ["t3"] });
+    await t.mutation(api.directory.setState, { adminToken: ADMIN, name: "b", state: "retired" });
+    const g = await group(t);
+    const mixed = await t.mutation(api.connector.send, { machine: m2, as: "c", conversationId: g, to: ["a", "b"], text: "stop", urgent: true });
+    expect(mixed.deliveries.map((d) => d.recipient)).toEqual(["a"]);
+    expect(mixed.skipped).toEqual([{ name: "b", reason: "retired" }]);
   });
 });
