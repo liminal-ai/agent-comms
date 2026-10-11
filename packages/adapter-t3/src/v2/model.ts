@@ -28,7 +28,8 @@ export type RunStatus =
   | "rolled_back";
 
 /** A run a message can be steered into. */
-export const STEERABLE: readonly RunStatus[] = ["starting", "running"];
+/** T3 accepts a steer only into a `running` run (docs/t3-v2-notes.md, busy thread); a `starting` one rejects it. */
+export const STEERABLE: readonly RunStatus[] = ["running"];
 
 /** A run that keeps the thread busy (a dispatch would queue behind it). */
 export const BLOCKING: readonly RunStatus[] = ["preparing", "queued", "starting", "running", "waiting"];

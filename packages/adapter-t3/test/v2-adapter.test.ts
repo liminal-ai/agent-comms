@@ -43,6 +43,8 @@ class FakeV2 implements V2Client {
   unreachable = 0;
   /** The steer target ends just before our dispatch: T3 turns steer_active into start_immediately. */
   lateSteer = false;
+  /** New runs stay `starting` (the provider turn hasn't begun). */
+  holdStarting = false;
   /** With lateSteer: our fallback run also answers and completes at once, while the event stream is silent. */
   lateSteerDone = false;
   /** A successful steer whose target run then finishes at once, while the event stream is silent. */
@@ -100,7 +102,7 @@ class FakeV2 implements V2Client {
     this.emit({ type: "run", run: { ...run } });
     this.thread.attempts.push({ runId, reason: "initial" });
     this.emit({ type: "attempt", attempt: { runId, reason: "initial" } });
-    if (!busy) this.setRun(runId, "running");
+    if (!busy && !this.holdStarting) this.setRun(runId, "running");
     return runId;
   }
 
@@ -144,7 +146,7 @@ class FakeV2 implements V2Client {
     }
     else if (m.steer) {
       const target = this.thread.runs.find((r) => r.id === m.steer);
-      if (!target || !["starting", "running"].includes(target.status)) {
+      if (!target || target.status !== "running") {
         this.receipts.set(m.commandId, { rejected: "target run is not active" });
         throw new Error("target run is not active");
       }
@@ -364,6 +366,17 @@ describe("T3 V2 adapter: live", () => {
     assert.equal(h.steered, true);
     const outcome = await Promise.race([adapter.awaitOutcome(target, delivery(), h.turnId), new Promise((r) => setTimeout(() => r("timeout"), 3_000))]);
     assert.deepEqual(outcome, { _tag: "ambiguous", entered: [{ origin: "t3-steered" }] });
+  });
+
+  it("steer-only while the turn is still starting sends nothing (T3 rejects a steer into a starting run)", async () => {
+    const { t3, adapter } = setup();
+    t3.holdStarting = true;
+    t3.human("lee");
+    const confirmed: (string | undefined)[] = [];
+    const h = await adapter.handOff(target, delivery(), { confirm: async (c) => (confirmed.push(c), true), signal: new AbortController().signal, steerOnly: true });
+    assert.equal(h._tag, "aborted");
+    assert.equal(confirmed.length, 0);
+    assert.equal(t3.dispatched.length, 0);
   });
 
   it("steer-only on an idle thread sends nothing and never confirms the gate (no target recorded)", async () => {
